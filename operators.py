@@ -4,9 +4,12 @@ from scipy.integrate import RK45
 
 from .core import *
 
+''' Common types ''' 
+
+System = Tuple[Integrable, List[Observable]]
+
 ''' Operations / views on gpde's ''' 
 
-def couple(*xs: Tuple[RK45]):
-	''' Couple multiple integrators in time ''' 
-	assert all([x.t == xs[0].t for x in xs]), 'Cannot couple integrators at different times'
-	pass
+def couple(*pdes: Tuple[gpde]) -> System:
+	sys = multi_gpde(pdes)
+	return sys, sys.observables()

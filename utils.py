@@ -15,7 +15,7 @@ def destructure(xs: Iterable[Any]) -> List[Any]:
 
 class bidict(dict):
 	''' dictionary for bi-directional keys ''' 
-	def __getitem__(self, key):
+	def __getitem__(self, key: Tuple[Any, Any]):
 		if key in self:
 			return dict.__getitem__(key)
 		else:

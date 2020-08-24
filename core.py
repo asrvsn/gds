@@ -5,6 +5,7 @@ import networkx as nx
 import networkx.linalg.graphmatrix as nx
 from typing import Any, Union, Tuple, Callable, Newtype, Iterable
 from scipy.integrate import RK45
+from abc import ABC, abstractmethod
 
 from .utils import *
 
@@ -18,9 +19,34 @@ Time = Newtype('Time', float)
 Domain = Dict[Point, int] # Mapping from points into array indices
 Sign = NewType('Sign', int)
 
-''' Base class ''' 
+''' Base interface ''' 
 
-class gpde:
+class Integrable(ABC):
+	@abstractmethod
+	def step(self, dt: float):
+		pass
+
+	@abstractmethod
+	def reset(self):
+		pass
+
+class Observable(ABC):
+	@property
+	@abstractmethod
+	def t(self): np.ndarray:
+		pass
+
+	@property
+	@abstractmethod
+	def y(self): np.ndarray:
+		pass
+
+	def __getitem__(self, idx):
+		return self.y.__getitem__(idx)
+
+''' Base classes ''' 
+
+class pde(Observable, Integrable):
 	def __init__(self, X: Domain, f: Callable[[Time], np.ndarray], order: int=1, max_step=None):
 		''' Create a PDE defined on some domain.
 		Uses RK45 solver.
@@ -29,11 +55,10 @@ class gpde:
 		self.Xi = list(X.values())
 		self.ndim = len(X)
 		self.t0 = 0.
-		self.y0 = np.full(len(X), np.nan)
+		self.y0 = np.full(self.ndim*order, np.nan)
 		self.f = f
 		self.order = order
 		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
-		self.w_key = w_key
 		self.dirichlet = lambda t, x: None
 		self.dirichlet_X = set()
 		self.dirichlet_indices = []
@@ -108,12 +133,54 @@ class gpde:
 	def t(self):
 		return self.integrator.t
 
-	def __getitem__(self, idx):
-		return self.integrator.y.__getitem__(idx)
+class multi_pde(Integrable):
+	''' Multiple PDEs coupled in time. Can be integrated but not observed directly. ''' 
+	def __init__(self, *pdes: Tuple[pde], max_step=None):
+		assert len(pdes) >= 1 
+		assert all([p.t == pdes[0].t for p in pdes]), 'Cannot couple integrators at different times'
+		self.pdes = pdes
+		self.max_step = max_step
+		self.t0 = pdes[0].t
+		y0s = [p.integrator.y for p in pdes]
+		self.views = [slice(0, len(y0s[0]))]
+		for i in range(1, len(pdes)):
+			start = self.views[i-1].stop
+			self.views.append(slice(start, start+len(y0s[i])))
+		self.y0 = np.concatenate(y0s)
+		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
+
+	def dydt(self, t: Time, y: np.ndarray):
+		return np.concatenate([p.dydt(t, y) for p in self.pdes])
+
+	def step(self, dt: float):
+		self.integrator.t_bound = self.t + dt
+		self.integrator.status = 'running'
+		while self.integrator.status != 'finished':
+			self.integrator.step()
+			# Apply all boundary conditions
+			for p, view in zip(self.xs, self.views):
+				for x in p.dirichet_X:
+					self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
+
+	def observables(self) -> List[Observable]:
+		class ViewObservable(Observable):
+			def __init__(obs, view: slice):
+				obs.view = view
+			@property
+			def t(obs):
+				return self.integrator.t
+			@property
+			def y(obs):
+				return self.integrator.y[obs.view]
+		return [ViewObservable(view) for view in self.views]
+
+	def reset(self):
+		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
+
 
 ''' Derived classes ''' 
 
-class vertex_pde(gpde):
+class vertex_pde(pde):
 	''' PDE defined on the vertices of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
 		X = {x: i for i, x in enumerate(G.nodes())}
@@ -151,7 +218,7 @@ class vertex_pde(gpde):
 		])
 
 
-class edge_pde(gpde):
+class edge_pde(pde):
 	''' PDE defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, orientation: Callable[[Edge], Sign]=None, **kwargs):
 		X = bidict({x: i for i, x in enumerate(G.edges())})
