@@ -154,7 +154,7 @@ class vertex_pde(gpde):
 class edge_pde(gpde):
 	''' PDE defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, orientation: Callable[[Edge], Sign]=None, **kwargs):
-		X = {x: i for i, x in enumerate(G.edges())}
+		X = bidict({x: i for i, x in enumerate(G.edges())})
 		self.G = G
 		self.weights = np.ones(len(G.edges()))
 		if w_key is not None:
@@ -171,7 +171,7 @@ class edge_pde(gpde):
 				self.oriented_incidence[x[1]][i] = -1
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
-		self.X_dual = {x: i for i, x in enumerate(self.G_dual.edges())}
+		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
 		self.weights_dual = np.zeros(len(self.X_dual))
 		for i, x in enumerate(self.G_dual.edges()):
 			for n in destructure(x):
@@ -181,6 +181,13 @@ class edge_pde(gpde):
 						self.incidence[n][a] * self.weights[X[a]] * 
 						self.incidence[n][b] * self.weights[X[b]] / 
 						(G.degree[n] - 1)
+		# Orientation of dual
+		self.oriented_incidence_dual = nx.incidence_matrix(self.G_dual)
+		for i, x in enumerate(self.X):
+			for y in self.G_dual.neighbors(x):
+				if y[1] in x: # Inward edges receive negative orientation
+					j = self.X_dual[(x,y)]
+					self.oriented_incidence_dual[i][j] = -1
 		super().__init__(X, *args, **kwargs)
 
 	def __call__(self, x: Edge):
@@ -197,13 +204,17 @@ class edge_pde(gpde):
 	def laplacian(self) -> np.ndarray:
 		''' Vector laplacian https://en.wikipedia.org/wiki/Vector_Laplacian ''' 
 		x1 = np.sqrt(self.weights) * self.div()@self.oriented_incidence
-		x2 = curl_operator @ self.curl()
+		x2 = curl_operator@self.curl() # TODO		
 		return x1 - x2
 
-	def advect(self) -> np.ndarray:
-		return np.array([
-			# TODO
-		])
+	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
+		ret = np.zeros(self.ndim)
+		for a, i in self.X.items():
+			u = self(a)
+			for b in self.G_dual.neighbors(a):
+				j = self.X_dual[(a, b)]
+				ret[i] += self.oriented_incidence_dual[i][j] * v_field(b) * u / self.weights_dual[j]
+		return np.array(ret)
 
 	''' Private methods ''' 
 
