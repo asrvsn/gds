@@ -2,9 +2,11 @@
 
 import numpy as np
 import networkx as nx
+import networkx.linalg.graphmatrix as nx
 from typing import Any, Union, Tuple, Callable, Newtype, Iterable
 from scipy.integrate import RK45
-from abc import ABC, abstractmethod
+
+from .utils import *
 
 ''' Common types ''' 
 
@@ -14,10 +16,11 @@ Face = Tuple[Vertex, ...]
 Point = Union[Vertex, Edge, Face] # A point in the graph domain
 Time = Newtype('Time', float)
 Domain = Dict[Point, int] # Mapping from points into array indices
+Sign = NewType('Sign', int)
 
 ''' Base class ''' 
 
-class gpde(ABC):
+class gpde:
 	def __init__(self, X: Domain, f: Callable[[Time], np.ndarray], order: int=1, max_step=None):
 		''' Create a PDE defined on some domain.
 		Uses RK45 solver.
@@ -114,6 +117,7 @@ class vertex_pde(gpde):
 	''' PDE defined on the vertices of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
 		X = {x: i for i, x in enumerate(G.nodes())}
+		self.edge_X = {x: i for i, x in enumerate(G.nodes())}
 		self.X_from = [e[0] for e in G.edges()]
 		self.X_to = [e[1] for e in G.edges()]
 		self.G = G
@@ -124,7 +128,10 @@ class vertex_pde(gpde):
 				self.weights[i] = G[e[0]][e[1]][w_key]
 		super().__init__(X, *args, **kwargs)
 
-	''' Available spatial differential operators '''
+	''' Spatial differential operators '''
+
+	def partial(self, e: Edge) -> float:
+		return np.sqrt(self.weights[self.edge_X[e]]) * (self(e[1]) - self(e[0]))
 
 	def grad(self) -> np.ndarray:
 		return np.sqrt(self.weights) * (self.y[self.X_from] - self.y[self.X_to])
@@ -138,14 +145,77 @@ class vertex_pde(gpde):
 		return self.laplacian_matrix@self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
-		pass
+		return np.array([
+			sum([v_field((x, y)) * self.partial((x, y)) for y in self.neighbors(x)])
+			for x in self.X
+		])
 
 
 class edge_pde(gpde):
 	''' PDE defined on the edges of a graph ''' 
-	pass
+	def __init__(self, G: nx.Graph, *args, w_key: str=None, orientation: Callable[[Edge], Sign]=None, **kwargs):
+		X = {x: i for i, x in enumerate(G.edges())}
+		self.G = G
+		self.weights = np.ones(len(G.edges()))
+		if w_key is not None:
+			for i, e in enumerate(G.edges()):
+				self.weights[i] = G[e[0]][e[1]][w_key]
+		self.incidence = nx.incidence_matrix(G)
+		# Orient edges
+		self.orientation = np.ones(len(X)) if orientation is None else np.array([orientation(x) for x in X])
+		self.oriented_incidence = self.incidence.copy()
+		for i, x in enumerate(G.edges()):
+			if self.orientation[i] > 0:
+				self.oriented_incidence[x[0]][i] = -1
+			else:
+				self.oriented_incidence[x[1]][i] = -1
+		# Vertex dual
+		self.G_dual = nx.line_graph(G)
+		self.X_dual = {x: i for i, x in enumerate(self.G_dual.edges())}
+		self.weights_dual = np.zeros(len(self.X_dual))
+		for i, x in enumerate(self.G_dual.edges()):
+			for n in destructure(x):
+				if G.degree[n] > 1:
+					(a, b) = x
+					self.weights_dual[self.X_dual[x]] += 
+						self.incidence[n][a] * self.weights[X[a]] * 
+						self.incidence[n][b] * self.weights[X[b]] / 
+						(G.degree[n] - 1)
+		super().__init__(X, *args, **kwargs)
+
+	def __call__(self, x: Edge):
+		return self.orientation[self.X[x]] * self.integrator.y[self.X[x]]
+
+	''' Spatial differential operators '''
+
+	def div(self) -> np.ndarray:
+		return 2 * np.sqrt(self.weights) * self.y@self.incidence.T
+
+	def curl(self) -> np.ndarray:
+		raise NotImplementedError
+
+	def laplacian(self) -> np.ndarray:
+		''' Vector laplacian https://en.wikipedia.org/wiki/Vector_Laplacian ''' 
+		x1 = np.sqrt(self.weights) * self.div()@self.oriented_incidence
+		x2 = curl_operator @ self.curl()
+		return x1 - x2
+
+	def advect(self) -> np.ndarray:
+		return np.array([
+			# TODO
+		])
+
+	''' Private methods ''' 
+
+	@property
+	def y(self) -> np.ndarray:
+		return self.integrator.y[:self.ndim] * self.orientation
 
 class face_pde(gpde):
 	''' PDE defined on the faces of a graph ''' 
-	pass
+	def __init__(self, G: nx.Graph, *args, **kwargs):
+		# Let faces be represented by cycles
+		X = {x: i for i, x in enumerate(nx.cycle_basis(G))}
+		self.G = G
+		super().__init__(X, *args, **kwargs)
 
