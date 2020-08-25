@@ -193,6 +193,9 @@ class multi_pde(Integrable):
 				return self.integrator.y[obs.view]
 		return [ViewObservable(view) for view in self.views]
 
+	def system(self) -> System:
+		return (self, self.observables())
+
 	def reset(self):
 		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
 

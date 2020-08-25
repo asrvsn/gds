@@ -4,13 +4,23 @@ import colorcet as cc
 import shortuuid
 import pandas as pd
 from abc import ABC, abstractmethod
+from pathlib import Path
+import webbrowser
+import zmq
+import time
+from multiprocessing import Process
 
 from bokeh.plotting import figure, from_networkx
 from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead
 from bokeh.models.glyphs import Oval, MultiLine
 from bokeh.transform import linear_cmap
+from bokeh.command.util import build_single_handler_applications
+from bokeh.server.server import Server
+from bokeh.util.browser import view
+from tornado.ioloop import IOLoop
 
 from gpde.core import *
+from gpde.utils.zmq import *
 
 ''' Common types ''' 
 
@@ -39,7 +49,7 @@ class Renderer(ABC):
 	def setup_canvas(self) -> Canvas:
 		pass
 
-	def setup_plots(self, root):
+	def draw_plots(self, root):
 		''' Draw plots to bokeh element ''' 
 		rows = []
 		for i in range(len(self.canvas)):
@@ -137,6 +147,52 @@ class GridRenderer(Renderer):
 
 ''' Entry point ''' 
 
+bokeh_host = 'localhost'
+bokeh_port = 8080
+
 def render_bokeh(renderer: Renderer):
 	''' Render as a Bokeh web app ''' 
-	pass
+	path = str(Path(__file__).parent / 'bokeh_server.py')
+	proc = Process(target=start_server, args=(filepath, bokeh_host, bokeh_port))
+	proc.start()
+	print('Server started')
+	ctx, tx = ipc_tx()
+
+	try:
+		print('Waiting for server to initialize...')
+		webbrowser.open_new_tab('http://{}:{}'.format(bokeh_host, bokeh_port))
+		tx({'tag': 'init', 'renderer': wire_pickle(renderer)})
+		print('Done.')
+		while True: 
+			time.sleep(1) # Let bokeh continue to handle interactivity while we wait
+	finally:
+		ctx.destroy()
+		proc.terminate()
+
+''' Helpers ''' 
+
+def start_server(filepath: str, host: str, port: int):
+	files = [filepath]
+	argvs = {}
+	urls = []
+	for f in files:
+		argvs[f]=None
+		urls.append(f.split('/')[-1].split('.')[0])
+	io_loop = IOLoop.instance()
+	apps = build_single_handler_applications(files,argvs)
+	kwags = {
+		'io_loop':io_loop,
+		'generade_session_ids':True,
+		'redirect_root':True,
+		'use_x_headers':False,
+		'secret_key':None,
+		'num_procs':1,
+		'host':['%s:%d'%(host, port)],
+		'sign_sessions':False,
+		'develop':False,
+		'port':port, 
+		'use_index':True
+	}
+	srv = Server(apps,**kwags)
+	io_loop.add_callback(view, 'http://{}:{}'.format(bokeh_host, bokeh_port))
+	io_loop.start()
