@@ -1,0 +1,3 @@
+colorcet
+shortuuid
+bokeh
