@@ -196,10 +196,3 @@ class multi_pde(Integrable):
 	def reset(self):
 		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
 
-
-''' Operations / views on gpde's ''' 
-
-def couple(*pdes: Tuple[gpde]) -> System:
-	sys = multi_gpde(pdes)
-	return sys, sys.observables()
-

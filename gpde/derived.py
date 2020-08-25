@@ -10,7 +10,7 @@ from .utils import *
 class VertexObservable(Observable):
 	def __init__(self, G: nx.Graph):
 		self.G = G
-		X = bidict({x: i for i, x in enumerate(G.nodes())})
+		X = {x: i for i, x in enumerate(G.nodes())}
 		super().__init__(X)
 
 class EdgeObservable(Observable):

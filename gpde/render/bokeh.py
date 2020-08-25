@@ -134,3 +134,9 @@ class GridRenderer(Renderer):
 			row = canvas[-1]
 			row.append([(obs,)])
 		return canvas
+
+''' Entry point ''' 
+
+def render_bokeh(renderer: Renderer):
+	''' Render as a Bokeh web app ''' 
+	pass

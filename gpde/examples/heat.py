@@ -4,7 +4,8 @@ import numpy as np
 import networkx as nx
 
 from gpde.core import *
-from gpde.render import *
+from gpde.ops import *
+from gpde.render.bokeh import *
 
 def heat_grid(n = 10) -> vertex_pde
 	n = 8
