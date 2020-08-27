@@ -2,12 +2,24 @@
 
 import numpy as np
 import networkx as nx
-import networkx.linalg.graphmatrix as nx
-from typing import Any, Union, Tuple, Callable, Newtype, Iterable
+# import networkx.linalg.graphmatrix as nx
+from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
 from scipy.integrate import RK45
 from abc import ABC, abstractmethod
+import pdb
 
 from .utils import *
+
+''' Common types ''' 
+
+Vertex = Any
+Edge = Tuple[Vertex, Vertex]
+Face = Tuple[Vertex, ...]
+Point = Union[Vertex, Edge, Face] # A point in the graph domain
+Time = NewType('Time', float)
+Domain = Dict[Point, int] # Mapping from points into array indices
+Sign = NewType('Sign', int)
+System = Tuple['Integrable', List['Observable']]
 
 ''' Base interfaces ''' 
 
@@ -23,15 +35,16 @@ class Integrable(ABC):
 class Observable(ABC):
 	def __init__(self, X: Domain):
 		self.X = X # Domain
+		self.ndim = len(X)
 
 	@property
 	@abstractmethod
-	def t(self): np.ndarray:
+	def t(self) -> np.ndarray:
 		pass
 
 	@property
 	@abstractmethod
-	def y(self): np.ndarray:
+	def y(self) -> np.ndarray:
 		pass
 
 	def __getitem__(self, idx):
@@ -41,32 +54,25 @@ class Observable(ABC):
 		''' Measure at a point '''
 		return self.y[self.X[x]]
 
-''' Common types ''' 
-
-Vertex = Any
-Edge = Tuple[Vertex, Vertex]
-Face = Tuple[Vertex, ...]
-Point = Union[Vertex, Edge, Face] # A point in the graph domain
-Time = Newtype('Time', float)
-Domain = Dict[Point, int] # Mapping from points into array indices
-Sign = NewType('Sign', int)
-System = Tuple[Integrable, List[Observable]]
+	def __len__(self):
+		return self.ndim
 
 ''' Base classes ''' 
 
 class pde(Observable, Integrable):
-	def __init__(self, X: Domain, f: Callable[[Time], np.ndarray], order: int=1, max_step=None):
+	def __init__(self, X: Domain, f: Callable[[Time], np.ndarray], order: int=1, max_step=1e-3):
 		''' Create a PDE defined on some domain.
 		Uses RK45 solver.
 		''' 
 		Observable.__init__(self, X)
 		self.Xi = list(X.values())
-		self.ndim = len(X)
 		self.t0 = 0.
 		self.y0 = np.zeros(self.ndim*order)
 		self.f = f
+		self.max_step = max_step
 		self.order = order
-		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
+		self.integrator = RK45(lambda t, y: np.zeros_like(self.y0), self.t0, self.y0, np.inf, max_step=max_step)
+		self.integrator.fun = self.dydt
 		self.dirichlet = lambda t, x: None
 		self.dirichlet_X = set()
 		self.dirichlet_indices = []
@@ -95,14 +101,13 @@ class pde(Observable, Integrable):
 		Assumes the domains do not change. 
 		''' 
 		self.dirichlet = dirichlet
-		self.dirichlet_X = set(x if dirichlet(x) is not None for x in self.X) # Fixed-value domain
+		self.dirichlet_X = set({x for x in self.X if (dirichlet(0., x) is not None)}) # Fixed-value domain
 		self.dirichlet_indices = [self.X[x] for x in self.dirichlet_X]
 		self.neumann = neumann
-		self.neumann_X = set(x if neumann(x) is not None for x in self.X) # Fixed-flux domain
+		self.neumann_X = set({x for x in self.X if (neumann(0., x) is not None)}) # Fixed-flux domain
 		self.neumann_indices = [self.X[x] for x in self.neumann_X]
 		intersect = self.dirichlet_X & self.neumann_X
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
-
 
 	def step(self, dt: float):
 		''' Integrate forward in time ''' 
@@ -112,8 +117,8 @@ class pde(Observable, Integrable):
 			self.integrator.step()
 			for x in self.dirichlet_X:
 				self.integrator.y[self.X[x] - self.ndim] = self.dirichlet(self.integrator.t, x)
-			if self.erroneous(self.y):
-				raise ValueError('Erroneous state encountered')
+		if self.erroneous(self.y):
+			raise ValueError('Erroneous state encountered')
 
 	def reset(self):
 		''' Reset the system to initial conditions ''' 
@@ -125,6 +130,11 @@ class pde(Observable, Integrable):
 	def system(self) -> System:
 		''' Express as a single-observable system ''' 
 		return (self, [self]) 
+
+	# @abstractmethod
+	# def observable(self) -> Observable:
+	# 	''' Express the self as an observable ''' 
+	# 	pass
 
 	''' Private methods ''' 
 
@@ -146,12 +156,14 @@ class pde(Observable, Integrable):
 	def t(self):
 		return self.integrator.t
 
-class multi_pde(Integrable):
+class coupled_pde(Integrable):
 	''' Multiple PDEs coupled in time. Can be integrated together but not observed directly. ''' 
 	def __init__(self, *pdes: Tuple[pde], max_step=None):
 		assert len(pdes) >= 1 
 		assert all([p.t == pdes[0].t for p in pdes]), 'Cannot couple integrators at different times'
 		self.pdes = pdes
+		if max_step is None:
+			max_step = min([p.max_step for p in pdes])
 		self.max_step = max_step
 		self.t0 = pdes[0].t
 		y0s = [p.integrator.y for p in pdes]
@@ -160,13 +172,10 @@ class multi_pde(Integrable):
 			start = self.views[i-1].stop
 			self.views.append(slice(start, start+len(y0s[i])))
 		# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
-		from (p, view) in zip(self.pdes, self.views):
-			def y(other):
-				return self.integrator.y[view]
-			# TODO
-			p.y = property(y)
 		self.y0 = np.concatenate(y0s)
 		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
+		for (p, view) in zip(self.pdes, self.views):
+			attach_dyn_props(p, {'y': lambda _: self.integrator.y[view], 't': lambda _: self.integrator.t})
 
 	def dydt(self, t: Time, y: np.ndarray):
 		return np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.pdes, self.views)])
@@ -177,25 +186,20 @@ class multi_pde(Integrable):
 		while self.integrator.status != 'finished':
 			self.integrator.step()
 			# Apply all boundary conditions
-			for p, view in zip(self.xs, self.views):
-				for x in p.dirichet_X:
+			for p, view in zip(self.pdes, self.views):
+				for x in p.dirichlet_X:
 					self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
 
 	def observables(self) -> List[Observable]:
-		class ViewObservable(Observable):
-			def __init__(obs, view: slice):
-				obs.view = view
-			@property
-			def t(obs):
-				return self.integrator.t
-			@property
-			def y(obs):
-				return self.integrator.y[obs.view]
-		return [ViewObservable(view) for view in self.views]
+		return list(self.pdes)
 
 	def system(self) -> System:
 		return (self, self.observables())
 
 	def reset(self):
 		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
+
+	@property
+	def t(self):
+		return self.integrator.t
 

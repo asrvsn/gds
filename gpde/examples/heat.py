@@ -3,30 +3,32 @@
 import numpy as np
 import networkx as nx
 
-from gpde.core import *
-from gpde.ops import *
+from gpde import *
 from gpde.render.bokeh import *
 
 def heat_grid(n = 10) -> vertex_pde:
-	n = 8
 	G = nx.grid_2d_graph(n, n)
-	return vertex_pde(G, lambda t, self: self.laplacian())
+	f = lambda t, self: self.laplacian()
+	return vertex_pde(G, f)
 
 def grid_const_boundary() -> vertex_pde:
-	temperature = heat_grid()
+	n = 10
+	temperature = heat_grid(n=n)
 	temperature.set_boundary(dirichlet = lambda t, x: 1.0 if (0 in x or (n-1) in x) else None)
 	return temperature
 
 def grid_mixed_boundary() -> vertex_pde:
-	temperature = heat_grid()
+	n = 10
+	temperature = heat_grid(n=n)
 	temperature.set_boundary(
 		dirichlet = lambda t, x: 1.0 if (0 in x) else None,
-		neumann = lambda t, x: -0.1 if ((n-1) in x) else None
+		neumann = lambda t, x: -0.1 if ((n-1) in x and 0 not in x) else None
 	)
 	return temperature
 
 def grid_timevarying_boundary() -> vertex_pde:
-	temperature = heat_grid()
+	n = 10
+	temperature = heat_grid(n=n)
 	temperature.set_boundary(
 		dirichlet = lambda t, x: np.sin(t/5)**2 if (0 in x or (n-1) in x) else None
 	)

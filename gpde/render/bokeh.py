@@ -1,16 +1,16 @@
 import numpy as np
-from typing import List, Tuple, Any, Dict
+from typing import List, Tuple, Any, Dict, NewType
 import colorcet as cc
 import shortuuid
 import pandas as pd
 from abc import ABC, abstractmethod
 from pathlib import Path
-import webbrowser
 import zmq
 import time
 from multiprocessing import Process
 
 from bokeh.plotting import figure, from_networkx
+from bokeh.layouts import row, column, gridplot, widgetbox
 from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead
 from bokeh.models.glyphs import Oval, MultiLine
 from bokeh.transform import linear_cmap
@@ -19,14 +19,14 @@ from bokeh.server.server import Server
 from bokeh.util.browser import view
 from tornado.ioloop import IOLoop
 
-from gpde.core import *
+from gpde import *
 from gpde.utils.zmq import *
 
 ''' Common types ''' 
 
 Canvas = List[List[List[Tuple[Observable]]]]
 Plot = Any
-PlotID = Newtype('PlotID', str)
+PlotID = NewType('PlotID', str)
 
 ''' Classes ''' 
 
@@ -56,11 +56,11 @@ class Renderer(ABC):
 			cols = []
 			for j in range(len(self.canvas[i])):
 				if len(self.canvas[i][j]) == 1:
-					cols.append(create_plot(self.canvas[i][j][0]))
+					cols.append(self.create_plot(self.canvas[i][j][0]))
 				else:
 					subplots = []
 					for k in range(len(self.canvas[i][j])):
-						subplots.append(create_plot(self.canvas[i][j][k]))
+						subplots.append(self.create_plot(self.canvas[i][j][k]))
 					nsubcols = int(np.sqrt(len(subplots)))
 					cols.append(gridplot(subplots, ncols=nsubcols, sizing_mode='scale_both'))
 			rows.append(row(cols, sizing_mode='scale_both'))
@@ -78,12 +78,13 @@ class Renderer(ABC):
 				renderer = from_networkx(G, layout)
 				plot.renderers.append(renderer)
 			# Domain-specific rendering
+			desc = 'value' # TODO
 			if isinstance(obs, VertexObservable):
 				plot.renderers[0].node_renderer.data_source.data['node'] = list(G.nodes())
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
 				plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('value', self.palette, self.lo, self.hi))
 				if self.show_bar:
-					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
+					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
 					plot.add_layout(cbar, 'right')
 				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node')]))
 			elif isinstance(obs, EdgeObservable):
@@ -100,7 +101,7 @@ class Renderer(ABC):
 				plot.renderers[0].edge_renderer.data_source.data['y_end'] = layout_coords['y_end']
 				plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('value', self.palette, self.lo, self.hi), line_width=5)
 				if self.show_bar:
-					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title='value')
+					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
 					plot.add_layout(cbar, 'right')
 				arrows = Arrow(
 					end=VeeHead(size=8), 
@@ -115,6 +116,7 @@ class Renderer(ABC):
 		for obs in items:
 			plot = helper(obs, plot)
 			obs.plot_id = plot_id
+			self.plots[plot_id] = plot
 		return plot
 
 	def draw(self):
@@ -132,9 +134,9 @@ class Renderer(ABC):
 class GridRenderer(Renderer):
 	''' Render all observables separately as items on a grid ''' 
 
-	def __init__(*args, ncols=2, **kwargs):
-		super().__init__(*args, **kwargs)
+	def __init__(self, *args, ncols=2, **kwargs):
 		self.ncols = ncols
+		super().__init__(*args, **kwargs)
 
 	def setup_canvas(self):
 		canvas = []
@@ -147,20 +149,19 @@ class GridRenderer(Renderer):
 
 ''' Entry point ''' 
 
-bokeh_host = 'localhost'
-bokeh_port = 8080
+host = 'localhost'
+port = 8080
 
 def render_bokeh(renderer: Renderer):
 	''' Render as a Bokeh web app ''' 
 	path = str(Path(__file__).parent / 'bokeh_server.py')
-	proc = Process(target=start_server, args=(filepath, bokeh_host, bokeh_port))
+	proc = Process(target=start_server, args=(path, host, port))
 	proc.start()
 	print('Server started')
 	ctx, tx = ipc_tx()
 
 	try:
 		print('Waiting for server to initialize...')
-		webbrowser.open_new_tab('http://{}:{}'.format(bokeh_host, bokeh_port))
 		tx({'tag': 'init', 'renderer': wire_pickle(renderer)})
 		print('Done.')
 		while True: 
@@ -194,5 +195,5 @@ def start_server(filepath: str, host: str, port: int):
 		'use_index':True
 	}
 	srv = Server(apps,**kwags)
-	io_loop.add_callback(view, 'http://{}:{}'.format(bokeh_host, bokeh_port))
+	io_loop.add_callback(view, 'http://{}:{}'.format(host, port))
 	io_loop.start()

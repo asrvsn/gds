@@ -11,8 +11,8 @@ from bokeh.models import ColumnDataSource, Slider, Select, Button, Oval
 from bokeh.layouts import row, column, gridplot, widgetbox
 from bokeh.models.widgets import Div, TextInput
 
-from utils.zmq import *
-from rendering import *
+from gpde.utils.zmq import *
+from gpde.render.bokeh import *
 
 # Save curdoc() to make sure all threads see the same document.
 doc = curdoc()
@@ -101,7 +101,7 @@ def react(msg):
 		renderer = wire_unpickle(msg['renderer'])
 		renderer.draw_plots(root)
 
-def stream_data():
+def start():
 	ctx, rx = ipc_rx()
 	try:
 		while True:
@@ -111,5 +111,5 @@ def stream_data():
 		ctx.destroy()
 
 print('Bokeh started')
-thread = Thread(target=stream_data)
+thread = Thread(target=start)
 thread.start()

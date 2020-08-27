@@ -1,6 +1,7 @@
 import numpy as np 
 from typing import Tuple
 from scipy.integrate import RK45
+import pdb
 
 from .core import *
 from .utils import *
@@ -31,6 +32,7 @@ class FaceObservable(Observable):
 class vertex_pde(pde, VertexObservable):
 	''' PDE defined on the vertices of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
+		# pdb.set_trace()
 		VertexObservable.__init__(self, G)
 		self.edge_X = {x: i for i, x in enumerate(G.nodes())}
 		self.X_from = [e[0] for e in G.edges()]
@@ -40,7 +42,7 @@ class vertex_pde(pde, VertexObservable):
 		if w_key is not None:
 			for i, e in enumerate(G.edges()):
 				self.weights[i] = G[e[0]][e[1]][w_key]
-		super().__init__(X, *args, **kwargs)
+		pde.__init__(self, self.X, *args, **kwargs)
 
 	''' Spatial differential operators '''
 
@@ -90,10 +92,11 @@ class edge_pde(pde, EdgeObservable):
 			for n in destructure(x):
 				if G.degree[n] > 1:
 					(a, b) = x
-					self.weights_dual[self.X_dual[x]] += 
+					self.weights_dual[self.X_dual[x]] += (
 						self.incidence[n][a] * self.weights[X[a]] * 
 						self.incidence[n][b] * self.weights[X[b]] / 
 						(G.degree[n] - 1)
+					)
 		# Orientation of dual
 		self.oriented_incidence_dual = nx.incidence_matrix(self.G_dual)
 		for i, x in enumerate(self.X):
@@ -101,7 +104,7 @@ class edge_pde(pde, EdgeObservable):
 				if y[1] in x: # Inward edges receive negative orientation
 					j = self.X_dual[(x,y)]
 					self.oriented_incidence_dual[i][j] = -1
-		super().__init__(X, *args, **kwargs)
+		pde.__init__(self, self.X, *args, **kwargs)
 
 	def __call__(self, x: Edge):
 		return self.orientation[self.X[x]] * self.y[self.X[x]]
