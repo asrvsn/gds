@@ -1,6 +1,7 @@
 ''' Operations on pde's ''' 
 
 from .core import *
+from .derived import *
 
 def couple(*pdes: Tuple[pde]) -> System:
 	return coupled_pde(*pdes).system()

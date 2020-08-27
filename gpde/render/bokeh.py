@@ -67,10 +67,11 @@ class Renderer(ABC):
 		root.children.append(column(rows, sizing_mode='scale_both'))
 
 	def create_plot(self, items: Tuple[Observable]):
+		assert all([obs.G is items[0].G for obs in items]), 'Co-rendered observables must use the same graph'
+		G = nx.convert_node_labels_to_integers(items[0].G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+		layout = self.layout_func(G)
 		def helper(obs: Observable, plot=None):
 			if plot is None:
-				G = nx.convert_node_labels_to_integers(obs.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-				layout = self.layout_func(G)
 				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
 				plot.axis.visible = None
 				plot.xgrid.grid_line_color = None
@@ -130,6 +131,11 @@ class Renderer(ABC):
 
 
 ''' Layout-specific renderers ''' 
+
+class SingleRenderer(Renderer):
+	''' Render all observables in the same plot ''' 
+	def setup_canvas(self):
+		return [[[tuple(self.observables)]]]
 
 class GridRenderer(Renderer):
 	''' Render all observables separately as items on a grid ''' 

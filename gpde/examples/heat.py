@@ -2,6 +2,7 @@
 
 import numpy as np
 import networkx as nx
+import pdb
 
 from gpde import *
 from gpde.render.bokeh import *
@@ -20,10 +21,17 @@ def grid_const_boundary() -> vertex_pde:
 def grid_mixed_boundary() -> vertex_pde:
 	n = 10
 	temperature = heat_grid(n=n)
-	temperature.set_boundary(
-		dirichlet = lambda t, x: 1.0 if (0 in x) else None,
-		neumann = lambda t, x: -0.1 if ((n-1) in x and 0 not in x) else None
-	)
+	def dirichlet(t, x):
+		if x[0] == 0 or x[0] == n-1:
+			return 0.5
+		elif x[1] == 0:
+			return 1.0
+		return None
+	def neumann(t, x):
+		if x[1] == n-1 and x[0] not in (0, n-1):
+			return -0.1
+		return None
+	temperature.set_boundary(dirichlet=dirichlet, neumann=neumann)
 	return temperature
 
 def grid_timevarying_boundary() -> vertex_pde:

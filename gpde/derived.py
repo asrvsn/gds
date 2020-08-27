@@ -34,7 +34,7 @@ class vertex_pde(pde, VertexObservable):
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
 		# pdb.set_trace()
 		VertexObservable.__init__(self, G)
-		self.edge_X = {x: i for i, x in enumerate(G.nodes())}
+		self.X_edge = bidict({x: i for i, x in enumerate(G.edges())})
 		self.X_from = [e[0] for e in G.edges()]
 		self.X_to = [e[1] for e in G.edges()]
 		self.laplacian_matrix = -nx.laplacian_matrix(G)
@@ -47,7 +47,7 @@ class vertex_pde(pde, VertexObservable):
 	''' Spatial differential operators '''
 
 	def partial(self, e: Edge) -> float:
-		return np.sqrt(self.weights[self.edge_X[e]]) * (self(e[1]) - self(e[0]))
+		return np.sqrt(self.weights[self.X_edge[e]]) * (self(e[1]) - self(e[0]))
 
 	def grad(self) -> np.ndarray:
 		return np.sqrt(self.weights) * (self.y[self.X_from] - self.y[self.X_to])
@@ -62,7 +62,7 @@ class vertex_pde(pde, VertexObservable):
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		return np.array([
-			sum([v_field((x, y)) * self.partial((x, y)) for y in self.neighbors(x)])
+			sum([v_field((x, y)) * self.partial((x, y)) for y in self.G.neighbors(x)])
 			for x in self.X
 		])
 
@@ -71,39 +71,42 @@ class edge_pde(pde, EdgeObservable):
 	''' PDE defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, orientation: Callable[[Edge], Sign]=None, **kwargs):
 		EdgeObservable.__init__(self, G)
+		self.X_vertex = {x: i for i, x in enumerate(G.nodes())}
 		self.weights = np.ones(len(G.edges()))
 		if w_key is not None:
 			for i, e in enumerate(G.edges()):
 				self.weights[i] = G[e[0]][e[1]][w_key]
 		self.incidence = nx.incidence_matrix(G)
 		# Orient edges
-		self.orientation = np.ones(len(X)) if orientation is None else np.array([orientation(x) for x in X])
+		self.orientation = np.ones(len(self.X)) if orientation is None else np.array([orientation(x) for x in self.X])
 		self.oriented_incidence = self.incidence.copy()
 		for i, x in enumerate(G.edges()):
+			(a, b) = x
 			if self.orientation[i] > 0:
-				self.oriented_incidence[x[0]][i] = -1
+				self.oriented_incidence[self.X_vertex[a], i] = -1
 			else:
-				self.oriented_incidence[x[1]][i] = -1
+				self.oriented_incidence[self.X_vertex[b], i] = -1
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
-		self.weights_dual = np.zeros(len(self.X_dual))
-		for i, x in enumerate(self.G_dual.edges()):
-			for n in destructure(x):
-				if G.degree[n] > 1:
-					(a, b) = x
-					self.weights_dual[self.X_dual[x]] += (
-						self.incidence[n][a] * self.weights[X[a]] * 
-						self.incidence[n][b] * self.weights[X[b]] / 
-						(G.degree[n] - 1)
-					)
+		# self.weights_dual = np.zeros(len(self.X_dual))
+		# for i, x in enumerate(self.G_dual.edges()):
+		# 	for n in destructure(x):
+		# 		if G.degree[n] > 1:
+		# 			(a, b) = x
+		# 			self.weights_dual[self.X_dual[x]] += (
+		# 				self.incidence[n][a] * self.weights[self.X[a]] * 
+		# 				self.incidence[n][b] * self.weights[self.X[b]] / 
+		# 				(G.degree[n] - 1)
+		# 			)
+		self.weights_dual = np.ones(len(self.X_dual)) # TODO
 		# Orientation of dual
 		self.oriented_incidence_dual = nx.incidence_matrix(self.G_dual)
 		for i, x in enumerate(self.X):
 			for y in self.G_dual.neighbors(x):
 				if y[1] in x: # Inward edges receive negative orientation
 					j = self.X_dual[(x,y)]
-					self.oriented_incidence_dual[i][j] = -1
+					self.oriented_incidence_dual[i, j] = -1
 		pde.__init__(self, self.X, *args, **kwargs)
 
 	def __call__(self, x: Edge):
@@ -141,3 +144,53 @@ class edge_pde(pde, EdgeObservable):
 class face_pde(pde, FaceObservable):
 	''' PDE defined on the faces of a graph ''' 
 	pass		
+
+''' Other derivations ''' 
+
+class coupled_pde(Integrable):
+	''' Multiple PDEs coupled in time. Can be integrated together but not observed directly. ''' 
+	def __init__(self, *pdes: Tuple[pde], max_step=None):
+		assert len(pdes) >= 1 
+		assert all([p.t == 0. for p in pdes]), 'Pass pdes at initial values only'
+		self.pdes = pdes
+		if max_step is None:
+			max_step = min([p.max_step for p in pdes])
+		self.max_step = max_step
+		self.t0 = 0.
+		y0s = [p.y0 for p in pdes]
+		self.views = [slice(0, len(y0s[0]))]
+		for i in range(1, len(pdes)):
+			start = self.views[i-1].stop
+			self.views.append(slice(start, start+len(y0s[i])))
+		self.y0 = np.concatenate(y0s)
+		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
+		# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
+		for (p, view) in zip(self.pdes, self.views):
+			attach_dyn_props(p, {'y': lambda _: self.integrator.y[view], 't': lambda _: self.integrator.t})
+			p.get_y = lambda: self.integrator.y[view]
+
+	def dydt(self, t: Time, y: np.ndarray):
+		return np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.pdes, self.views)])
+
+	def step(self, dt: float):
+		self.integrator.t_bound = self.t + dt
+		self.integrator.status = 'running'
+		while self.integrator.status != 'finished':
+			self.integrator.step()
+			# Apply all boundary conditions
+			for p, view in zip(self.pdes, self.views):
+				for x in p.dirichlet_X:
+					self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
+
+	def observables(self) -> List[Observable]:
+		return list(self.pdes)
+
+	def system(self) -> System:
+		return (self, self.observables())
+
+	def reset(self):
+		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
+
+	@property
+	def t(self):
+		return self.integrator.t

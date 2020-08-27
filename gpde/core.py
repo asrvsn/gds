@@ -60,7 +60,7 @@ class Observable(ABC):
 ''' Base classes ''' 
 
 class pde(Observable, Integrable):
-	def __init__(self, X: Domain, f: Callable[[Time], np.ndarray], order: int=1, max_step=1e-3):
+	def __init__(self, X: Domain, f: Callable[[Time, 'pde'], np.ndarray], order: int=1, max_step=1e-3):
 		''' Create a PDE defined on some domain.
 		Uses RK45 solver.
 		''' 
@@ -86,7 +86,7 @@ class pde(Observable, Integrable):
 		assert len(kwargs) == self.order - 1, f'{len(kwargs)+1} initial conditions provided but {self.order} needed'
 		self.t0 = t0
 		self.integrator.t = t0
-		for x, i in self.X:
+		for x, i in self.X.items():
 			self.y0[i] = y0(x)
 			self.integrator.y[i] = y0(x)
 			for j, y0_j in enumerate(kwargs):
@@ -102,6 +102,9 @@ class pde(Observable, Integrable):
 		''' 
 		self.dirichlet = dirichlet
 		self.dirichlet_X = set({x for x in self.X if (dirichlet(0., x) is not None)}) # Fixed-value domain
+		for x in self.dirichlet_X:
+			v, i = self.dirichlet(0., x), self.X[x] - self.ndim
+			self.integrator.y[i] = self.y0[i] = v 
 		self.dirichlet_indices = [self.X[x] for x in self.dirichlet_X]
 		self.neumann = neumann
 		self.neumann_X = set({x for x in self.X if (neumann(0., x) is not None)}) # Fixed-flux domain
@@ -155,51 +158,3 @@ class pde(Observable, Integrable):
 	@property
 	def t(self):
 		return self.integrator.t
-
-class coupled_pde(Integrable):
-	''' Multiple PDEs coupled in time. Can be integrated together but not observed directly. ''' 
-	def __init__(self, *pdes: Tuple[pde], max_step=None):
-		assert len(pdes) >= 1 
-		assert all([p.t == pdes[0].t for p in pdes]), 'Cannot couple integrators at different times'
-		self.pdes = pdes
-		if max_step is None:
-			max_step = min([p.max_step for p in pdes])
-		self.max_step = max_step
-		self.t0 = pdes[0].t
-		y0s = [p.integrator.y for p in pdes]
-		self.views = [slice(0, len(y0s[0]))]
-		for i in range(1, len(pdes)):
-			start = self.views[i-1].stop
-			self.views.append(slice(start, start+len(y0s[i])))
-		# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
-		self.y0 = np.concatenate(y0s)
-		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
-		for (p, view) in zip(self.pdes, self.views):
-			attach_dyn_props(p, {'y': lambda _: self.integrator.y[view], 't': lambda _: self.integrator.t})
-
-	def dydt(self, t: Time, y: np.ndarray):
-		return np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.pdes, self.views)])
-
-	def step(self, dt: float):
-		self.integrator.t_bound = self.t + dt
-		self.integrator.status = 'running'
-		while self.integrator.status != 'finished':
-			self.integrator.step()
-			# Apply all boundary conditions
-			for p, view in zip(self.pdes, self.views):
-				for x in p.dirichlet_X:
-					self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
-
-	def observables(self) -> List[Observable]:
-		return list(self.pdes)
-
-	def system(self) -> System:
-		return (self, self.observables())
-
-	def reset(self):
-		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
-
-	@property
-	def t(self):
-		return self.integrator.t
-

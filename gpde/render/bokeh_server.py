@@ -100,6 +100,7 @@ def react(msg):
 	if msg['tag'] == 'init':
 		renderer = wire_unpickle(msg['renderer'])
 		renderer.draw_plots(root)
+		renderer.draw()
 
 def start():
 	ctx, rx = ipc_rx()
