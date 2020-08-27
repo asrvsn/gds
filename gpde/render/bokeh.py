@@ -11,8 +11,8 @@ from multiprocessing import Process
 
 from bokeh.plotting import figure, from_networkx
 from bokeh.layouts import row, column, gridplot, widgetbox
-from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead
-from bokeh.models.glyphs import Oval, MultiLine
+from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead, ColumnDataSource
+from bokeh.models.glyphs import Oval, MultiLine, Patches
 from bokeh.transform import linear_cmap
 from bokeh.command.util import build_single_handler_applications
 from bokeh.server.server import Server
@@ -31,7 +31,7 @@ PlotID = NewType('PlotID', str)
 ''' Classes ''' 
 
 class Renderer(ABC):
-	def __init__(self, sys: System, palette=cc.fire, lo=0., hi=1., layout_func=None, n_spring_iters=500, show_bar=True):
+	def __init__(self, sys: System, palette=cc.fire, lo=0., hi=1., layout_func=None, n_spring_iters=500, show_bar=True, dim=2):
 		self.integrator = sys[0]
 		self.observables = sys[1]
 		self.canvas: Canvas = self.setup_canvas()
@@ -41,7 +41,7 @@ class Renderer(ABC):
 		self.hi = hi
 		self.show_bar=show_bar
 		if layout_func is None:
-			self.layout_func = lambda G: nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1)
+			self.layout_func = lambda G: nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1, dim=dim)
 		else:
 			self.layout_func = layout_func
 
@@ -73,9 +73,9 @@ class Renderer(ABC):
 		def helper(obs: Observable, plot=None):
 			if plot is None:
 				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
-				plot.axis.visible = None
-				plot.xgrid.grid_line_color = None
-				plot.ygrid.grid_line_color = None
+				# plot.axis.visible = None
+				# plot.xgrid.grid_line_color = None
+				# plot.ygrid.grid_line_color = None
 				renderer = from_networkx(G, layout)
 				plot.renderers.append(renderer)
 			# Domain-specific rendering
@@ -90,22 +90,13 @@ class Renderer(ABC):
 				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node')]))
 			elif isinstance(obs, EdgeObservable):
 				source = plot.renderers[0].edge_renderer.data_source
-				obs.layout_data = pd.DataFrame(
-					[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in G.edges()],
-					columns=['x1', 'y1', 'x2', 'y2']
-				)
-				source.data['value'] = np.ones(len(obs.y))
-				source.data['x1'], source.data['x2'], source.data['y1'], source.data['y2'] = obs.layout_data['x1'], obs.layout_data['x2'], obs.layout_data['y1'], obs.layout_data['y2']
-				self.draw_arrows(source, obs)
+				self.prep_layout_data(obs, G, layout)
+				self.draw_arrows(obs)
 				if self.show_bar:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
 					plot.add_layout(cbar, 'right')
-				arrows = Arrow(
-					end=VeeHead(size=8), 
-					x_start='x1', y_start='y1', x_end='x2', y_end='y2', line_width=0, 
-					source=source
-				)
-				plot.add_layout(arrows)
+				arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.palette, low=self.lo, high=self.hi))
+				plot.add_glyph(obs.arr_source, arrows)
 			return plot
 		
 		plot = None
@@ -123,17 +114,39 @@ class Renderer(ABC):
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y
 			elif isinstance(obs, EdgeObservable):
 				# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
-				self.draw_arrows(plot.renderers[0].edge_renderer.data_source, obs)
+				self.draw_arrows(obs)
 
-	def draw_arrows(self, source, obs):
-		idx = np.sign(source.data['value']) != obs.y
-		tmp = source.data['x1']
-		source.data['x1'][idx] = source.data['x2'][idx] 
-		source.data['x2'][idx] = tmp[idx] 
-		tmp = source.data['y1']
-		source.data['y1'][idx] = source.data['y2'][idx] 
-		source.data['y2'][idx] = tmp[idx] 
-		source.data['value'] = obs.y
+	def prep_layout_data(self, obs, G, layout):
+		n = len(G.edges())
+		data = pd.DataFrame(
+			[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in G.edges()],
+			columns=['x1', 'y1', 'x2', 'y2']
+		)
+		data['dx'] = data['x2'] - data['x1']
+		data['dy'] = data['y2'] - data['y1']
+		data['x_mid'] = data['x1'] + data['dx'] / 2
+		data['y_mid'] = data['y1'] + data['dy'] / 2
+		norm = np.sqrt(data['dx']**2 + data['dy']**2)
+		data['dx'] /= norm
+		data['dy'] /= norm
+		data['m'] = data['dy'] / data['dx']
+		obs.layout = data
+		obs.arr_source = ColumnDataSource()
+
+	def draw_arrows(self, obs):
+		h = 0.04
+		w = 0.04
+		p1x = obs.layout['x_mid']
+		p1y = obs.layout['y_mid']
+		dx = np.sign(obs.y) * h / np.sqrt(obs.layout['m'] ** 2 + 1)
+		dy = obs.layout['m'] * dx
+		p2x = -obs.layout['dy'] * w/2 + p1x + dx
+		p2y = obs.layout['dx'] * w/2 + p1y + dy
+		p3x = obs.layout['dy'] * w/2 + p1x + dx
+		p3y = -obs.layout['dx'] * w/2 + p1y + dy
+		obs.arr_source.data['xs'] = np.stack((p1x, p2x, p3x), axis=1).tolist()
+		obs.arr_source.data['ys'] = np.stack((p1y, p2y, p3y), axis=1).tolist()
+		obs.arr_source.data['value'] = np.abs(obs.y)
 
 
 ''' Layout-specific renderers ''' 

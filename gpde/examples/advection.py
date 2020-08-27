@@ -42,5 +42,5 @@ def advection_on_torus():
 	return couple(concentration, flow)
 
 if __name__ == '__main__':
-	sys = advection_on_grid()
+	sys = advection_on_torus()
 	render_bokeh(SingleRenderer(sys))
