@@ -125,7 +125,7 @@ class pde(Observable, Integrable):
 
 	def reset(self):
 		''' Reset the system to initial conditions ''' 
-		pass
+		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
 
 	def set_erroneous(self, erroneous: Callable[[np.ndarray], bool]):
 		self.erroneous = erroneous

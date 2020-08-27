@@ -13,7 +13,7 @@ def heat_grid(n = 10) -> vertex_pde:
 	return vertex_pde(G, f)
 
 def grid_const_boundary() -> vertex_pde:
-	n = 10
+	n = 7
 	temperature = heat_grid(n=n)
 	temperature.set_boundary(dirichlet = lambda t, x: 1.0 if (0 in x or (n-1) in x) else None)
 	return temperature

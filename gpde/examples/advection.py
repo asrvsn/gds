@@ -1,3 +1,5 @@
+''' Advection of scalar fields '''
+
 import networkx as nx
 import pdb
 
@@ -13,17 +15,16 @@ def advection_on_grid():
 				return 1
 			else:
 				return -1
-		else:
-			return 0
+		return 0
 	flow_diff = np.zeros(len(G.edges()))
 	flow = edge_pde(G, lambda t, self: flow_diff)
 	flow.set_initial(y0 = v_field)
 	concentration = vertex_pde(G, f = lambda t, self: self.advect(v_field))
-	concentration.set_initial(y0 = lambda x: 1.0 if x == (2, 2) else None) # delta initial condition
+	concentration.set_initial(y0 = lambda x: 1.0 if x == (2, 2) else 0.) # delta initial condition
 	return couple(concentration, flow)
 
 def advection_on_torus():
-	n = 40
+	n = 20
 	G = nx.grid_2d_graph(n, n, periodic=True)
 	def v_field(e: Edge):
 		if e[0][1] == e[1][1]:

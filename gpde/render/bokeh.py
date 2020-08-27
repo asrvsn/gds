@@ -24,7 +24,7 @@ from gpde.utils.zmq import *
 
 ''' Common types ''' 
 
-Canvas = List[List[List[Tuple[Observable]]]]
+Canvas = List[List[List[List[Observable]]]]
 Plot = Any
 PlotID = NewType('PlotID', str)
 
@@ -66,7 +66,7 @@ class Renderer(ABC):
 			rows.append(row(cols, sizing_mode='scale_both'))
 		root.children.append(column(rows, sizing_mode='scale_both'))
 
-	def create_plot(self, items: Tuple[Observable]):
+	def create_plot(self, items: List[Observable]):
 		assert all([obs.G is items[0].G for obs in items]), 'Co-rendered observables must use the same graph'
 		G = nx.convert_node_labels_to_integers(items[0].G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
 		layout = self.layout_func(G)
@@ -83,31 +83,27 @@ class Renderer(ABC):
 			if isinstance(obs, VertexObservable):
 				plot.renderers[0].node_renderer.data_source.data['node'] = list(G.nodes())
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
-				plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('value', self.palette, self.lo, self.hi))
+				plot.renderers[0].node_renderer.glyph = Oval(height=0.04, width=0.04, fill_color=linear_cmap('value', self.palette, self.lo, self.hi))
 				if self.show_bar:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
 					plot.add_layout(cbar, 'right')
 				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node')]))
 			elif isinstance(obs, EdgeObservable):
-				plot.renderers[0].edge_renderer.data_source.data['value'] = obs.y
-				layout_coords = pd.DataFrame(
+				source = plot.renderers[0].edge_renderer.data_source
+				obs.layout_data = pd.DataFrame(
 					[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in G.edges()],
-					columns=['x_start', 'y_start', 'x_end', 'y_end']
+					columns=['x1', 'y1', 'x2', 'y2']
 				)
-				layout_coords['x_end'] = (layout_coords['x_end'] - layout_coords['x_start']) / 2 + layout_coords['x_start']
-				layout_coords['y_end'] = (layout_coords['y_end'] - layout_coords['y_start']) / 2 + layout_coords['y_start']
-				plot.renderers[0].edge_renderer.data_source.data['x_start'] = layout_coords['x_start']
-				plot.renderers[0].edge_renderer.data_source.data['y_start'] = layout_coords['y_start']
-				plot.renderers[0].edge_renderer.data_source.data['x_end'] = layout_coords['x_end']
-				plot.renderers[0].edge_renderer.data_source.data['y_end'] = layout_coords['y_end']
-				plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('value', self.palette, self.lo, self.hi), line_width=5)
+				source.data['value'] = np.ones(len(obs.y))
+				source.data['x1'], source.data['x2'], source.data['y1'], source.data['y2'] = obs.layout_data['x1'], obs.layout_data['x2'], obs.layout_data['y1'], obs.layout_data['y2']
+				self.draw_arrows(source, obs)
 				if self.show_bar:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
 					plot.add_layout(cbar, 'right')
 				arrows = Arrow(
 					end=VeeHead(size=8), 
-					x_start='x_start', y_start='y_start', x_end='x_end', y_end='y_end', line_width=0, 
-					source=plot.renderers[0].edge_renderer.data_source
+					x_start='x1', y_start='y1', x_end='x2', y_end='y2', line_width=0, 
+					source=source
 				)
 				plot.add_layout(arrows)
 			return plot
@@ -127,7 +123,17 @@ class Renderer(ABC):
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y
 			elif isinstance(obs, EdgeObservable):
 				# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
-				plot.renderers[0].edge_renderer.data_source.data['value'] = obs.y
+				self.draw_arrows(plot.renderers[0].edge_renderer.data_source, obs)
+
+	def draw_arrows(self, source, obs):
+		idx = np.sign(source.data['value']) != obs.y
+		tmp = source.data['x1']
+		source.data['x1'][idx] = source.data['x2'][idx] 
+		source.data['x2'][idx] = tmp[idx] 
+		tmp = source.data['y1']
+		source.data['y1'][idx] = source.data['y2'][idx] 
+		source.data['y2'][idx] = tmp[idx] 
+		source.data['value'] = obs.y
 
 
 ''' Layout-specific renderers ''' 
@@ -135,7 +141,7 @@ class Renderer(ABC):
 class SingleRenderer(Renderer):
 	''' Render all observables in the same plot ''' 
 	def setup_canvas(self):
-		return [[[tuple(self.observables)]]]
+		return [[[self.observables]]]
 
 class GridRenderer(Renderer):
 	''' Render all observables separately as items on a grid ''' 

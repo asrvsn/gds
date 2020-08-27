@@ -35,8 +35,8 @@ class vertex_pde(pde, VertexObservable):
 		# pdb.set_trace()
 		VertexObservable.__init__(self, G)
 		self.X_edge = bidict({x: i for i, x in enumerate(G.edges())})
-		self.X_from = [e[0] for e in G.edges()]
-		self.X_to = [e[1] for e in G.edges()]
+		self.X_from = [self.X[e[0]] for e in G.edges()]
+		self.X_to = [self.X[e[1]] for e in G.edges()]
 		self.laplacian_matrix = -nx.laplacian_matrix(G)
 		self.weights = np.ones(len(G.edges()))
 		if w_key is not None:
@@ -132,7 +132,7 @@ class edge_pde(pde, EdgeObservable):
 			u = self(a)
 			for b in self.G_dual.neighbors(a):
 				j = self.X_dual[(a, b)]
-				ret[i] += self.oriented_incidence_dual[i][j] * v_field(b) * u / self.weights_dual[j]
+				ret[i] += self.oriented_incidence_dual[i,j] * v_field(b) * u / self.weights_dual[j]
 		return np.array(ret)
 
 	''' Private methods ''' 
@@ -166,8 +166,8 @@ class coupled_pde(Integrable):
 		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
 		# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
 		for (p, view) in zip(self.pdes, self.views):
-			attach_dyn_props(p, {'y': lambda _: self.integrator.y[view], 't': lambda _: self.integrator.t})
-			p.get_y = lambda: self.integrator.y[view]
+			p.view = view
+			attach_dyn_props(p, {'y': lambda p: self.integrator.y[p.view], 't': lambda _: self.integrator.t})
 
 	def dydt(self, t: Time, y: np.ndarray):
 		return np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.pdes, self.views)])
