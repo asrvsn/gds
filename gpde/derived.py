@@ -47,10 +47,12 @@ class vertex_pde(pde, VertexObservable):
 	''' Spatial differential operators '''
 
 	def partial(self, e: Edge) -> float:
-		return np.sqrt(self.weights[self.X_edge[e]]) * (self(e[1]) - self(e[0]))
+		i = self.X_edge[e]
+		return np.sqrt(self.weights[i]) * (self(e[1]) - self(e[0])) 
 
 	def grad(self) -> np.ndarray:
-		return np.sqrt(self.weights) * (self.y[self.X_from] - self.y[self.X_to])
+		# Respects implicit orientation
+		return np.sqrt(self.weights) * (self.y[self.X_to] - self.y[self.X_from]) 
 
 	def laplacian(self) -> np.ndarray:
 		fixed_flux = replace(np.zeros(self.y.shape), self.neumann_indices, [self.neumann(self.t, x) for x in self.neumann_X])
@@ -69,7 +71,7 @@ class vertex_pde(pde, VertexObservable):
 
 class edge_pde(pde, EdgeObservable):
 	''' PDE defined on the edges of a graph ''' 
-	def __init__(self, G: nx.Graph, *args, w_key: str=None, orientation: Callable[[Edge], Sign]=None, **kwargs):
+	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
 		EdgeObservable.__init__(self, G)
 		self.X_vertex = {x: i for i, x in enumerate(G.nodes())}
 		self.weights = np.ones(len(G.edges()))
@@ -78,14 +80,14 @@ class edge_pde(pde, EdgeObservable):
 				self.weights[i] = G[e[0]][e[1]][w_key]
 		self.incidence = nx.incidence_matrix(G)
 		# Orient edges
-		self.orientation = np.ones(len(self.X)) if orientation is None else np.array([orientation(x) for x in self.X])
-		self.oriented_incidence = self.incidence.copy()
-		for i, x in enumerate(G.edges()):
-			(a, b) = x
-			if self.orientation[i] > 0:
-				self.oriented_incidence[self.X_vertex[a], i] = -1
-			else:
-				self.oriented_incidence[self.X_vertex[b], i] = -1
+		self.orientation = {**{x: 1 for x in self.X}, **{(x[1], x[0]): -1 for x in self.X}} # Orientation implicit by stored keys in domain
+		# self.oriented_incidence = self.incidence.copy()
+		# for i, x in enumerate(G.edges()):
+		# 	(a, b) = x
+		# 	if self.orientation[i] > 0:
+		# 		self.oriented_incidence[self.X_vertex[a], i] = -1
+		# 	else:
+		# 		self.oriented_incidence[self.X_vertex[b], i] = -1
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
@@ -101,16 +103,16 @@ class edge_pde(pde, EdgeObservable):
 		# 			)
 		self.weights_dual = np.ones(len(self.X_dual)) # TODO
 		# Orientation of dual
-		self.oriented_incidence_dual = nx.incidence_matrix(self.G_dual)
-		for i, x in enumerate(self.X):
-			for y in self.G_dual.neighbors(x):
-				if y[1] in x: # Inward edges receive negative orientation
-					j = self.X_dual[(x,y)]
-					self.oriented_incidence_dual[i, j] = -1
+		# self.oriented_incidence_dual = nx.incidence_matrix(self.G_dual)
+		# for i, x in enumerate(self.X):
+		# 	for y in self.G_dual.neighbors(x):
+		# 		if y[1] in x: # Inward edges receive negative orientation
+		# 			j = self.X_dual[(x,y)]
+		# 			self.oriented_incidence_dual[i, j] = -1
 		pde.__init__(self, self.X, *args, **kwargs)
 
 	def __call__(self, x: Edge):
-		return self.orientation[self.X[x]] * self.y[self.X[x]]
+		return self.orientation[x] * self.y[self.X[x]]
 
 	''' Spatial differential operators '''
 
@@ -131,9 +133,10 @@ class edge_pde(pde, EdgeObservable):
 		for a, i in self.X.items():
 			u = self(a)
 			for b in self.G_dual.neighbors(a):
+				# print('For', a, 'got neighbor', b)
 				w = self.weights_dual[self.X_dual[(a, b)]]
 				if b[0] == a[1]: # Outgoing edge
-					ret[i] += u * v_field(b) * u / w
+					ret[i] += u * v_field(b) / w
 				elif b[1] == a[1]: # Outgoing edge, reversed direction
 					ret[i] += u * v_field((b[1], b[0])) / w
 				elif b[0] == a[0]: # Ingoing edge, reversed directopm
@@ -141,12 +144,6 @@ class edge_pde(pde, EdgeObservable):
 				else: # Ingoing edge
 					ret[i] -= u * v_field(b) / w
 		return np.array(ret)
-
-	''' Private methods ''' 
-
-	@property
-	def y(self) -> np.ndarray:
-		return self.integrator.y[:self.ndim] * self.orientation
 
 class face_pde(pde, FaceObservable):
 	''' PDE defined on the faces of a graph ''' 

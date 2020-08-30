@@ -68,7 +68,8 @@ class Renderer(ABC):
 
 	def create_plot(self, items: List[Observable]):
 		assert all([obs.G is items[0].G for obs in items]), 'Co-rendered observables must use the same graph'
-		G = nx.convert_node_labels_to_integers(items[0].G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+		# G = nx.convert_node_labels_to_integers(items[0].G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+		G = items[0].G
 		layout = self.layout_func(G)
 		def helper(obs: Observable, plot=None):
 			if plot is None:
@@ -78,19 +79,18 @@ class Renderer(ABC):
 				# plot.ygrid.grid_line_color = None
 				renderer = from_networkx(G, layout)
 				plot.renderers.append(renderer)
+				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node'), ('edge', '@edge')]))
 			# Domain-specific rendering
 			desc = 'value' # TODO
 			if isinstance(obs, VertexObservable):
-				plot.renderers[0].node_renderer.data_source.data['node'] = list(G.nodes())
+				plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, G.nodes()))
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
 				plot.renderers[0].node_renderer.glyph = Oval(height=0.04, width=0.04, fill_color=linear_cmap('value', self.palette, self.lo, self.hi))
 				if self.show_bar:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
 					plot.add_layout(cbar, 'right')
-				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node')]))
 			elif isinstance(obs, EdgeObservable):
-				source = plot.renderers[0].edge_renderer.data_source
-				self.prep_layout_data(obs, G, layout)
+				self.prep_layout_data(obs, layout)
 				self.draw_arrows(obs)
 				if self.show_bar:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
@@ -116,29 +116,30 @@ class Renderer(ABC):
 				# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
 				self.draw_arrows(obs)
 
-	def prep_layout_data(self, obs, G, layout):
-		n = len(G.edges())
+	def prep_layout_data(self, obs, layout):
 		data = pd.DataFrame(
-			[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in G.edges()],
+			[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in obs.G.edges()],
 			columns=['x1', 'y1', 'x2', 'y2']
 		)
 		data['dx'] = data['x2'] - data['x1']
+		data['dx_dir'] = np.sign(data['dx'])
 		data['dy'] = data['y2'] - data['y1']
 		data['x_mid'] = data['x1'] + data['dx'] / 2
 		data['y_mid'] = data['y1'] + data['dy'] / 2
 		norm = np.sqrt(data['dx']**2 + data['dy']**2)
 		data['dx'] /= norm
 		data['dy'] /= norm
-		data['m'] = data['dy'] / data['dx']
+		data['m'] = data['dy'] / data['dx'] # TODO: possible division by 0
 		obs.layout = data
 		obs.arr_source = ColumnDataSource()
+		obs.arr_source.data['edge'] = list(map(str, obs.G.edges()))
 
 	def draw_arrows(self, obs):
 		h = 0.04
 		w = 0.04
 		p1x = obs.layout['x_mid']
 		p1y = obs.layout['y_mid']
-		dx = np.sign(obs.y) * h / np.sqrt(obs.layout['m'] ** 2 + 1)
+		dx = -np.sign(obs.y) * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
 		dy = obs.layout['m'] * dx
 		p2x = -obs.layout['dy'] * w/2 + p1x + dx
 		p2y = obs.layout['dx'] * w/2 + p1y + dy
