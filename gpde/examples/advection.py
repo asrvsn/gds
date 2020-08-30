@@ -23,6 +23,22 @@ def advection_on_grid():
 	concentration.set_initial(y0 = lambda x: 1.0 if x == (2, 2) else 0.) # delta initial condition
 	return couple(concentration, flow)
 
+def advection_on_circle():
+	n = 10
+	G = nx.Graph()
+	G.add_nodes_from(list(range(n)))
+	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
+	def v_field(e: Edge):
+		if e[1] > e[0] or e == (n-1, 0):
+			return 1.0
+		return -1.0
+	flow_diff = np.zeros(len(G.edges()))
+	flow = edge_pde(G, lambda t, self: flow_diff)
+	flow.set_initial(y0 = v_field)
+	concentration = vertex_pde(G, f = lambda t, self: -self.advect(v_field))
+	concentration.set_initial(y0 = lambda x: 1.0 if x == 0 else 0.) # delta initial condition
+	return couple(concentration, flow)
+
 def advection_on_torus():
 	n = 20
 	G = nx.grid_2d_graph(n, n, periodic=True)
@@ -42,5 +58,5 @@ def advection_on_torus():
 	return couple(concentration, flow)
 
 if __name__ == '__main__':
-	sys = advection_on_grid()
+	sys = advection_on_circle()
 	render_bokeh(SingleRenderer(sys))

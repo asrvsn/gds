@@ -125,7 +125,8 @@ class edge_pde(pde, EdgeObservable):
 
 	def laplacian(self) -> np.ndarray:
 		''' Vector laplacian https://en.wikipedia.org/wiki/Vector_Laplacian ''' 
-		# TODO: check? (also need edge-edge weights...)
+		# TODO: check correctness 
+		# TODO: need edge-edge weights
 		# TODO: neumann conditions
 		return self.dual_laplacian_matrix@self.y
 
