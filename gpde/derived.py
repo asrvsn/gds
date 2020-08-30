@@ -131,8 +131,15 @@ class edge_pde(pde, EdgeObservable):
 		for a, i in self.X.items():
 			u = self(a)
 			for b in self.G_dual.neighbors(a):
-				j = self.X_dual[(a, b)]
-				ret[i] += self.oriented_incidence_dual[i,j] * v_field(b) * u / self.weights_dual[j]
+				w = self.weights_dual[self.X_dual[(a, b)]]
+				if b[0] == a[1]: # Outgoing edge
+					ret[i] += u * v_field(b) * u / w
+				elif b[1] == a[1]: # Outgoing edge, reversed direction
+					ret[i] += u * v_field((b[1], b[0])) / w
+				elif b[0] == a[0]: # Ingoing edge, reversed directopm
+					ret[i] -= u * v_field((b[1], b[0])) / w
+				else: # Ingoing edge
+					ret[i] -= u * v_field(b) / w
 		return np.array(ret)
 
 	''' Private methods ''' 
