@@ -91,6 +91,7 @@ class edge_pde(pde, EdgeObservable):
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
+		self.dual_laplacian_matrix = -nx.laplacian_matrix(self.G_dual)
 		# self.weights_dual = np.zeros(len(self.X_dual))
 		# for i, x in enumerate(self.G_dual.edges()):
 		# 	for n in destructure(x):
@@ -124,16 +125,15 @@ class edge_pde(pde, EdgeObservable):
 
 	def laplacian(self) -> np.ndarray:
 		''' Vector laplacian https://en.wikipedia.org/wiki/Vector_Laplacian ''' 
-		x1 = np.sqrt(self.weights) * self.div()@self.oriented_incidence
-		x2 = curl_operator@self.curl() # TODO		
-		return x1 - x2
+		# TODO: check? (also need edge-edge weights...)
+		# TODO: neumann conditions
+		return self.dual_laplacian_matrix@self.y
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		ret = np.zeros(self.ndim)
 		for a, i in self.X.items():
 			u = self(a)
 			for b in self.G_dual.neighbors(a):
-				# print('For', a, 'got neighbor', b)
 				w = self.weights_dual[self.X_dual[(a, b)]]
 				if b[0] == a[1]: # Outgoing edge
 					ret[i] += u * v_field(b) / w

@@ -19,7 +19,7 @@ def advection_on_grid():
 	flow_diff = np.zeros(len(G.edges()))
 	flow = edge_pde(G, lambda t, self: flow_diff)
 	flow.set_initial(y0 = v_field)
-	concentration = vertex_pde(G, f = lambda t, self: self.advect(v_field))
+	concentration = vertex_pde(G, f = lambda t, self: -self.advect(v_field))
 	concentration.set_initial(y0 = lambda x: 1.0 if x == (2, 2) else 0.) # delta initial condition
 	return couple(concentration, flow)
 
@@ -42,5 +42,5 @@ def advection_on_torus():
 	return couple(concentration, flow)
 
 if __name__ == '__main__':
-	sys = advection_on_torus()
+	sys = advection_on_grid()
 	render_bokeh(SingleRenderer(sys))
