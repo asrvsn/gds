@@ -31,14 +31,14 @@ PlotID = NewType('PlotID', str)
 ''' Classes ''' 
 
 class Renderer(ABC):
-	def __init__(self, sys: System, palette=cc.fire, lo=0., hi=1., layout_func=None, n_spring_iters=500, show_bar=True, dim=2):
+	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, show_bar=True, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.)):
 		self.integrator = sys[0]
 		self.observables = sys[1]
 		self.canvas: Canvas = self.setup_canvas()
 		self.plots: Dict[PlotID, Plot] = dict()
 		self.palette = palette
-		self.lo = lo
-		self.hi = hi
+		self.node_rng = node_rng
+		self.edge_rng = edge_rng
 		self.show_bar=show_bar
 		if layout_func is None:
 			self.layout_func = lambda G: nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1, dim=dim)
@@ -80,22 +80,21 @@ class Renderer(ABC):
 				plot.renderers.append(renderer)
 				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node'), ('edge', '@edge')]))
 			# Domain-specific rendering
-			desc = 'value' # TODO
 			if isinstance(obs, VertexObservable):
 				plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
-				plot.renderers[0].node_renderer.glyph = Oval(height=0.04, width=0.04, fill_color=linear_cmap('value', self.palette, self.lo, self.hi))
+				plot.renderers[0].node_renderer.glyph = Oval(height=0.04, width=0.04, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]))
 				if self.show_bar:
-					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
+					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
 					plot.add_layout(cbar, 'right')
 			elif isinstance(obs, EdgeObservable):
 				self.prep_layout_data(obs, G, layout)
 				obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
 				self.draw_arrows(obs)
 				if self.show_bar:
-					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=desc)
+					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
 					plot.add_layout(cbar, 'right')
-				arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.palette, low=self.lo, high=self.hi))
+				arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.palette, low=self.edge_rng[0], high=self.edge_rng[1]))
 				plot.add_glyph(obs.arr_source, arrows)
 			return plot
 		
@@ -126,9 +125,9 @@ class Renderer(ABC):
 		data['dy'] = data['y2'] - data['y1']
 		data['x_mid'] = data['x1'] + data['dx'] / 2
 		data['y_mid'] = data['y1'] + data['dy'] / 2
-		norm = np.sqrt(data['dx']**2 + data['dy']**2)
-		data['dx'] /= norm
-		data['dy'] /= norm
+		data['m_norm'] = np.sqrt(data['dx']**2 + data['dy']**2)
+		data['dx'] /= data['m_norm']
+		data['dy'] /= data['m_norm']
 		data['m'] = data['dy'] / data['dx'] # TODO: possible division by 0
 		obs.layout = data
 		obs.arr_source = ColumnDataSource()
@@ -136,15 +135,15 @@ class Renderer(ABC):
 	def draw_arrows(self, obs):
 		h = 0.1
 		w = 0.1
-		y_abs = np.abs(obs.y)
+		magn = np.minimum(np.abs(obs.y), obs.layout['m_norm'] / 2)
 		p1x = obs.layout['x_mid']
 		p1y = obs.layout['y_mid']
-		dx = -obs.y * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
+		dx = -np.sign(obs.y) * magn * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
 		dy = obs.layout['m'] * dx
-		p2x = -obs.layout['dy'] * y_abs * w/2 + p1x + dx
-		p2y = obs.layout['dx'] * y_abs * w/2 + p1y + dy
-		p3x = obs.layout['dy'] * y_abs * w/2 + p1x + dx
-		p3y = -obs.layout['dx'] * y_abs * w/2 + p1y + dy
+		p2x = -obs.layout['dy'] * magn * w/2 + p1x + dx
+		p2y = obs.layout['dx'] * magn * w/2 + p1y + dy
+		p3x = obs.layout['dy'] * magn * w/2 + p1x + dx
+		p3y = -obs.layout['dx'] * magn * w/2 + p1y + dy
 		obs.arr_source.data['xs'] = np.stack((p1x, p2x, p3x), axis=1).tolist()
 		obs.arr_source.data['ys'] = np.stack((p1y, p2y, p3y), axis=1).tolist()
 		obs.arr_source.data['value'] = np.abs(obs.y)

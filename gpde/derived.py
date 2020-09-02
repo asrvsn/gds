@@ -6,61 +6,40 @@ import pdb
 from .core import *
 from .utils import *
 
-''' Derived interfaces ''' 
+''' Domain-specific  interfaces ''' 
 
 class VertexObservable(Observable):
-	def __init__(self, G: nx.Graph):
-		self.G = G
-		X = {x: i for i, x in enumerate(G.nodes())}
-		super().__init__(X)
+	pass
 
 class EdgeObservable(Observable):
-	def __init__(self, G: nx.Graph):
-		self.G = G
-		X = bidict({x: i for i, x in enumerate(G.edges())})
-		super().__init__(X)
+	pass
 
 class FaceObservable(Observable):
-	def __init__(self, G: nx.Graph):
-		self.G = G
-		# Let faces be represented by cycles
-		X = {x: i for i, x in enumerate(nx.cycle_basis(G))}
-		super().__init__(X)
+	pass
 
-''' Derived PDE types ''' 
+''' Domain-specific gpde's ''' 
 
-class vertex_pde(pde, VertexObservable):
+class vertex_pde(gpde, VertexObservable):
 	''' PDE defined on the vertices of a graph ''' 
-	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
-		# pdb.set_trace()
-		VertexObservable.__init__(self, G)
-		self.X_edge = bidict({x: i for i, x in enumerate(G.edges())})
-		self.X_from = [self.X[e[0]] for e in G.edges()]
-		self.X_to = [self.X[e[1]] for e in G.edges()]
-		self.laplacian_matrix = -nx.laplacian_matrix(G)
-		self.weights = np.ones(len(G.edges()))
-		if w_key is not None:
-			for i, e in enumerate(G.edges()):
-				self.weights[i] = G[e[0]][e[1]][w_key]
-		pde.__init__(self, self.X, *args, **kwargs)
 
-	''' Spatial differential operators '''
+	def get_domain(self):
+		return self.vertices
+
+	''' Differential operators '''
 
 	def partial(self, e: Edge) -> float:
-		i = self.X_edge[e]
-		return np.sqrt(self.weights[i]) * (self(e[1]) - self(e[0])) 
+		return np.sqrt(self.weights[self.edges[e]]) * (self(e[1]) - self(e[0])) 
 
 	def grad(self) -> np.ndarray:
-		# Respects implicit orientation
-		return np.sqrt(self.weights) * (self.y[self.X_to] - self.y[self.X_from]) 
+		return self.gradient@self.y
 
 	def laplacian(self) -> np.ndarray:
 		fixed_flux = replace(np.zeros(self.y.shape), self.neumann_indices, [self.neumann(self.t, x) for x in self.neumann_X])
-		return self.laplacian_matrix@self.y + fixed_flux
+		return self.vertex_laplacian@self.y + fixed_flux
 
 	def bilaplacian(self) -> np.ndarray:
 		# TODO correct way to handle Neumann in this case? (Gradient constraint only specifies one neighbor beyond)
-		return self.laplacian_matrix@self.laplacian()
+		return self.vertex_laplacian@self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		return np.array([
@@ -69,25 +48,10 @@ class vertex_pde(pde, VertexObservable):
 		])
 
 
-class edge_pde(pde, EdgeObservable):
+class edge_pde(gpde, EdgeObservable):
 	''' PDE defined on the edges of a graph ''' 
-	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
-		EdgeObservable.__init__(self, G)
-		self.X_vertex = {x: i for i, x in enumerate(G.nodes())}
-		self.weights = np.ones(len(G.edges()))
-		if w_key is not None:
-			for i, e in enumerate(G.edges()):
-				self.weights[i] = G[e[0]][e[1]][w_key]
-		self.incidence = nx.incidence_matrix(G)
-		# Orient edges
-		self.orientation = {**{x: 1 for x in self.X}, **{(x[1], x[0]): -1 for x in self.X}} # Orientation implicit by stored keys in domain
-		# self.oriented_incidence = self.incidence.copy()
-		# for i, x in enumerate(G.edges()):
-		# 	(a, b) = x
-		# 	if self.orientation[i] > 0:
-		# 		self.oriented_incidence[self.X_vertex[a], i] = -1
-		# 	else:
-		# 		self.oriented_incidence[self.X_vertex[b], i] = -1
+	def __init__(self, G: nx.Graph, *args, **kwargs):
+		gpde.__init__(self, G, *args, **kwargs)
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
@@ -110,7 +74,9 @@ class edge_pde(pde, EdgeObservable):
 		# 		if y[1] in x: # Inward edges receive negative orientation
 		# 			j = self.X_dual[(x,y)]
 		# 			self.oriented_incidence_dual[i, j] = -1
-		pde.__init__(self, self.X, *args, **kwargs)
+
+	def get_domain(self):
+		return self.edges
 
 	def __call__(self, x: Edge):
 		return self.orientation[x] * self.y[self.X[x]]
@@ -118,17 +84,24 @@ class edge_pde(pde, EdgeObservable):
 	''' Spatial differential operators '''
 
 	def div(self) -> np.ndarray:
-		return 2 * np.sqrt(self.weights) * self.y@self.incidence.T
+		return -self.gradient.T@self.y
 
 	def curl(self) -> np.ndarray:
-		raise NotImplementedError
+		raise self.curl3@self.y
 
 	def laplacian(self) -> np.ndarray:
-		''' Vector laplacian https://en.wikipedia.org/wiki/Vector_Laplacian ''' 
-		# TODO: check correctness 
-		# TODO: need edge-edge weights
-		# TODO: neumann conditions
-		return self.dual_laplacian_matrix@self.y
+		''' Edge laplacian 
+		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
+		TODO: neumann conditions
+		''' 
+		return self.curl3.T@self.curl3@self.y
+
+	def helmholtzian(self) -> np.ndarray:
+		''' Vector laplacian or discrete Helmholtz operator 
+		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
+		TODO: neumann conditions
+		''' 
+		return -self.gradient@self.gradient.T@self.y - self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		ret = np.zeros(self.ndim)

@@ -1,11 +1,15 @@
 import networkx as nx
 import numpy as np
+import pdb
 
 from gpde.core import *
 from gpde.render.bokeh import *
 
 def velocity_eq(G: nx.Graph, pressure: vertex_pde, dyn_viscosity: float=1.0) -> edge_pde:
-	return edge_pde(G, lambda t, self: -self.advect(self) - pressure.grad() + dyn_viscosity * self.laplacian())
+	def f(t, self):
+		# pdb.set_trace()
+		return -self.advect(self) - pressure.grad() + self.helmholtzian()
+	return edge_pde(G, f)
 
 def fluid_on_grid():
 	n = 8
@@ -33,7 +37,6 @@ def differential_inlets():
 	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
 	pressure.set_initial(y0=pressure_values)
 	velocity = velocity_eq(G, pressure)
-	# velocity.set_initial(y0=lambda x: 1e-2)
 	return couple(pressure, velocity)
 
 def poiseuille():
@@ -59,5 +62,5 @@ def von_karman():
 	pass
 
 if __name__ == '__main__':
-	sys = fluid_on_grid()
-	render_bokeh(SingleRenderer(sys))
+	sys = poiseuille()
+	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))

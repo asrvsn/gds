@@ -158,3 +158,44 @@ class pde(Observable, Integrable):
 	@property
 	def t(self):
 		return self.integrator.t
+
+''' PDE on graph domain ''' 
+
+class gpde(pde):
+	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
+		self.G = G
+		# Domains
+		self.vertices = {v: i for i, v in enumerate(G.nodes())}
+		self.edges = bidict({e: i for i, e in enumerate(G.edges())})
+		self.triangles, tri_index = {}, 0
+		for clique in nx.find_cliques(G):
+			if len(clique) == 3:
+				self.triangles[tuple(clique)] = tri_index
+				tri_index += 1
+
+		# Weights
+		self.weights = np.ones(len(G.edges()))
+		if w_key is not None:
+			for i, e in enumerate(G.edges()):
+				self.weights[i] = G[e[0]][e[1]][w_key]
+
+		# Orientation / incidence
+		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
+		self.incidence = nx.incidence_matrix(G, oriented=True)
+
+		# Operators
+		self.vertex_laplacian = -nx.laplacian_matrix(G) # |V| x |V| laplacian operator
+		self.gradient = self.incidence.multiply(np.sqrt(self.weights)).T # |E| x |V| gradient operator; respects implicit orientation
+		self.curl3 = sparse_product(
+			self.triangles.keys(), 
+			self.edges.keys(), 
+			lambda t, e: float(e[0] in t and e[1] in t) / np.sqrt(self.weights[self.edges[e]])
+		) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
+
+		super().__init__(self.get_domain(), *args, **kwargs)
+
+
+	@abstractmethod
+	def get_domain(self) -> Domain:
+		''' Subclasses must specify the domain (vertices, edges, etc.) '''
+		pass
