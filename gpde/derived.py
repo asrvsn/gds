@@ -114,6 +114,7 @@ class edge_pde(gpde, EdgeObservable):
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		if type(v_field) is edge_pde and v_field.G is self.G:
+			# Since graphs are identical, orientation is implicitly respected
 			return self.y * (self.adj_dual@v_field.y)
 		else:
 			ret = np.zeros(self.ndim)

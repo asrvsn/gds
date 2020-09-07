@@ -59,21 +59,22 @@ def fluid_on_sphere():
 	pass
 
 def von_karman():
-	G = nx.grid_2d_graph(10, 5)
+	w, h = 20, 10
+	G = nx.grid_2d_graph(w, h)
+	obstacle = [ # Introduce occlusion
+		(6, 4), (6, 5), 
+		(7, 4), (7, 5), 
+	]
+	G.remove_nodes_from(obstacle)
 	def pressure_values(x):
 		if x[0] == 0: return 1.0
-		if x[0] == 9: return -1.0
+		if x[0] == w-1: return -1.0
 		return 0.
 	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
 	pressure.set_initial(y0=pressure_values)
 	velocity = velocity_eq(G, pressure)
-	def no_slip(t, x):
-		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == 4:
-			return 0.
-		return None
-	velocity.set_boundary(dirichlet=no_slip)
 	return couple(pressure, velocity)
 
 if __name__ == '__main__':
-	sys = differential_inlets()
+	sys = von_karman()
 	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))

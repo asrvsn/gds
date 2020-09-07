@@ -135,7 +135,8 @@ class Renderer(ABC):
 	def draw_arrows(self, obs):
 		h = 0.1
 		w = 0.1
-		magn = np.minimum(np.abs(obs.y), obs.layout['m_norm'] / 2)
+		absy = np.abs(obs.y)
+		magn = np.minimum(np.log(1 + absy), obs.layout['m_norm'] / 2)
 		p1x = obs.layout['x_mid']
 		p1y = obs.layout['y_mid']
 		dx = -np.sign(obs.y) * magn * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
@@ -146,7 +147,7 @@ class Renderer(ABC):
 		p3y = -obs.layout['dx'] * magn * w/2 + p1y + dy
 		obs.arr_source.data['xs'] = np.stack((p1x, p2x, p3x), axis=1).tolist()
 		obs.arr_source.data['ys'] = np.stack((p1y, p2y, p3y), axis=1).tolist()
-		obs.arr_source.data['value'] = np.abs(obs.y)
+		obs.arr_source.data['value'] = absy
 
 
 ''' Layout-specific renderers ''' 
