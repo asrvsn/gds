@@ -75,6 +75,18 @@ def von_karman():
 	velocity = velocity_eq(G, pressure)
 	return couple(pressure, velocity)
 
+def random_graph():
+	n = 30
+	eps = 0.5
+	G = nx.random_geometric_graph(n, eps)
+	def pressure_values(x):
+		if x == 5: return 1.0
+		return 0.
+	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
+	pressure.set_initial(y0=pressure_values)
+	velocity = velocity_eq(G, pressure)
+	return couple(pressure, velocity)
+
 if __name__ == '__main__':
 	sys = von_karman()
 	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))

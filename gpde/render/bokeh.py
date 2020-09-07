@@ -8,6 +8,7 @@ from pathlib import Path
 import zmq
 import time
 from multiprocessing import Process
+import networkx as nx
 
 from bokeh.plotting import figure, from_networkx
 from bokeh.layouts import row, column, gridplot, widgetbox
@@ -41,7 +42,13 @@ class Renderer(ABC):
 		self.edge_rng = edge_rng
 		self.show_bar=show_bar
 		if layout_func is None:
-			self.layout_func = lambda G: nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1, dim=dim)
+			def func(G):
+				pos_attr = nx.get_node_attributes(G, 'pos')
+				if len(pos_attr) > 0: # G already has self-defined positions
+					return {k: (np.array(v) - 0.5)*2 for k, v in pos_attr.items()}
+				else:
+					return nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1, dim=dim)
+			self.layout_func = func
 		else:
 			self.layout_func = layout_func
 
