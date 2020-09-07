@@ -73,6 +73,16 @@ class edge_pde(gpde, EdgeObservable):
 		# 		if y[1] in x: # Inward edges receive negative orientation
 		# 			j = self.X_dual[(x,y)]
 		# 			self.oriented_incidence_dual[i, j] = -1
+		def oriented_adj(e1, e2):
+			if e1 == e2:
+				return 0.
+			elif e2[0] in e1: # Outgoing edge
+				return 1.0
+			elif e2[1] in e1: # Ingoing edge
+				return -1.0
+			return 0.
+		# TODO: edge-weighted edge adjacency
+		self.adj_dual = sparse_product(self.edges.keys(), self.edges.keys(), oriented_adj) # |E| x |E| signed edge adjacency matrix
 
 	def get_domain(self):
 		return self.edges
@@ -104,22 +114,25 @@ class edge_pde(gpde, EdgeObservable):
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		if type(v_field) is edge_pde and v_field.G is self.G:
-			# Use faster vectorized approach (TODO)
-			pass
-		ret = np.zeros(self.ndim)
-		for a, i in self.X.items():
-			u = self(a)
-			for b in self.G_dual.neighbors(a):
-				w = self.weights_dual[self.X_dual[(a, b)]]
-				if b[0] == a[1]: # Outgoing edge
-					ret[i] += u * v_field(b) / w
-				elif b[1] == a[1]: # Outgoing edge, reversed direction
-					ret[i] += u * v_field((b[1], b[0])) / w
-				elif b[0] == a[0]: # Ingoing edge, reversed directopm
-					ret[i] -= u * v_field((b[1], b[0])) / w
-				else: # Ingoing edge
-					ret[i] -= u * v_field(b) / w
-		return np.array(ret)
+			return self.y * (self.adj_dual@v_field.y)
+		else:
+			ret = np.zeros(self.ndim)
+			for a, i in self.X.items():
+				u = self(a)
+				for b in self.G_dual.neighbors(a):
+					w = self.weights_dual[self.X_dual[(a, b)]]
+					if b[0] == a[1]: # Outgoing edge
+						ret[i] += u * v_field(b) / w
+					elif b[1] == a[1]: # Outgoing edge, reversed direction
+						ret[i] -= u * v_field(b) / w
+					elif b[0] == a[0]: # Ingoing edge, reversed directopm
+						ret[i] += u * v_field(b) / w
+					else: # Ingoing edge
+						ret[i] -= u * v_field(b) / w
+			return np.array(ret)
+
+	def advect_self(self) -> np.ndarray:
+		return self.y * (self.adj_dual@self.y)
 
 class face_pde(pde, FaceObservable):
 	''' PDE defined on the faces of a graph ''' 

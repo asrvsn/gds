@@ -8,7 +8,7 @@ from gpde.render.bokeh import *
 def velocity_eq(G: nx.Graph, pressure: vertex_pde, dyn_viscosity: float=1.0) -> edge_pde:
 	def f(t, self):
 		# pdb.set_trace()
-		return -self.advect(self) - pressure.grad() + self.helmholtzian()
+		return -self.advect_self() - pressure.grad() + self.helmholtzian()
 	return edge_pde(G, f)
 
 def fluid_on_grid():
@@ -59,8 +59,21 @@ def fluid_on_sphere():
 	pass
 
 def von_karman():
-	pass
+	G = nx.grid_2d_graph(10, 5)
+	def pressure_values(x):
+		if x[0] == 0: return 1.0
+		if x[0] == 9: return -1.0
+		return 0.
+	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
+	pressure.set_initial(y0=pressure_values)
+	velocity = velocity_eq(G, pressure)
+	def no_slip(t, x):
+		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == 4:
+			return 0.
+		return None
+	velocity.set_boundary(dirichlet=no_slip)
+	return couple(pressure, velocity)
 
 if __name__ == '__main__':
-	sys = poiseuille()
+	sys = differential_inlets()
 	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))

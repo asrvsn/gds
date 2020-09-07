@@ -13,7 +13,8 @@ from .utils import *
 ''' Common types ''' 
 
 Time = NewType('Time', float)
-Domain = Dict[Any, int] # Mapping from points into array indices
+Point = Any
+Domain = Dict[Point, int] # Mapping from points into array indices
 Sign = NewType('Sign', int)
 System = Tuple['Integrable', List['Observable']]
 
