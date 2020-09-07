@@ -55,7 +55,6 @@ class edge_pde(gpde, EdgeObservable):
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
-		self.dual_laplacian_matrix = -nx.laplacian_matrix(self.G_dual)
 		# self.weights_dual = np.zeros(len(self.X_dual))
 		# for i, x in enumerate(self.G_dual.edges()):
 		# 	for n in destructure(x):
@@ -104,6 +103,9 @@ class edge_pde(gpde, EdgeObservable):
 		return -self.gradient@self.gradient.T@self.y - self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
+		if type(v_field) is edge_pde and v_field.G is self.G:
+			# Use faster vectorized approach (TODO)
+			pass
 		ret = np.zeros(self.ndim)
 		for a, i in self.X.items():
 			u = self(a)

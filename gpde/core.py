@@ -12,12 +12,8 @@ from .utils import *
 
 ''' Common types ''' 
 
-Vertex = Any
-Edge = Tuple[Vertex, Vertex]
-Face = Tuple[Vertex, ...]
-Point = Union[Vertex, Edge, Face] # A point in the graph domain
 Time = NewType('Time', float)
-Domain = Dict[Point, int] # Mapping from points into array indices
+Domain = Dict[Any, int] # Mapping from points into array indices
 Sign = NewType('Sign', int)
 System = Tuple['Integrable', List['Observable']]
 
@@ -57,7 +53,7 @@ class Observable(ABC):
 	def __len__(self):
 		return self.ndim
 
-''' Base classes ''' 
+''' Base class: PDE on arbitrary domain ''' 
 
 class pde(Observable, Integrable):
 	def __init__(self, X: Domain, f: Callable[[Time, 'pde'], np.ndarray], order: int=1, max_step=1e-3):
@@ -134,11 +130,6 @@ class pde(Observable, Integrable):
 		''' Express as a single-observable system ''' 
 		return (self, [self]) 
 
-	# @abstractmethod
-	# def observable(self) -> Observable:
-	# 	''' Express the self as an observable ''' 
-	# 	pass
-
 	''' Private methods ''' 
 
 	def dydt(self, t: Time, y: np.ndarray):
@@ -160,6 +151,11 @@ class pde(Observable, Integrable):
 		return self.integrator.t
 
 ''' PDE on graph domain ''' 
+
+Vertex = Any
+Edge = Tuple[Vertex, Vertex]
+Face = Tuple[Vertex, ...]
+Point = Union[Vertex, Edge, Face] # A point in the graph domain
 
 class gpde(pde):
 	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
