@@ -34,7 +34,7 @@ class vertex_pde(gpde, VertexObservable):
 		return self.gradient@self.y
 
 	def laplacian(self) -> np.ndarray:
-		fixed_flux = replace(np.zeros(self.y.shape), self.neumann_indices, [self.neumann(self.t, x) for x in self.neumann_X])
+		fixed_flux = replace(np.zeros(self.y.shape), self.neumann_indices, self.neumann_values)
 		return self.vertex_laplacian@self.y + fixed_flux
 
 	def bilaplacian(self) -> np.ndarray:
@@ -173,8 +173,9 @@ class coupled_pde(Integrable):
 			self.integrator.step()
 			# Apply all boundary conditions
 			for p, view in zip(self.pdes, self.views):
-				for x in p.dirichlet_X:
-					self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
+				if p.dynamic_bc:
+					for x in p.dirichlet_X:
+						self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
 
 	def observables(self) -> List[Observable]:
 		return list(self.pdes)

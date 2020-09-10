@@ -70,12 +70,14 @@ class pde(Observable, Integrable):
 		self.order = order
 		self.integrator = RK45(lambda t, y: np.zeros_like(self.y0), self.t0, self.y0, np.inf, max_step=max_step)
 		self.integrator.fun = self.dydt
+		self.dynamic_bc = True
 		self.dirichlet = lambda t, x: None
 		self.dirichlet_X = set()
 		self.dirichlet_indices = []
 		self.neumann = lambda t, x: None
 		self.neumann_X = set()
 		self.neumann_indices = []
+		self.neumann_values = []
 		self.erroneous = lambda y: False 
 
 	def set_initial(self, t0: float=0., y0: Callable[[Point], float]=lambda _: 0., **kwargs):
@@ -92,11 +94,13 @@ class pde(Observable, Integrable):
 
 	def set_boundary(self, 
 			dirichlet: Callable[[Time, Point], float]=lambda t, x: None, 
-			neumann: Callable[[Time, Point], float]=lambda t, x: None
+			neumann: Callable[[Time, Point], float]=lambda t, x: None,
+			dynamic: bool=True
 		):
 		''' Impose boundary conditions via time-varying values (dirichlet conditions) or fluxes (neumann conditions). 
-		Assumes the domains do not change. 
+		Assumes the domains do not change. If `dynamic` is off, the boundary conditions are assumed to be static for performance improvement.
 		''' 
+		self.dynamic_bc = dynamic
 		self.dirichlet = dirichlet
 		self.dirichlet_X = set({x for x in self.X if (dirichlet(0., x) is not None)}) # Fixed-value domain
 		for x in self.dirichlet_X:
@@ -106,6 +110,7 @@ class pde(Observable, Integrable):
 		self.neumann = neumann
 		self.neumann_X = set({x for x in self.X if (neumann(0., x) is not None)}) # Fixed-flux domain
 		self.neumann_indices = [self.X[x] for x in self.neumann_X]
+		self.neumann_values = np.array([neumann(0., x) for x in self.neumann_X])
 		intersect = self.dirichlet_X & self.neumann_X
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 
@@ -115,8 +120,10 @@ class pde(Observable, Integrable):
 		self.integrator.status = 'running'
 		while self.integrator.status != 'finished':
 			self.integrator.step()
-			for x in self.dirichlet_X:
-				self.integrator.y[self.X[x] - self.ndim] = self.dirichlet(self.integrator.t, x)
+			# Update boundary conditions
+			if self.dynamic_bc:
+				for x in self.dirichlet_X:
+					self.integrator.y[self.X[x] - self.ndim] = self.dirichlet(self.integrator.t, x)
 		if self.erroneous(self.y):
 			raise ValueError('Erroneous state encountered')
 
@@ -138,6 +145,9 @@ class pde(Observable, Integrable):
 		ret = np.zeros_like(y)
 		for i in range(order-1):
 			ret[n*i:n*(i+1)] = y[n*(i+1):n*(i+2)]
+		# Update boundary conditions
+		if self.dynamic_bc:
+			self.neumann_values = np.array([self.neumann(t, x) for x in self.neumann_X])
 		diff = self.f(t, self)
 		diff = replace(diff, self.dirichlet_indices, np.zeros(len(self.dirichlet_X))) # Do not modify constrained nodes
 		ret[n*(order-1):] = diff

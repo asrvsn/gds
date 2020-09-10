@@ -15,7 +15,7 @@ def heat_grid(n = 10) -> vertex_pde:
 def grid_const_boundary() -> vertex_pde:
 	n = 7
 	temperature = heat_grid(n=n)
-	temperature.set_boundary(dirichlet = lambda t, x: 1.0 if (0 in x or (n-1) in x) else None)
+	temperature.set_boundary(dirichlet = lambda t, x: 1.0 if (0 in x or (n-1) in x) else None, dynamic=False)
 	return temperature
 
 def grid_mixed_boundary() -> vertex_pde:
@@ -31,7 +31,7 @@ def grid_mixed_boundary() -> vertex_pde:
 		if x[1] == n-1 and x[0] not in (0, n-1):
 			return -0.1
 		return None
-	temperature.set_boundary(dirichlet=dirichlet, neumann=neumann)
+	temperature.set_boundary(dirichlet=dirichlet, neumann=neumann, dynamic=False)
 	return temperature
 
 def grid_timevarying_boundary() -> vertex_pde:
@@ -44,5 +44,5 @@ def grid_timevarying_boundary() -> vertex_pde:
 
 if __name__ == '__main__':
 	# Use coupling to visualize multiple PDEs simultaneously
-	system = couple(grid_const_boundary(), grid_mixed_boundary())
+	system = couple(grid_const_boundary(), grid_mixed_boundary(), grid_timevarying_boundary())
 	render_bokeh(GridRenderer(system))

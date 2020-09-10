@@ -52,7 +52,7 @@ def poiseuille():
 		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == 4:
 			return 0.
 		return None
-	velocity.set_boundary(dirichlet=no_slip)
+	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
 	return couple(pressure, velocity)
 
 def fluid_on_sphere():
@@ -88,5 +88,5 @@ def random_graph():
 	return couple(pressure, velocity)
 
 if __name__ == '__main__':
-	sys = von_karman()
+	sys = random_graph()
 	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))
