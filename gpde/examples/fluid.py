@@ -23,7 +23,7 @@ def fluid_on_grid():
 		return 0.
 	pressure.set_initial(y0=pressure_values)
 	velocity = velocity_eq(G, pressure)
-	return couple(pressure, velocity)
+	return pressure, velocity
 
 def differential_inlets():
 	G = nx.Graph()
@@ -37,7 +37,7 @@ def differential_inlets():
 	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
 	pressure.set_initial(y0=pressure_values)
 	velocity = velocity_eq(G, pressure)
-	return couple(pressure, velocity)
+	return pressure, velocity
 
 def poiseuille():
 	G = nx.grid_2d_graph(10, 5)
@@ -53,7 +53,7 @@ def poiseuille():
 			return 0.
 		return None
 	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
-	return couple(pressure, velocity)
+	return pressure, velocity
 
 def fluid_on_sphere():
 	pass
@@ -74,7 +74,7 @@ def von_karman():
 	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
 	pressure.set_initial(y0=pressure_values)
 	velocity = velocity_eq(G, pressure)
-	return couple(pressure, velocity)
+	return pressure, velocity
 
 def random_graph():
 	set_seed(1001)
@@ -87,8 +87,13 @@ def random_graph():
 	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
 	pressure.set_initial(y0=pressure_values)
 	velocity = velocity_eq(G, pressure)
-	return couple(pressure, velocity)
+	return pressure, velocity
 
 if __name__ == '__main__':
-	sys = random_graph()
-	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))
+	p, v = differential_inlets()
+	sys = couple(p, v)
+	# renderer = SingleRenderer(sys, node_rng=(-1,1))
+	cycles = project_cycle_basis(v)
+	renderer = CustomRenderer(sys[0], [[[[p, v]], [[c] for c in cycles]]], node_rng=(-1,1), colorbars=False)
+
+	render_bokeh(renderer)

@@ -32,7 +32,7 @@ PlotID = NewType('PlotID', str)
 ''' Classes ''' 
 
 class Renderer(ABC):
-	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, show_bar=True, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.)):
+	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.), colorbars=True):
 		self.integrator = sys[0]
 		self.observables = sys[1]
 		self.canvas: Canvas = self.setup_canvas()
@@ -40,7 +40,7 @@ class Renderer(ABC):
 		self.palette = palette
 		self.node_rng = node_rng
 		self.edge_rng = edge_rng
-		self.show_bar=show_bar
+		self.colorbars = colorbars
 		if layout_func is None:
 			def func(G):
 				pos_attr = nx.get_node_attributes(G, 'pos')
@@ -91,14 +91,14 @@ class Renderer(ABC):
 				plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
 				plot.renderers[0].node_renderer.glyph = Oval(height=0.04, width=0.04, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]))
-				if self.show_bar:
+				if self.colorbars:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
 					plot.add_layout(cbar, 'right')
 			elif isinstance(obs, EdgeObservable):
 				self.prep_layout_data(obs, G, layout)
 				obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
 				self.draw_arrows(obs)
-				if self.show_bar:
+				if self.colorbars:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
 					plot.add_layout(cbar, 'right')
 				arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.palette, low=self.edge_rng[0], high=self.edge_rng[1]))
@@ -179,6 +179,14 @@ class GridRenderer(Renderer):
 			row = canvas[-1]
 			row.append([(obs,)])
 		return canvas
+
+class CustomRenderer(Renderer):
+	def __init__(self, integrator: Integrable, canvas: List[List[List[Observable]]], **kwargs):
+		self.canvas = canvas
+		super().__init__((integrator, destructure(canvas)), **kwargs)
+
+	def setup_canvas(self):
+		return self.canvas
 
 ''' Entry point ''' 
 

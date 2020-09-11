@@ -15,11 +15,12 @@ def project_cycle_basis(p: gpde) -> List[EdgeObservable]:
 			self.G = nx.Graph()
 			nx.add_cycle(self.G, cycle)
 			self.edge_indices = [p.edges[e] for e in self.G.edges()]
+			self.orientation = np.array([p.orientation[e] for e in self.G.edges()])
 		@property
 		def t(self):
 			return p.t
 		@property
 		def y(self):
-			return p.y[self.edge_indices]
+			return p.y[self.edge_indices] * self.orientation
 		
 	return [ProjObservable(cycle) for cycle in nx.cycle_basis(p.G)]
