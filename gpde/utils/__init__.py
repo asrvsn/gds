@@ -3,6 +3,11 @@ from typing import Tuple, List, Any, Iterable, Callable, Dict, Set
 from scipy.integrate import RK45
 import shortuuid
 from scipy.sparse import csr_matrix
+import random
+
+def set_seed(seed=None):
+	random.seed(seed)
+	np.random.seed(seed)
 
 def destructure(xs: Iterable[Any]) -> List[Any]:
 	ret = []

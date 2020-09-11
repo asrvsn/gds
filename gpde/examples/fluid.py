@@ -2,6 +2,7 @@ import networkx as nx
 import numpy as np
 import pdb
 
+from gpde.utils import set_seed
 from gpde.core import *
 from gpde.render.bokeh import *
 
@@ -76,8 +77,9 @@ def von_karman():
 	return couple(pressure, velocity)
 
 def random_graph():
+	set_seed(1001)
 	n = 30
-	eps = 0.5
+	eps = 0.3
 	G = nx.random_geometric_graph(n, eps)
 	def pressure_values(x):
 		if x == 5: return 1.0
@@ -88,5 +90,5 @@ def random_graph():
 	return couple(pressure, velocity)
 
 if __name__ == '__main__':
-	sys = von_karman()
+	sys = random_graph()
 	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))
