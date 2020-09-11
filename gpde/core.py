@@ -36,7 +36,7 @@ class Observable(ABC):
 
 	@property
 	@abstractmethod
-	def t(self) -> np.ndarray:
+	def t(self) -> float:
 		pass
 
 	@property
@@ -78,7 +78,7 @@ class pde(Observable, Integrable):
 		self.neumann_X = set()
 		self.neumann_indices = []
 		self.neumann_values = []
-		self.erroneous = lambda y: False 
+		self.erroneous = None
 
 	def set_initial(self, t0: float=0., y0: Callable[[Point], float]=lambda _: 0., **kwargs):
 		''' Set initial values. Other optional arguments are taken to be nth-derivative initial values. ''' 
@@ -124,7 +124,7 @@ class pde(Observable, Integrable):
 			if self.dynamic_bc:
 				for x in self.dirichlet_X:
 					self.integrator.y[self.X[x] - self.ndim] = self.dirichlet(self.integrator.t, x)
-		if self.erroneous(self.y):
+		if self.erroneous is not Nont and self.erroneous(self.y):
 			raise ValueError('Erroneous state encountered')
 
 	def reset(self):

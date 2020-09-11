@@ -5,10 +5,9 @@ import pdb
 from gpde.core import *
 from gpde.render.bokeh import *
 
-def velocity_eq(G: nx.Graph, pressure: vertex_pde, dyn_viscosity: float=1.0) -> edge_pde:
+def velocity_eq(G: nx.Graph, pressure: vertex_pde, kinematic_viscosity: float=1.0):
 	def f(t, self):
-		# pdb.set_trace()
-		return -self.advect_self() - pressure.grad() + self.helmholtzian()
+		return -self.advect_self() - pressure.grad() + kinematic_viscosity * self.helmholtzian()
 	return edge_pde(G, f)
 
 def fluid_on_grid():
@@ -64,6 +63,7 @@ def von_karman():
 	obstacle = [ # Introduce occlusion
 		(6, 4), (6, 5), 
 		(7, 4), (7, 5), 
+		(8, 4),
 	]
 	G.remove_nodes_from(obstacle)
 	def pressure_values(x):
@@ -88,5 +88,5 @@ def random_graph():
 	return couple(pressure, velocity)
 
 if __name__ == '__main__':
-	sys = random_graph()
+	sys = von_karman()
 	render_bokeh(SingleRenderer(sys, node_rng=(-1,1)))
