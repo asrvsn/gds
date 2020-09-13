@@ -45,4 +45,4 @@ def grid_timevarying_boundary() -> vertex_pde:
 if __name__ == '__main__':
 	# Use coupling to visualize multiple PDEs simultaneously
 	system = couple(grid_const_boundary(), grid_mixed_boundary(), grid_timevarying_boundary())
-	render_bokeh(GridRenderer(system))
+	GridRenderer(system).start()

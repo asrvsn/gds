@@ -59,4 +59,4 @@ def advection_on_torus():
 
 if __name__ == '__main__':
 	sys = advection_on_circle()
-	render_bokeh(SingleRenderer(sys))
+	SingleRenderer(sys).start()

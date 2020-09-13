@@ -156,6 +156,11 @@ class Renderer(ABC):
 		obs.arr_source.data['ys'] = np.stack((p1y, p2y, p3y), axis=1).tolist()
 		obs.arr_source.data['value'] = absy
 
+	''' entry point ''' 
+
+	def start(self):
+		render_bokeh(self)
+
 
 ''' Layout-specific renderers ''' 
 

@@ -197,10 +197,6 @@ class FluidRenderer(Renderer):
 				plot.x_range.range_padding = 0
 				plot.line('t', cat, line_color='black', source=src)
 				# plot.varea(x='t', y1=0, y2=cat, fill_color=cc.glasbey[i], alpha=0.6, source=src)
-				# plot.outline_line_color = None
-				# plot.ygrid.grid_line_color = None
-				# plot.xgrid.grid_line_color = '#dddddd'
-				# plot.xgrid.ticker = plot.xaxis.ticker
 				plots.append(plot)
 			self.turbulence.src = src
 			return column(plots, sizing_mode='stretch_both')
@@ -212,8 +208,7 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = fluid_on_grid()
+	p, v = differential_inlets()
 	# sys = couple(p, v)
-	# renderer = SingleRenderer(sys, node_rng=(-1,1))
-	renderer = FluidRenderer(p, v, node_rng=(-1, 1))
-	render_bokeh(renderer)
+	# SingleRenderer(sys, node_rng=(-1,1)).start()
+	FluidRenderer(p, v, node_rng=(-1, 1)).start()
