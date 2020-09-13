@@ -196,7 +196,7 @@ class gpde(pde):
 		self.curl3 = sparse_product(
 			self.triangles.keys(), 
 			self.edges.keys(), 
-			lambda t, e: float(e[0] in t and e[1] in t) / np.sqrt(self.weights[self.edges[e]])
+			lambda t, e: float(e[0] in t and e[1] in t) * np.sqrt(self.weights[self.edges[e]])
 		) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
 
 		super().__init__(self.get_domain(), *args, **kwargs)

@@ -19,7 +19,7 @@ def fluid_on_grid():
 	G = nx.grid_2d_graph(n, n)
 	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
 	def pressure_values(x):
-		if x == (3,3):
+		if x == (2,2):
 			return 1.0
 		if x == (5,5):
 			return -1.0
@@ -103,7 +103,33 @@ class TurbulenceObservable(Observable):
 			'v_M2': 0.,
 			'v_sigma': 0,
 		}
-		self.rendered = set({'v_sigma',})
+		# Warning: do not allow rendered metrics to be None, or Bokeh won't render it
+		self.rendered = ['v_sigma',]
+		self.cycle_indices = {}
+		self.cycle_signs = {}
+		for cycle in nx.cycle_basis(velocity.G):
+			n = len(cycle)
+			id = f'{n}-cycle flow'
+			self.metrics[id] = 0.
+			G_cyc = nx.Graph()
+			nx.add_cycle(G_cyc, cycle)
+			cyc_orient = {}
+			for i in range(n):
+				if i == n-1:
+					cyc_orient[(cycle[i], cycle[0])] = 1
+					cyc_orient[(cycle[0], cycle[i])] = -1
+				else:
+					cyc_orient[(cycle[i], cycle[i+1])] = 1
+					cyc_orient[(cycle[i+1], cycle[i])] = -1
+			indices = [velocity.edges[e] for e in G_cyc.edges()]
+			signs = np.array([velocity.orientation[e]*cyc_orient[e] for e in G_cyc.edges()])
+			if id in self.cycle_indices:
+				self.cycle_indices[id].append(indices)
+				self.cycle_signs[id].append(signs)
+			else:
+				self.cycle_indices[id] = [indices]
+				self.cycle_signs[id] = [signs]
+		self.rendered += list(self.cycle_indices.keys())
 		super().__init__({})
 
 	def observe(self):
@@ -119,6 +145,10 @@ class TurbulenceObservable(Observable):
 			self['v_sigma'] = np.sqrt((self['v_M2'] / n).sum())
 			self['v_mu'] = new_mu
 		self['n'] += 1
+		for id, cycles in self.cycle_indices.items():
+			self[id] = 0
+			for cyc, sigma in zip(cycles, self.cycle_signs[id]):
+				self[id] += np.abs((y[cyc] * sigma).sum())
 		return self.y
 
 	def __getitem__(self, idx):
@@ -135,11 +165,11 @@ class TurbulenceObservable(Observable):
 	def y(self):
 		ret = {k: [self.metrics[k]] for k in self.rendered}
 		ret['t'] = [self.t]
-		print(ret)
 		return ret
 	
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource
+from bokeh.layouts import column
 import colorcet as cc
 
 class FluidRenderer(Renderer):
@@ -159,32 +189,31 @@ class FluidRenderer(Renderer):
 		if len(items) == 1 and items[0] is self.turbulence:
 			cats = list(self.turbulence.rendered)
 			src = ColumnDataSource({cat: [] for cat in ['t'] + cats})
-			plot = figure(title='Turbulence metrics', y_range=cats)
-			plot.x_range.follow = 'end'
-			plot.x_range.follow_interval = 5.0
-			plot.x_range.range_padding = 0
-			for i, cat in enumerate(reversed(cats)):
-				plot.patch('t', cat, color=cc.glasbey[i], alpha=0.6, line_color='black', source=src)
-			plot.outline_line_color = None
-			plot.ygrid.grid_line_color = None
-			plot.xgrid.grid_line_color = '#dddddd'
-			plot.xgrid.ticker = plot.xaxis.ticker
+			plots = []
+			for i, cat in enumerate(cats):
+				plot = figure(title=cat, tooltips=[(cat, '@'+cat)])
+				plot.x_range.follow = 'end'
+				plot.x_range.follow_interval = 10.0
+				plot.x_range.range_padding = 0
+				plot.line('t', cat, line_color='black', source=src)
+				# plot.varea(x='t', y1=0, y2=cat, fill_color=cc.glasbey[i], alpha=0.6, source=src)
+				# plot.outline_line_color = None
+				# plot.ygrid.grid_line_color = None
+				# plot.xgrid.grid_line_color = '#dddddd'
+				# plot.xgrid.ticker = plot.xaxis.ticker
+				plots.append(plot)
 			self.turbulence.src = src
-			return plot
+			return column(plots, sizing_mode='stretch_both')
 		else:
 			return super().create_plot(items)
 
 	def draw(self):
-		self.turbulence.src.stream(self.turbulence.observe(), 100)
+		self.turbulence.src.stream(self.turbulence.observe(), 200)
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = differential_inlets()
-
+	p, v = fluid_on_grid()
 	# sys = couple(p, v)
 	# renderer = SingleRenderer(sys, node_rng=(-1,1))
-	# cycles = project_cycle_basis(v)
-	# renderer = CustomRenderer(sys[0], [[[[p, v]], [[c] for c in cycles]]], node_rng=(-1,1), colorbars=False)
-
 	renderer = FluidRenderer(p, v, node_rng=(-1, 1))
 	render_bokeh(renderer)
