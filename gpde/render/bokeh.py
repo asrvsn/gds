@@ -32,7 +32,7 @@ PlotID = NewType('PlotID', str)
 ''' Classes ''' 
 
 class Renderer(ABC):
-	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.), colorbars=True):
+	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True):
 		self.integrator = sys[0]
 		self.observables = sys[1]
 		self.canvas: Canvas = self.setup_canvas()
@@ -41,6 +41,7 @@ class Renderer(ABC):
 		self.node_rng = node_rng
 		self.edge_rng = edge_rng
 		self.colorbars = colorbars
+		self.edge_max = edge_max
 		if layout_func is None:
 			def func(G):
 				pos_attr = nx.get_node_attributes(G, 'pos')
@@ -143,7 +144,7 @@ class Renderer(ABC):
 		h = 0.1
 		w = 0.1
 		absy = np.abs(obs.y)
-		magn = np.minimum(np.log(1 + absy), obs.layout['m_norm'] / 2)
+		magn = np.clip(np.log(1 + absy), a_min=None, a_max=self.edge_max)
 		p1x = obs.layout['x_mid']
 		p1y = obs.layout['y_mid']
 		dx = -np.sign(obs.y) * magn * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)

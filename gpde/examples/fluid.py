@@ -15,13 +15,28 @@ def velocity_eq(G: nx.Graph, pressure: vertex_pde, kinematic_viscosity: float=1.
 	return edge_pde(G, f)
 
 def fluid_on_grid():
-	n = 8
-	G = nx.grid_2d_graph(n, n)
+	G = nx.grid_2d_graph(9, 8)
 	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
 	def pressure_values(x):
 		if x == (2,2):
 			return 1.0
-		if x == (5,5):
+		if x == (6,5):
+			return -1.0
+		return 0.
+	pressure.set_initial(y0=pressure_values)
+	velocity = velocity_eq(G, pressure)
+	return pressure, velocity
+
+def fluid_on_circle():
+	n = 10
+	G = nx.Graph()
+	G.add_nodes_from(list(range(n)))
+	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
+	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
+	def pressure_values(x):
+		if x == 0:
+			return 1.0
+		if x == n-1:
 			return -1.0
 		return 0.
 	pressure.set_initial(y0=pressure_values)
@@ -192,9 +207,14 @@ class FluidRenderer(Renderer):
 			plots = []
 			for i, cat in enumerate(cats):
 				plot = figure(title=cat, tooltips=[(cat, '@'+cat)])
-				plot.x_range.follow = 'end'
-				plot.x_range.follow_interval = 10.0
-				plot.x_range.range_padding = 0
+				if i == 0:
+					plot.toolbar_location = 'above'
+					plot.x_range.follow = 'end'
+					plot.x_range.follow_interval = 10.0
+					plot.x_range.range_padding = 0
+				else:
+					plot.toolbar_location = None
+					plot.x_range = plots[0].x_range
 				plot.line('t', cat, line_color='black', source=src)
 				# plot.varea(x='t', y1=0, y2=cat, fill_color=cc.glasbey[i], alpha=0.6, source=src)
 				plots.append(plot)
@@ -208,7 +228,7 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = differential_inlets()
-	# sys = couple(p, v)
-	# SingleRenderer(sys, node_rng=(-1,1)).start()
-	FluidRenderer(p, v, node_rng=(-1, 1)).start()
+	p, v = von_karman()
+	sys = couple(p, v)
+	SingleRenderer(sys, node_rng=(-1,1), edge_max=0.1).start()
+	# FluidRenderer(p, v, node_rng=(-1, 1)).start()
