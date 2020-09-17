@@ -175,8 +175,9 @@ class face_pde(pde, FaceObservable):
 ''' Other derivations ''' 
 
 class coupled_pde(Integrable):
-	''' Multiple PDEs coupled in time. Can be integrated together but not observed directly. 
-	TODO: fix to couple both forward-solved and direct-solved PDEs.
+	''' Multiple PDEs coupled in time. 
+	Can be integrated together but not observed directly. 
+	Can couple both forward-solved and direct-solved PDEs.
 	''' 
 	def __init__(self, *pdes: Tuple[pde], max_step=None):
 		assert len(pdes) >= 2, 'Pass two or more pdes to couple'
@@ -213,7 +214,7 @@ class coupled_pde(Integrable):
 	def dydt(self, t: Time, y: np.ndarray):
 		res = np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.forward_pdes, self.views)])
 		for p in self.forward_pdes:
-			p.step_direct(t - p.t) # Interleave direct solvers with forward solvers
+			p.step_direct(0.) # Interleave direct solvers with forward solvers
 		return res
 
 	def step(self, dt: float):

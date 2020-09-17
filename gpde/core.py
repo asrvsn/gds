@@ -183,7 +183,7 @@ class pde(Observable, Integrable):
 			if self.dynamic_bc:
 				for x in self.dirichlet_X:
 					self.integrator.y[self.X[x] - self.ndim] = self.dirichlet(self.integrator.t, x)
-		if self.erroneous is not Nont and self.erroneous(self.y):
+		if self.erroneous is not None and self.erroneous(self.y):
 			raise ValueError('Erroneous state encountered')
 
 	def dydt(self, t: Time, y: np.ndarray):
@@ -204,6 +204,7 @@ class pde(Observable, Integrable):
 		if self.dynamic_bc:
 			self.neumann_values = np.array([self.neumann(t, x) for x in self.neumann_X])
 		self.t_direct += dt
+		# TODO: Jacobian?
 		result = least_squares(self.lhs, self.y_direct, gtol=self.gtol)
 		if result.status >= 1:
 			self.y_direct = result.x
@@ -212,7 +213,7 @@ class pde(Observable, Integrable):
 
 	def lhs(self, y: np.ndarray):
 		self.y_direct = replace(y, self.dirichlet_indices, self.dirichlet_values) # Do not modify constrained nodes
-		return self.lhs_fun(self.t_direct, self)
+		return self.lhs_fun(self.t, self)
 
 	@property
 	def y(self):
@@ -223,7 +224,10 @@ class pde(Observable, Integrable):
 
 	@property
 	def t(self):
-		return self.integrator.t
+		if self.mode is SolveMode.forward:
+			return self.integrator.t
+		else:
+			return self.t_direct
 
 ''' PDE on graph domain ''' 
 
