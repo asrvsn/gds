@@ -175,50 +175,78 @@ class face_pde(pde, FaceObservable):
 ''' Other derivations ''' 
 
 class coupled_pde(Integrable):
-	''' Multiple PDEs coupled in time. Can be integrated together but not observed directly. ''' 
+	''' Multiple PDEs coupled in time. Can be integrated together but not observed directly. 
+	TODO: fix to couple both forward-solved and direct-solved PDEs.
+	''' 
 	def __init__(self, *pdes: Tuple[pde], max_step=None):
-		assert len(pdes) >= 1 
+		assert len(pdes) >= 2, 'Pass two or more pdes to couple'
 		assert all([p.t == 0. for p in pdes]), 'Pass pdes at initial values only'
-		self.pdes = pdes
-		if max_step is None:
-			max_step = min([p.max_step for p in pdes])
-		self.max_step = max_step
 		self.t0 = 0.
-		y0s = [p.y0 for p in pdes]
-		self.views = [slice(0, len(y0s[0]))]
-		for i in range(1, len(pdes)):
-			start = self.views[i-1].stop
-			self.views.append(slice(start, start+len(y0s[i])))
-		self.y0 = np.concatenate(y0s)
-		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
-		# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
-		for (p, view) in zip(self.pdes, self.views):
-			p.view = view
-			attach_dyn_props(p, {'y': lambda p: self.integrator.y[p.view], 't': lambda _: self.integrator.t})
+		self.forward_pdes = []
+		self.direct_pdes = []
+		for p in pdes:
+			if p.mode is SolveMode.forward:
+				self.forward_pdes.append(p)
+			else:
+				self.direct_pdes.append(p)
+		self.has_forward = len(self.forward_pdes) > 0
+
+		if self.has_forward:
+			if max_step is None:
+				max_step = min([p.max_step for p in pdes])
+			self.max_step = max_step
+			y0s = [p.y0 for p in pdes]
+			self.views = [slice(0, len(y0s[0]))]
+			for i in range(1, len(pdes)):
+				start = self.views[i-1].stop
+				self.views.append(slice(start, start+len(y0s[i])))
+			self.y0 = np.concatenate(y0s)
+			self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
+			# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
+			for (p, view) in zip(self.forward_pdes, self.views):
+				p.view = view
+				attach_dyn_props(p, {'y': lambda p: self.integrator.y[p.view], 't': lambda _: self.integrator.t})
+			for p in self.direct_pdes:
+				attach_dyn_props(p, {'t': lambda _: self.integrator.t})
+
 
 	def dydt(self, t: Time, y: np.ndarray):
-		return np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.pdes, self.views)])
+		res = np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.forward_pdes, self.views)])
+		for p in self.forward_pdes:
+			p.step_direct(t - p.t) # Interleave direct solvers with forward solvers
+		return res
 
 	def step(self, dt: float):
-		self.integrator.t_bound = self.t + dt
-		self.integrator.status = 'running'
-		while self.integrator.status != 'finished':
-			self.integrator.step()
-			# Apply all boundary conditions
-			for p, view in zip(self.pdes, self.views):
-				if p.dynamic_bc:
-					for x in p.dirichlet_X:
-						self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
+		if self.has_forward:
+			self.integrator.t_bound = self.t + dt
+			self.integrator.status = 'running'
+			while self.integrator.status != 'finished':
+				self.integrator.step()
+				# Apply all boundary conditions
+				for p, view in zip(self.pdes, self.views):
+					if p.dynamic_bc:
+						for x in p.dirichlet_X:
+							self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
+		else:
+			# In the case of no forward-solved PDE's, this class is merely a utility for simultaneously solving direct PDE's
+			for p in self.forward_pdes:
+				p.step_direct(dt)
 
 	def observables(self) -> List[Observable]:
-		return list(self.pdes)
+		return self.forward_pdes + self.direct_pdes
 
 	def system(self) -> System:
 		return (self, self.observables())
 
 	def reset(self):
-		self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
+		if self.has_forward:
+			self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
+		for p in self.direct_pdes:
+			p.reset()
 
 	@property
 	def t(self):
-		return self.integrator.t
+		if self.has_forward:
+			return self.integrator.t
+		else:
+			return self.direct_pdes[0].t
