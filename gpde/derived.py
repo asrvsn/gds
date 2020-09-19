@@ -194,11 +194,11 @@ class coupled_pde(Integrable):
 
 		if self.has_forward:
 			if max_step is None:
-				max_step = min([p.max_step for p in pdes])
+				max_step = min([p.max_step for p in self.forward_pdes])
 			self.max_step = max_step
-			y0s = [p.y0 for p in pdes]
+			y0s = [p.y0 for p in self.forward_pdes]
 			self.views = [slice(0, len(y0s[0]))]
-			for i in range(1, len(pdes)):
+			for i in range(1, len(self.forward_pdes)):
 				start = self.views[i-1].stop
 				self.views.append(slice(start, start+len(y0s[i])))
 			self.y0 = np.concatenate(y0s)
@@ -213,7 +213,7 @@ class coupled_pde(Integrable):
 
 	def dydt(self, t: Time, y: np.ndarray):
 		res = np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.forward_pdes, self.views)])
-		for p in self.forward_pdes:
+		for p in self.direct_pdes:
 			p.step_direct(0.) # Interleave direct solvers with forward solvers
 		return res
 
@@ -224,13 +224,13 @@ class coupled_pde(Integrable):
 			while self.integrator.status != 'finished':
 				self.integrator.step()
 				# Apply all boundary conditions
-				for p, view in zip(self.pdes, self.views):
+				for p, view in zip(self.forward_pdes, self.views):
 					if p.dynamic_bc:
 						for x in p.dirichlet_X:
 							self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
 		else:
 			# In the case of no forward-solved PDE's, this class is merely a utility for simultaneously solving direct PDE's
-			for p in self.forward_pdes:
+			for p in self.direct_pdes:
 				p.step_direct(dt)
 
 	def observables(self) -> List[Observable]:

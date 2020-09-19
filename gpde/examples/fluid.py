@@ -9,6 +9,11 @@ from gpde.render.bokeh import *
 
 ''' Definitions ''' 
 
+def incompressible(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
+	pressure = vertex_pde(G, lhs=lambda t, self: None)
+	velocity = edge_pde(G, dydt=lambda t, self: None)
+	# TODO...
+
 def velocity_eq(G: nx.Graph, pressure: vertex_pde, kinematic_viscosity: float=1.0):
 	def f(t, self):
 		return -self.advect_self() - pressure.grad() + kinematic_viscosity * self.helmholtzian()

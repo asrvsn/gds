@@ -8,6 +8,7 @@ from scipy.integrate import RK45
 from scipy.optimize import least_squares
 from abc import ABC, abstractmethod
 import pdb
+from enum import Enum
 
 from .utils import *
 
@@ -102,6 +103,7 @@ class pde(Observable, Integrable):
 			self.integrator = RK45(lambda t, y: np.zeros_like(self.y0), self.t0, self.y0, np.inf, max_step=max_step)
 			self.integrator.fun = self.dydt
 		else:
+			self.t_direct = self.t0
 			self.mode = SolveMode.direct
 			self.y0 = np.zeros(self.ndim)
 			self.lhs_fun = lhs
@@ -110,9 +112,9 @@ class pde(Observable, Integrable):
 
 	def set_initial(self, t0: float=0., y0: Callable[[Point], float]=lambda _: 0., **kwargs):
 		''' Set initial values. Other optional arguments are taken to be nth-derivative initial values. ''' 
-		assert len(kwargs) == self.order - 1, f'{len(kwargs)+1} initial conditions provided but {self.order} needed'
 		self.t0 = t0
 		if self.mode is SolveMode.forward:
+			assert len(kwargs) == self.order - 1, f'{len(kwargs)+1} initial conditions provided but {self.order} needed'
 			self.integrator.t = t0
 		for x, i in self.X.items():
 			self.y0[i] = y0(x)
@@ -135,17 +137,17 @@ class pde(Observable, Integrable):
 		self.dynamic_bc = dynamic
 		self.dirichlet = dirichlet
 		self.dirichlet_X = set({x for x in self.X if (dirichlet(0., x) is not None)}) # Fixed-value domain
-		self.dirichlet_indices = [self.X[x] for x in self.dirichlet_X]
+		self.dirichlet_indices = np.array([self.X[x] for x in self.dirichlet_X], dtype=np.int64)
 		self.dirichlet_values = np.array([dirichlet(0., x) for x in self.dirichlet_X])
 		self.y0 = replace(self.y0, self.dirichlet_indices, self.dirichlet_values)
 		if self.mode is SolveMode.forward:
-			for i, v in enumerate(self.dirichlet_values):
+			for i, v in zip(self.dirichlet_indices, self.dirichlet_values):
 				self.integrator.y[i - self.ndim] = v 
 		else:
 			self.y_direct = self.y0.copy()
 		self.neumann = neumann
 		self.neumann_X = set({x for x in self.X if (neumann(0., x) is not None)}) # Fixed-flux domain
-		self.neumann_indices = [self.X[x] for x in self.neumann_X]
+		self.neumann_indices = np.array([self.X[x] for x in self.neumann_X], dtype=np.int64)
 		self.neumann_values = np.array([neumann(0., x) for x in self.neumann_X])
 		intersect = self.dirichlet_X & self.neumann_X
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
@@ -155,13 +157,14 @@ class pde(Observable, Integrable):
 		if self.mode is SolveMode.forward:
 			self.step_forward(dt)
 		else:
-			self.step_direct()
+			self.step_direct(dt)
 
 	def reset(self):
 		''' Reset the system to initial conditions ''' 
 		if self.mode is SolveMode.forward:
 			self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
 		else:
+			self.t_direct = self.t0
 			self.y_direct = self.y0.copy()
 
 	def set_erroneous(self, erroneous: Callable[[np.ndarray], bool]):
@@ -179,10 +182,8 @@ class pde(Observable, Integrable):
 		self.integrator.status = 'running'
 		while self.integrator.status != 'finished':
 			self.integrator.step()
-			# Update boundary conditions
 			if self.dynamic_bc:
-				for x in self.dirichlet_X:
-					self.integrator.y[self.X[x] - self.ndim] = self.dirichlet(self.integrator.t, x)
+				self.integrator.y[self.dirichlet_indices - ndim] = self.dirichlet_values
 		if self.erroneous is not None and self.erroneous(self.y):
 			raise ValueError('Erroneous state encountered')
 
@@ -193,17 +194,17 @@ class pde(Observable, Integrable):
 			ret[n*i:n*(i+1)] = y[n*(i+1):n*(i+2)]
 		# Update boundary conditions
 		if self.dynamic_bc:
-			self.neumann_values = np.array([self.neumann(t, x) for x in self.neumann_X])
-		diff = self.f(t, self)
-		diff = replace(diff, self.dirichlet_indices, np.zeros(len(self.dirichlet_X))) # Do not modify constrained nodes
+			self.update_bcs(t)
+		diff = self.dydt_fun(t, self)
+		diff[self.dirichlet_indices] = 0. # Do not modify constrained nodes
 		ret[n*(order-1):] = diff
 		return ret
 
 	def step_direct(self, dt: float):
 		# Update boundary conditions
-		if self.dynamic_bc:
-			self.neumann_values = np.array([self.neumann(t, x) for x in self.neumann_X])
 		self.t_direct += dt
+		if self.dynamic_bc:
+			self.update_bcs(self.t_direct)
 		# TODO: Jacobian?
 		result = least_squares(self.lhs, self.y_direct, gtol=self.gtol)
 		if result.status >= 1:
@@ -214,6 +215,10 @@ class pde(Observable, Integrable):
 	def lhs(self, y: np.ndarray):
 		self.y_direct = replace(y, self.dirichlet_indices, self.dirichlet_values) # Do not modify constrained nodes
 		return self.lhs_fun(self.t, self)
+
+	def update_bcs(self, t: float):
+		self.neumann_values = np.array([self.neumann(t, x) for x in self.neumann_X])
+		self.dirichlet_values = np.array([self.dirichlet(t, x) for x in self.dirichlet_X])
 
 	@property
 	def y(self):
