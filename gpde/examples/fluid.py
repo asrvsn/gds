@@ -9,27 +9,25 @@ from gpde.render.bokeh import *
 
 ''' Definitions ''' 
 
-def incompressible(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
+def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
 	pressure = vertex_pde(G, lhs=lambda t, self: None)
 	velocity = edge_pde(G, dydt=lambda t, self: None)
-	# TODO...
+	pressure.lhs_fun = lambda t, self: self.gradient.T@velocity.advect_self() + self.laplacian()
+	velocity.dydt_fun = lambda t, self: -self.advect_self() - pressure.grad() + viscosity*self.helmholtzian()/density
+	return pressure, velocity
 
-def velocity_eq(G: nx.Graph, pressure: vertex_pde, kinematic_viscosity: float=1.0):
-	def f(t, self):
-		return -self.advect_self() - pressure.grad() + kinematic_viscosity * self.helmholtzian()
-	return edge_pde(G, f)
+''' Systems ''' 
 
 def fluid_on_grid():
 	G = nx.grid_2d_graph(9, 8)
-	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
-	def pressure_values(x):
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
 		if x == (2,2):
 			return 1.0
 		if x == (6,5):
 			return -1.0
 		return 0.
-	pressure.set_initial(y0=pressure_values)
-	velocity = velocity_eq(G, pressure)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def fluid_on_circle():
@@ -37,40 +35,37 @@ def fluid_on_circle():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
-	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
-	def pressure_values(x):
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
 		if x == 0:
 			return 1.0
 		if x == n-1:
 			return -1.0
 		return 0.
-	pressure.set_initial(y0=pressure_values)
-	velocity = velocity_eq(G, pressure)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def differential_inlets():
 	G = nx.Graph()
 	G.add_nodes_from([1,2,3,4,5,6])
 	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
-	def pressure_values(x):
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
 		if x == 1: return 1.0
 		if x == 4: return 0.5
 		if x == 6: return -0.5
 		return 0.
-	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
-	pressure.set_initial(y0=pressure_values)
-	velocity = velocity_eq(G, pressure)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def poiseuille():
 	G = nx.grid_2d_graph(10, 5)
-	def pressure_values(x):
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
 		if x[0] == 0: return 1.0
 		if x[0] == 9: return -1.0
 		return 0.
-	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
-	pressure.set_initial(y0=pressure_values)
-	velocity = velocity_eq(G, pressure)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	def no_slip(t, x):
 		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == 4:
 			return 0.
@@ -90,13 +85,12 @@ def von_karman():
 		(8, 4),
 	]
 	G.remove_nodes_from(obstacle)
-	def pressure_values(x):
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
 		if x[0] == 0: return 1.0
 		if x[0] == w-1: return -1.0
 		return 0.
-	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
-	pressure.set_initial(y0=pressure_values)
-	velocity = velocity_eq(G, pressure)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def random_graph():
@@ -104,12 +98,11 @@ def random_graph():
 	n = 30
 	eps = 0.3
 	G = nx.random_geometric_graph(n, eps)
-	def pressure_values(x):
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
 		if x == 5: return 1.0
 		return 0.
-	pressure = vertex_pde(G, lambda t, self: np.zeros(len(self)))
-	pressure.set_initial(y0=pressure_values)
-	velocity = velocity_eq(G, pressure)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 ''' Experimentation / observation ''' 
@@ -166,9 +159,7 @@ class TurbulenceObservable(Observable):
 			self['v_mu'] = new_mu
 		self['n'] += 1
 		for id, cycles in self.cycle_indices.items():
-			self[id] = 0
-			for cyc, sigma in zip(cycles, self.cycle_signs[id]):
-				self[id] += np.abs((y[cyc] * sigma).sum())
+			self[id] = sum([(y[cyc] ** 2).sum() for cyc in cycles])
 		return self.y
 
 	def __getitem__(self, idx):
