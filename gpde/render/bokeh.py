@@ -32,7 +32,7 @@ PlotID = NewType('PlotID', str)
 ''' Classes ''' 
 
 class Renderer(ABC):
-	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True):
+	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, node_size=0.04):
 		self.integrator = sys[0]
 		self.observables = sys[1]
 		self.canvas: Canvas = self.setup_canvas()
@@ -42,6 +42,7 @@ class Renderer(ABC):
 		self.edge_rng = edge_rng
 		self.colorbars = colorbars
 		self.edge_max = edge_max
+		self.node_size = node_size
 		if layout_func is None:
 			def func(G):
 				pos_attr = nx.get_node_attributes(G, 'pos')
@@ -91,7 +92,8 @@ class Renderer(ABC):
 			if isinstance(obs, VertexObservable):
 				plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
-				plot.renderers[0].node_renderer.glyph = Oval(height=0.04, width=0.04, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]))
+				plot.renderers[0].node_renderer.data_source.data['thickness'] = [2 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
+				plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
 				if self.colorbars:
 					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
 					plot.add_layout(cbar, 'right')

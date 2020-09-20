@@ -116,7 +116,8 @@ class pde(Observable, Integrable):
 		if self.mode is SolveMode.forward:
 			assert len(kwargs) == self.order - 1, f'{len(kwargs)+1} initial conditions provided but {self.order} needed'
 			self.integrator.t = t0
-		for x, i in self.X.items():
+		for x in self.X.keys() - self.dirichlet_X:
+			i = self.X[x]
 			self.y0[i] = y0(x)
 			if self.mode is SolveMode.forward:
 				self.integrator.y[i] = self.y0[i]

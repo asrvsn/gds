@@ -10,11 +10,15 @@ from gpde.render.bokeh import *
 ''' Definitions ''' 
 
 def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
-	pressure = vertex_pde(G, lhs=lambda t, self: None)
 	velocity = edge_pde(G, dydt=lambda t, self: None)
-	pressure.lhs_fun = lambda t, self: self.gradient.T@velocity.advect_self() + self.laplacian()
-	velocity.dydt_fun = lambda t, self: -self.advect_self() - pressure.grad() + viscosity*self.helmholtzian()/density
+	pressure = vertex_pde(G, 
+		lhs=lambda t, self: self.gradient.T@velocity.advect_self() + self.laplacian()/density
+	)
+	velocity.dydt_fun = lambda t, self: -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
 	return pressure, velocity
+
+def compressible_flow(G: nx.Graph, viscosity=1.0) -> (vertex_pde, edge_pde):
+	pass
 
 ''' Systems ''' 
 
@@ -26,7 +30,7 @@ def fluid_on_grid():
 			return 1.0
 		if x == (6,5):
 			return -1.0
-		return 0.
+		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
@@ -41,7 +45,7 @@ def fluid_on_circle():
 			return 1.0
 		if x == n-1:
 			return -1.0
-		return 0.
+		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
@@ -53,21 +57,22 @@ def differential_inlets():
 	def pressure_values(t, x):
 		if x == 1: return 1.0
 		if x == 4: return 0.5
-		if x == 6: return -0.5
-		return 0.
+		# if x == 6: return -0.5
+		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def poiseuille():
-	G = nx.grid_2d_graph(10, 5)
+	m, n = 8, 10
+	G = nx.grid_2d_graph(n, m)
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
-		if x[0] == 0: return 1.0
-		if x[0] == 9: return -1.0
-		return 0.
-	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+		if x[0] == 0: return 0.2
+		if x[0] == n-1: return -0.2
+		return None
+	pressure.set_boundary(neumann=pressure_values, dynamic=False)
 	def no_slip(t, x):
-		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == 4:
+		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == m-1:
 			return 0.
 		return None
 	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
@@ -87,10 +92,10 @@ def von_karman():
 	G.remove_nodes_from(obstacle)
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
-		if x[0] == 0: return 1.0
-		if x[0] == w-1: return -1.0
-		return 0.
-	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+		if x[0] == 0: return 0.1
+		if x[0] == w-1: return -0.1
+		return None
+	pressure.set_boundary(neumann=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def random_graph():
@@ -101,7 +106,7 @@ def random_graph():
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
 		if x == 5: return 1.0
-		return 0.
+		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
@@ -224,7 +229,7 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = von_karman()
+	p, v = poiseuille()
 	sys = couple(p, v)
-	SingleRenderer(sys, node_rng=(-1,1), edge_max=0.1).start()
+	SingleRenderer(sys, node_rng=(-1,1), edge_max=0.1, n_spring_iters=2000).start()
 	# FluidRenderer(p, v, node_rng=(-1, 1)).start()

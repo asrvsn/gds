@@ -67,8 +67,9 @@ class vertex_pde(gpde, VertexObservable):
 		return self.gradient@self.y
 
 	def laplacian(self) -> np.ndarray:
-		fixed_flux = replace(np.zeros(self.y.shape), self.neumann_indices, self.neumann_values)
-		return self.vertex_laplacian@self.y + fixed_flux
+		ret = self.vertex_laplacian@self.y
+		ret[self.neumann_indices] += self.neumann_values
+		return ret
 
 	def bilaplacian(self) -> np.ndarray:
 		# TODO correct way to handle Neumann in this case? (Gradient constraint only specifies one neighbor beyond)
@@ -143,7 +144,7 @@ class edge_pde(gpde, EdgeObservable):
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		return -self.gradient@self.gradient.T@self.y - self.laplacian()
+		return -self.gradient@self.gradient.T@self.y + self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		if type(v_field) is edge_pde and v_field.G is self.G:
