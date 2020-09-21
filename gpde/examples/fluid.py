@@ -55,11 +55,11 @@ def differential_inlets():
 	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
-		if x == 1: return 1.0
-		if x == 4: return 0.5
-		# if x == 6: return -0.5
+		if x == 1: return 0.2
+		if x == 4: return 0.1
+		if x == 6: return -0.1
 		return None
-	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+	pressure.set_boundary(neumann=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def poiseuille():
@@ -105,7 +105,8 @@ def random_graph():
 	G = nx.random_geometric_graph(n, eps)
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
-		if x == 5: return 1.0
+		if x == 4: return 1.0
+		elif x == 21: return -1.0 
 		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
@@ -229,7 +230,9 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = poiseuille()
-	sys = couple(p, v)
-	SingleRenderer(sys, node_rng=(-1,1), edge_max=0.1, n_spring_iters=2000).start()
+	p, v = random_graph()
+	d = v.project(GraphDomain.vertices, lambda v: v.div())
+	integrator, _ = couple(p, v)
+	CustomRenderer(integrator, [[[[p, v]], [[d]]]], node_rng=(-1,1), edge_max=0.1, n_spring_iters=2000).start()
+	# SingleRenderer(sys, node_rng=(-1,1), edge_max=0.1, n_spring_iters=2000).start()
 	# FluidRenderer(p, v, node_rng=(-1, 1)).start()

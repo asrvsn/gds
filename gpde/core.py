@@ -239,12 +239,18 @@ class pde(Observable, Integrable):
 
 Vertex = Any
 Edge = Tuple[Vertex, Vertex]
-Face = Tuple[Vertex, ...]
-Point = Union[Vertex, Edge, Face] # A point in the graph domain
+Triangle = Tuple[Vertex, Vertex, Vertex]
+Point = Union[Vertex, Edge, Triangle] # A point in the graph domain
+class GraphDomain(Enum):
+	vertices = 0
+	edges = 1
+	triangles = 2
 
-class gpde(pde):
-	def __init__(self, G: nx.Graph, *args, w_key: str=None, **kwargs):
+class GraphObservable(Observable):
+	''' Graph-domain observable ''' 
+	def __init__(self, G: nx.Graph, Gd: GraphDomain):
 		self.G = G
+		self.Gd = Gd
 		# Domains
 		self.vertices = {v: i for i, v in enumerate(G.nodes())}
 		self.edges = bidict({e: i for i, e in enumerate(G.edges())})
@@ -253,6 +259,28 @@ class gpde(pde):
 			if len(clique) == 3:
 				self.triangles[tuple(clique)] = tri_index
 				tri_index += 1
+
+		if Gd is GraphDomain.vertices:
+			X = self.vertices
+		elif Gd is GraphDomain.edges:
+			X = self.edges
+		elif Gd is GraphDomain.triangles:
+			X = self.triangles
+		Observable.__init__(self, X)
+
+	def project(self, Gd: GraphDomain, view: Callable[['GraphObservable'], np.ndarray]) -> 'GraphObservable':
+		class ProjectedObservable(GraphObservable):
+			@property
+			def y(other):
+				return view(self)
+			@property
+			def t(other):
+				return self.t
+		return ProjectedObservable(self.G, Gd)
+
+class gpde(pde, GraphObservable):
+	def __init__(self, G: nx.Graph, Gd: GraphDomain, *args, w_key: str=None, **kwargs):
+		GraphObservable.__init__(self, G, Gd)
 
 		# Weights
 		self.weights = np.ones(len(G.edges()))
@@ -273,10 +301,4 @@ class gpde(pde):
 			lambda t, e: float(e[0] in t and e[1] in t) * np.sqrt(self.weights[self.edges[e]])
 		) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
 
-		super().__init__(self.get_domain(), *args, **kwargs)
-
-
-	@abstractmethod
-	def get_domain(self) -> Domain:
-		''' Subclasses must specify the domain (vertices, edges, etc.) '''
-		pass
+		pde.__init__(self, self.X, *args, **kwargs)

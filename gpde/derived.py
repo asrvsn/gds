@@ -7,22 +7,6 @@ from itertools import count
 from .core import *
 from .utils import *
 
-''' Domain-specific  interfaces ''' 
-
-class GraphObservable(Observable):
-	pass
-
-class VertexObservable(GraphObservable):
-	pass
-
-class EdgeObservable(GraphObservable):
-	pass
-
-class FaceObservable(GraphObservable):
-	pass
-
-class CycleObservable(GraphObservable):
-	pass
 
 ''' Other derived observables for measurement ''' 
 
@@ -52,11 +36,11 @@ class MetricsObservable(Observable):
 
 ''' Domain-specific gpde's ''' 
 
-class vertex_pde(gpde, VertexObservable):
+class vertex_pde(gpde):
 	''' PDE defined on the vertices of a graph ''' 
 
-	def get_domain(self):
-		return self.vertices
+	def __init__(self, G: nx.Graph, *args, **kwargs):
+		gpde.__init__(self, G, GraphDomain.vertices, *args, **kwargs)
 
 	''' Differential operators '''
 
@@ -81,11 +65,10 @@ class vertex_pde(gpde, VertexObservable):
 			for x in self.X
 		])
 
-
-class edge_pde(gpde, EdgeObservable):
+class edge_pde(gpde):
 	''' PDE defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
-		gpde.__init__(self, G, *args, **kwargs)
+		gpde.__init__(self, G, GraphDomain.edges, *args, **kwargs)
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
@@ -117,9 +100,6 @@ class edge_pde(gpde, EdgeObservable):
 			return 0.
 		# TODO: edge-weighted edge adjacency
 		self.adj_dual = sparse_product(self.edges.keys(), self.edges.keys(), oriented_adj) # |E| x |E| signed edge adjacency matrix
-
-	def get_domain(self):
-		return self.edges
 
 	def __call__(self, x: Edge):
 		return self.orientation[x] * self.y[self.X[x]]
@@ -169,7 +149,7 @@ class edge_pde(gpde, EdgeObservable):
 	def advect_self(self) -> np.ndarray:
 		return self.y * (self.adj_dual@self.y)
 
-class face_pde(pde, FaceObservable):
+class face_pde(gpde):
 	''' PDE defined on the faces of a graph ''' 
 	pass		
 

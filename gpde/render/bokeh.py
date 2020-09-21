@@ -89,23 +89,29 @@ class Renderer(ABC):
 				plot.renderers.append(renderer)
 				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node'), ('edge', '@edge')]))
 			# Domain-specific rendering
-			if isinstance(obs, VertexObservable):
-				plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
-				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
-				plot.renderers[0].node_renderer.data_source.data['thickness'] = [2 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
-				plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
-				if self.colorbars:
-					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
-					plot.add_layout(cbar, 'right')
-			elif isinstance(obs, EdgeObservable):
-				self.prep_layout_data(obs, G, layout)
-				obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
-				self.draw_arrows(obs)
-				if self.colorbars:
-					cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
-					plot.add_layout(cbar, 'right')
-				arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.palette, low=self.edge_rng[0], high=self.edge_rng[1]))
-				plot.add_glyph(obs.arr_source, arrows)
+			if isinstance(obs, GraphObservable):
+				if obs.Gd is GraphDomain.vertices: 
+					plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
+					plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
+					if isinstance(obs, gpde):
+						plot.renderers[0].node_renderer.data_source.data['thickness'] = [2 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
+						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
+					else:
+						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]))
+					if self.colorbars:
+						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
+						plot.add_layout(cbar, 'right')
+				elif obs.Gd is GraphDomain.edges:
+					self.prep_layout_data(obs, G, layout)
+					obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
+					self.draw_arrows(obs)
+					if self.colorbars:
+						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
+						plot.add_layout(cbar, 'right')
+					arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.palette, low=self.edge_rng[0], high=self.edge_rng[1]))
+					plot.add_glyph(obs.arr_source, arrows)
+				else:
+					raise Exception('unknown graph domain.')
 			return plot
 		
 		plot = None
@@ -119,9 +125,9 @@ class Renderer(ABC):
 	def draw(self):
 		for obs in self.observables:
 			plot = self.plots[obs.plot_id]
-			if isinstance(obs, VertexObservable):
+			if obs.Gd is GraphDomain.vertices:
 				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y
-			elif isinstance(obs, EdgeObservable):
+			elif obs.Gd is GraphDomain.edges:
 				# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
 				self.draw_arrows(obs)
 
