@@ -32,12 +32,17 @@ PlotID = NewType('PlotID', str)
 ''' Classes ''' 
 
 class Renderer(ABC):
-	def __init__(self, sys: System, palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, node_size=0.04):
+	def __init__(self, sys: System, 
+				node_palette=cc.fire, edge_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
+				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, 
+				node_size=0.04
+			):
 		self.integrator = sys[0]
 		self.observables = sys[1]
 		self.canvas: Canvas = self.setup_canvas()
 		self.plots: Dict[PlotID, Plot] = dict()
-		self.palette = palette
+		self.node_palette = node_palette
+		self.edge_palette = edge_palette
 		self.node_rng = node_rng
 		self.edge_rng = edge_rng
 		self.colorbars = colorbars
@@ -94,21 +99,21 @@ class Renderer(ABC):
 					plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 					plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
 					if isinstance(obs, gpde):
-						plot.renderers[0].node_renderer.data_source.data['thickness'] = [2 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
-						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
+						plot.renderers[0].node_renderer.data_source.data['thickness'] = [3 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
+						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.node_palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
 					else:
-						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.palette, self.node_rng[0], self.node_rng[1]))
+						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.node_palette, self.node_rng[0], self.node_rng[1]))
 					if self.colorbars:
-						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
+						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.node_palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
 						plot.add_layout(cbar, 'right')
 				elif obs.Gd is GraphDomain.edges:
 					self.prep_layout_data(obs, G, layout)
 					obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
 					self.draw_arrows(obs)
 					if self.colorbars:
-						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
+						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
-					arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.palette, low=self.edge_rng[0], high=self.edge_rng[1]))
+					arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]))
 					plot.add_glyph(obs.arr_source, arrows)
 				else:
 					raise Exception('unknown graph domain.')

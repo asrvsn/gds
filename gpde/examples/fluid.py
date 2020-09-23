@@ -2,6 +2,7 @@ import networkx as nx
 import numpy as np
 import pdb
 from itertools import count
+import colorcet as cc
 
 from gpde.utils import set_seed
 from gpde.core import *
@@ -12,7 +13,8 @@ from gpde.render.bokeh import *
 def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
 	velocity = edge_pde(G, dydt=lambda t, self: None)
 	pressure = vertex_pde(G, 
-		lhs=lambda t, self: self.gradient.T@velocity.advect_self() + self.laplacian()/density
+		lhs=lambda t, self: -self.gradient.T@velocity.advect_self() + self.laplacian()/density,
+		gtol=1e-8
 	)
 	velocity.dydt_fun = lambda t, self: -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
 	return pressure, velocity
@@ -57,7 +59,7 @@ def differential_inlets():
 	def pressure_values(t, x):
 		if x == 1: return 0.2
 		if x == 4: return 0.1
-		if x == 6: return -0.1
+		if x == 6: return -0.3
 		return None
 	pressure.set_boundary(neumann=pressure_values, dynamic=False)
 	return pressure, velocity
@@ -230,9 +232,9 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = random_graph()
+	p, v = differential_inlets()
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	integrator, _ = couple(p, v)
-	CustomRenderer(integrator, [[[[p, v]], [[d]]]], node_rng=(-1,1), edge_max=0.1, n_spring_iters=2000).start()
+	CustomRenderer(integrator, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06).start()
 	# SingleRenderer(sys, node_rng=(-1,1), edge_max=0.1, n_spring_iters=2000).start()
 	# FluidRenderer(p, v, node_rng=(-1, 1)).start()
