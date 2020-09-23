@@ -39,10 +39,12 @@ def poiseuille():
 	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
 	return pressure, velocity
 
+p, v = poiseuille()
+sys = couple(p, v)
+
 def run():
+	global sys
 	try:
-		p, v = poiseuille()
-		sys = couple(p, v)
 		while True:
 			sys[0].step(1e-2)
 			print(sys[0].t)
