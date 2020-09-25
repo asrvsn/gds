@@ -232,7 +232,7 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = differential_inlets()
+	p, v = poiseuille()
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	integrator, _ = couple(p, v)
 	CustomRenderer(integrator, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06).start()

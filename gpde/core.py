@@ -295,10 +295,13 @@ class gpde(pde, GraphObservable):
 		# Operators
 		self.vertex_laplacian = -nx.laplacian_matrix(G) # |V| x |V| laplacian operator
 		self.gradient = self.incidence.multiply(np.sqrt(self.weights)).T # |E| x |V| gradient operator; respects implicit orientation
-		self.curl3 = sparse_product(
-			self.triangles.keys(), 
-			self.edges.keys(), 
-			lambda t, e: float(e[0] in t and e[1] in t) * np.sqrt(self.weights[self.edges[e]])
-		) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
+		def curl_element(tri, edge):
+			if edge[0] in tri and edge[1] in tri:
+				c = np.sqrt(self.weights[self.edges[edge]])
+				if edge == (tri[0], tri[1]) or edge == (tri[1], tri[2]) or edge == (tri[2], tri[0]): # Orientation of triangle
+					return c
+				return -c
+			return 0
+		self.curl3 = sparse_product(self.triangles.keys(), self.edges.keys(), curl_element) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
 
 		pde.__init__(self, self.X, *args, **kwargs)
