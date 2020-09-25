@@ -69,10 +69,10 @@ def poiseuille():
 	G = nx.grid_2d_graph(n, m)
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
-		if x[0] == 0: return 0.2
-		if x[0] == n-1: return -0.2
+		if x[0] == 0: return 1.0
+		if x[0] == n-1: return -1.0
 		return None
-	pressure.set_boundary(neumann=pressure_values, dynamic=False)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	def no_slip(t, x):
 		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == m-1:
 			return 0.
@@ -94,10 +94,10 @@ def von_karman():
 	G.remove_nodes_from(obstacle)
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
-		if x[0] == 0: return 0.1
-		if x[0] == w-1: return -0.1
+		if x[0] == 0: return 1.0
+		if x[0] == w-1: return -1.0
 		return None
-	pressure.set_boundary(neumann=pressure_values, dynamic=False)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def random_graph():
@@ -232,7 +232,7 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = poiseuille()
+	p, v = von_karman()
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	integrator, _ = couple(p, v)
 	CustomRenderer(integrator, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06).start()

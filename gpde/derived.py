@@ -90,7 +90,9 @@ class edge_pde(gpde):
 		# 		if y[1] in x: # Inward edges receive negative orientation
 		# 			j = self.X_dual[(x,y)]
 		# 			self.oriented_incidence_dual[i, j] = -1
-		def oriented_adj(e1, e2):
+		def oriented_adj(e1, e2): 
+			# TODO: make sure signs here are right
+			# TODO: use edge weights
 			if e1 == e2:
 				return 0.
 			elif e2[0] in e1: # Outgoing edge
