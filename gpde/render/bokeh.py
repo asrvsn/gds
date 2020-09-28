@@ -9,6 +9,8 @@ import zmq
 import time
 from multiprocessing import Process
 import networkx as nx
+import os.path
+import cloudpickle
 
 from bokeh.plotting import figure, from_networkx
 from bokeh.layouts import row, column, gridplot, widgetbox
@@ -32,14 +34,13 @@ PlotID = NewType('PlotID', str)
 ''' Classes ''' 
 
 class Renderer(ABC):
-	def __init__(self, sys: System, 
+	def __init__(self, 
+				canvas: Canvas,
 				node_palette=cc.fire, edge_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
 				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, 
 				node_size=0.04
 			):
-		self.integrator = sys[0]
-		self.observables = sys[1]
-		self.canvas: Canvas = self.setup_canvas()
+		self.canvas: Canvas = canvas
 		self.plots: Dict[PlotID, Plot] = dict()
 		self.node_palette = node_palette
 		self.edge_palette = edge_palette
@@ -59,9 +60,24 @@ class Renderer(ABC):
 		else:
 			self.layout_func = layout_func
 
+	''' Overrides ''' 
+
 	@abstractmethod
-	def setup_canvas(self) -> Canvas:
+	def step(self, dt: float): 
+		''' Draw data to plots '''
 		pass
+
+	@property
+	@abstractmethod
+	def t(self) -> float:
+		''' Get current time ''' 
+		pass
+
+	''' API ''' 
+
+	def start(self):
+		''' entry point ''' 
+		render_bokeh(self)
 
 	def draw_plots(self, root):
 		''' Draw plots to bokeh element ''' 
@@ -127,15 +143,6 @@ class Renderer(ABC):
 			self.plots[plot_id] = plot
 		return plot
 
-	def draw(self):
-		for obs in self.observables:
-			plot = self.plots[obs.plot_id]
-			if obs.Gd is GraphDomain.vertices:
-				plot.renderers[0].node_renderer.data_source.data['value'] = obs.y
-			elif obs.Gd is GraphDomain.edges:
-				# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
-				self.draw_arrows(obs)
-
 	def prep_layout_data(self, obs, G, layout):
 		data = pd.DataFrame(
 			[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in G.edges()],
@@ -153,10 +160,10 @@ class Renderer(ABC):
 		obs.layout = data
 		obs.arr_source = ColumnDataSource()
 
-	def draw_arrows(self, obs):
+	def draw_arrows(self, obs, y):
 		h = 0.1
 		w = 0.1
-		absy = np.abs(obs.y)
+		absy = np.abs(y)
 		magn = np.clip(np.log(1 + absy), a_min=None, a_max=self.edge_max)
 		p1x = obs.layout['x_mid']
 		p1y = obs.layout['y_mid']
@@ -170,44 +177,75 @@ class Renderer(ABC):
 		obs.arr_source.data['ys'] = np.stack((p1y, p2y, p3y), axis=1).tolist()
 		obs.arr_source.data['value'] = absy
 
-	''' entry point ''' 
 
-	def start(self):
-		render_bokeh(self)
+''' Derivations ''' 
 
-
-''' Layout-specific renderers ''' 
-
-class SingleRenderer(Renderer):
-	''' Render all observables in the same plot ''' 
-	def setup_canvas(self):
-		return [[[self.observables]]]
-
-class GridRenderer(Renderer):
-	''' Render all observables separately as items on a grid ''' 
-
-	def __init__(self, *args, ncols=2, **kwargs):
-		self.ncols = ncols
+class LiveRenderer(Renderer):
+	''' Simultaneously solves & renders the system ''' 
+	def __init__(self, sys: System, *args, **kwargs):
+		self.system = sys
+		self.integrator = sys.integrator
+		self.observables = list(sys.observables.values())
 		super().__init__(*args, **kwargs)
 
-	def setup_canvas(self):
-		canvas = []
-		for i, obs in enumerate(self.observables):
-			if i % self.ncols == 0:
-				canvas.append([])
-			row = canvas[-1]
-			row.append([(obs,)])
-		return canvas
+	def step(self, dt: float):
+		self.integrator.step(dt)
+		for obs in self.observables:
+			plot = self.plots[obs.plot_id]
+			if obs.Gd is GraphDomain.vertices:
+				self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
+			elif obs.Gd is GraphDomain.edges:
+				self.draw_arrows(obs, obs.y)
 
-class CustomRenderer(Renderer):
-	def __init__(self, integrator: Integrable, canvas: List[List[List[Observable]]], **kwargs):
-		self.canvas = canvas
-		super().__init__((integrator, destructure(canvas)), **kwargs)
+	@property
+	def t(self):
+		return self.integrator.t
 
-	def setup_canvas(self):
-		return self.canvas
+class StaticRenderer(Renderer):
+	''' Reads a solution from disk & renders it ''' 
+	def __init__(self, path: str, *args, **kwargs):
+		assert os.path.isdir(path), 'The given path does not exist'
+		with open(f'{path}/system.pkl', 'rb') as f:
+			self.system = cloudpickle.load(f)
+		self.data = dict()
+		for name in self.system.observables.keys():
+			self.data[name] = hkl.load(f'{path}/{name}.hkl')
+		self._t = 0.
+		self._i = 0
+		super().__init__(*args, **kwargs)
 
-''' Entry point ''' 
+	def step(self, dt: float):
+		T = self._t + dt
+		while self._t < t:
+			for name, obs in self.system.observables.items():
+				if obs.Gd is GraphDomain.vertices:
+					self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = self.data[name][self._i]
+				elif obs.Gd is GraphDomain.edges:
+					self.draw_arrows(obs, self.data[name][self._i])
+			self._t += self.system.dt
+			self._i += 1
+
+	@property
+	def t(self):
+		return self._t
+
+''' Layout creators ''' 
+
+def single_canvas(observables: List[Observable]) -> Canvas:
+	''' Render all observables in the same plot ''' 
+	return [[[self.observables]]]
+
+def grid_canvas(observables: List[Observable], ncols: int=2) -> Canvas:
+	''' Render all observables separately as items on a grid ''' 
+	canvas = []
+	for i, obs in enumerate(observables):
+		if i % ncols == 0:
+			canvas.append([])
+		row = canvas[-1]
+		row.append([(obs,)])
+	return canvas
+
+''' Server ''' 
 
 host = 'localhost'
 port = 8080
@@ -229,8 +267,6 @@ def render_bokeh(renderer: Renderer):
 	finally:
 		ctx.destroy()
 		proc.terminate()
-
-''' Helpers ''' 
 
 def start_server(filepath: str, host: str, port: int):
 	files = [filepath]

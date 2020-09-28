@@ -43,9 +43,8 @@ Callbacks
 def update():
 	global renderer, viz_dt, render_callback
 	try:
-		renderer.integrator.step(viz_dt * 1e-3 * speed)
-		renderer.draw()
-		t2.text = str(round(renderer.integrator.t, 3))
+		renderer.step(viz_dt * 1e-3 * speed)
+		t2.text = str(round(renderer.t, 3))
 	except KeyboardInterrupt:
 		raise
 	except:

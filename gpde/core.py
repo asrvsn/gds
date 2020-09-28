@@ -18,7 +18,6 @@ Time = NewType('Time', float)
 Point = Any
 Domain = Dict[Point, int] # Mapping from points into array indices
 Sign = NewType('Sign', int)
-System = Tuple['Integrable', List['Observable']]
 
 class SolveMode(Enum):
 	forward = 0
@@ -59,6 +58,26 @@ class Observable(ABC):
 
 	def __len__(self):
 		return self.ndim
+
+''' System objects ''' 
+
+class System:
+	def __init__(self, integrator: Integrable, observables: List[Observable], names: List[str]=None):
+		if names is None:
+			names = [shortuuid.uuid() for obs in observables]
+		else:
+			assert len(names) == len(observables), 'Must give exactly as many names as observables'
+			assert len(set(names)) == len(names), 'Must give unique names'
+		self._integrator = integrator
+		self._observables = {n: o for n, o in zip(names, observables)}
+
+	@property
+	def integrator(self):
+		return self._integrator
+
+	@property 
+	def observables(self) -> Dict[str, Observable]:
+		return self._observables
 
 ''' Base class: PDE on arbitrary domain ''' 
 
@@ -170,10 +189,6 @@ class pde(Observable, Integrable):
 
 	def set_erroneous(self, erroneous: Callable[[np.ndarray], bool]):
 		self.erroneous = erroneous
-
-	def system(self) -> System:
-		''' Express as a single-observable system ''' 
-		return (self, [self]) 
 
 	''' Solving / private methods ''' 
 

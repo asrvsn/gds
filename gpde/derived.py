@@ -91,14 +91,13 @@ class edge_pde(gpde):
 		# 			j = self.X_dual[(x,y)]
 		# 			self.oriented_incidence_dual[i, j] = -1
 		def oriented_adj(e1, e2): 
-			# TODO: make sure signs here are right
 			# TODO: use edge weights
 			if e1 == e2:
 				return 0.
-			elif e2[0] in e1: # Outgoing edge
-				return 1.0
-			elif e2[1] in e1: # Ingoing edge
+			elif e2[1] == e1[1] or e2[0] == e1[0]:
 				return -1.0
+			elif e2[1] == e1[0] or e2[0] == e1[1]:
+				return 1.0
 			return 0.
 		# TODO: edge-weighted edge adjacency
 		self.adj_dual = sparse_product(self.edges.keys(), self.edges.keys(), oriented_adj) # |E| x |E| signed edge adjacency matrix

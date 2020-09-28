@@ -4,8 +4,8 @@ import pdb
 from itertools import count
 import colorcet as cc
 
+from gpde import *
 from gpde.utils import set_seed
-from gpde.core import *
 from gpde.render.bokeh import *
 
 ''' Definitions ''' 
@@ -65,7 +65,7 @@ def differential_inlets():
 	return pressure, velocity
 
 def poiseuille():
-	m, n = 8, 10
+	m, n = 10, 20
 	G = nx.grid_2d_graph(n, m)
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
@@ -232,9 +232,13 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = von_karman()
+	p, v = poiseuille()
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
-	integrator, _ = couple(p, v)
-	CustomRenderer(integrator, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06).start()
-	# SingleRenderer(sys, node_rng=(-1,1), edge_max=0.1, n_spring_iters=2000).start()
-	# FluidRenderer(p, v, node_rng=(-1, 1)).start()
+	pv = couple(p, v)
+	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
+
+	# renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06)
+	solve_and_dump(sys, 10., folder='poiseuille')
+	renderer = StaticRenderer('poiseuille', [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06)
+
+	renderer.start()
