@@ -7,3 +7,6 @@ pandas
 webbrowser
 pyzmq
 cloudpickle
+hickle
+tqdm
+networkx
