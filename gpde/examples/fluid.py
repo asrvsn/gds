@@ -86,6 +86,22 @@ def poiseuille():
 	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
 	return pressure, velocity
 
+def couette():
+	m, n = 10, 20
+	G = nx.grid_2d_graph(n, m)
+	pressure, velocity = incompressible_flow(G)
+	def vel_boundary(t, x):
+		if x[0][1] == x[1][1] == 0:
+			if x[0][0] > x[0][1]:
+				return 1.0
+			else:
+				return -1.0 
+		elif x[0][1] == x[1][1] == m-1:
+			return 0.
+		return None
+	velocity.set_boundary(dirichlet=vel_boundary, dynamic=False)
+	return pressure, velocity
+
 def fluid_on_sphere():
 	pass
 

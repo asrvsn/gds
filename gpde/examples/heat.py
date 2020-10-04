@@ -45,7 +45,21 @@ def grid_timevarying_boundary(steady_state=False) -> vertex_pde:
 	)
 	return temperature
 
+def grid_linear(steady_state=False) -> vertex_pde:
+	n = 10
+	temperature = heat_grid(n=n, steady_state=steady_state)
+	def dirichlet(t, x):
+		if x[0] == 0:
+			return 1.0
+		elif x[0] == n-1:
+			return 0.
+		return None
+	temperature.set_boundary(dirichlet=dirichlet, dynamic=False)
+	return temperature
+
 if __name__ == '__main__':
 	# Use coupling to visualize multiple PDEs simultaneously
-	system = couple(grid_mixed_boundary(), grid_mixed_boundary(steady_state=True))
-	GridRenderer(system).start()
+	p1 = grid_linear()
+	p2 = grid_linear(steady_state=True)
+	sys = System(couple(p1, p2), [p1, p2])
+	LiveRenderer(sys, grid_canvas([p1, p2])).start()
