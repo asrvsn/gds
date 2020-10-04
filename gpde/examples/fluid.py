@@ -12,11 +12,17 @@ from gpde.render.bokeh import *
 
 def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
 	velocity = edge_pde(G, dydt=lambda t, self: None)
-	pressure = vertex_pde(G, 
-		lhs=lambda t, self: -self.gradient.T@velocity.advect_self() + self.laplacian()/density,
-		gtol=1e-8
-	)
-	velocity.dydt_fun = lambda t, self: -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
+
+	def pressure_fun(t, self):
+		div = -self.gradient.T@velocity.advect_self()
+		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
+		return div + self.laplacian()/density
+	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
+
+	def velocity_fun(t, self):
+		return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
+	velocity.dydt_fun = velocity_fun
+
 	return pressure, velocity
 
 def compressible_flow(G: nx.Graph, viscosity=1.0) -> (vertex_pde, edge_pde):
@@ -232,14 +238,14 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	# p, v = poiseuille()
-	# d = v.project(GraphDomain.vertices, lambda v: v.div())
-	# pv = couple(p, v)
-	# sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
+	p, v = poiseuille()
+	d = v.project(GraphDomain.vertices, lambda v: v.div())
+	pv = couple(p, v)
+	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
 	# sys.solve_to_disk(10., 1e-3, 'poiseuille')
 
-	sys = System.from_disk('poiseuille')
-	p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
+	# sys = System.from_disk('poiseuille')
+	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
 	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06)
 	renderer.start()
