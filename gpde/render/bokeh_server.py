@@ -55,8 +55,7 @@ def update():
 
 def reset_button_cb():
 	global renderer
-	renderer.integrator.reset()
-	renderer.draw()
+	renderer.reset()
 	t2.text = str(round(renderer.integrator.t, 3))
 reset_button.on_click(reset_button_cb)
 

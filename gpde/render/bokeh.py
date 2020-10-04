@@ -125,7 +125,7 @@ class Renderer(ABC):
 				elif obs.Gd is GraphDomain.edges:
 					self.prep_layout_data(obs, G, layout)
 					obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
-					self.draw_arrows(obs)
+					self.draw_arrows(obs, obs.y)
 					if self.colorbars:
 						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
@@ -154,8 +154,8 @@ class Renderer(ABC):
 		data['x_mid'] = data['x1'] + data['dx'] / 2
 		data['y_mid'] = data['y1'] + data['dy'] / 2
 		data['m_norm'] = np.sqrt(data['dx']**2 + data['dy']**2)
-		data['dx'] /= data['m_norm']
-		data['dy'] /= data['m_norm']
+		data['dx'] /= data['m_norm'] # TODO: possible division by 0
+		data['dy'] /= data['m_norm'] # TODO: possible division by 0
 		data['m'] = data['dy'] / data['dx'] # TODO: possible division by 0
 		obs.layout = data
 		obs.arr_source = ColumnDataSource()
@@ -190,6 +190,13 @@ class LiveRenderer(Renderer):
 
 	def step(self, dt: float):
 		self.integrator.step(dt)
+		self.draw()
+
+	def reset(self):
+		self.integrator.reset()
+		self.draw()
+
+	def draw(self):
 		for obs in self.observables:
 			plot = self.plots[obs.plot_id]
 			if obs.Gd is GraphDomain.vertices:
@@ -233,7 +240,7 @@ class StaticRenderer(Renderer):
 
 def single_canvas(observables: List[Observable]) -> Canvas:
 	''' Render all observables in the same plot ''' 
-	return [[[self.observables]]]
+	return [[[observables]]]
 
 def grid_canvas(observables: List[Observable], ncols: int=2) -> Canvas:
 	''' Render all observables separately as items on a grid ''' 
