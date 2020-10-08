@@ -129,6 +129,8 @@ class Renderer(ABC):
 					if self.colorbars:
 						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
+					plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
+					plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
 					arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]))
 					plot.add_glyph(obs.arr_source, arrows)
 				else:

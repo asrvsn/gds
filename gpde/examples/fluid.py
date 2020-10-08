@@ -16,7 +16,9 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	def pressure_fun(t, self):
 		div = -self.gradient.T@velocity.advect_self()
 		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
-		return div + self.laplacian()/density
+		lap = self.laplacian()/density
+		lap[self.dirichlet_indices] = 0. # Laplacian should be zero at dirichlet boundaries
+		return div + lap
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
@@ -81,6 +83,33 @@ def poiseuille():
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	def no_slip(t, x):
 		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == m-1:
+			return 0.
+		return None
+	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
+	return pressure, velocity
+
+def poiseuille_asymmetric():
+	''' Poiseuille flow with a boundary asymmetry '''
+	m, n = 10, 20
+	G = nx.grid_2d_graph(n, m)
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
+		if x[0] == 0: return 1.0
+		if x[0] == n-1: return -1.0
+		return None
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+	k = 6
+	blockage = [
+		((k, m-1), (k, m-2)),
+		((k, m-2), (k, m-3)),
+		((k, m-3), (k+1, m-3)),
+		((k+1, m-3), (k+1, m-2)),
+		((k+1, m-2), (k+1, m-1)),
+	]
+	def no_slip(t, x):
+		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == m-1:
+			return 0.
+		elif x in blockage or (x[1], x[0]) in blockage:
 			return 0.
 		return None
 	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
@@ -254,14 +283,14 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = poiseuille()
+	p, v = poiseuille_asymmetric()
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	pv = couple(p, v)
 	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
-	# sys.solve_to_disk(10., 1e-3, 'poiseuille')
+	sys.solve_to_disk(20., 1e-3, 'poiseuille_asymmetric')
 
 	# sys = System.from_disk('poiseuille')
 	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.06)
-	renderer.start()
+	# renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.03)
+	# renderer.start()
