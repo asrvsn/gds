@@ -51,8 +51,10 @@ class vertex_pde(gpde):
 		return self.gradient@self.y
 
 	def laplacian(self) -> np.ndarray:
+		''' Dirichlet-Neumann Laplacian. TODO: should minimize error from laplacian on interior? ''' 
 		ret = self.vertex_laplacian@self.y
 		ret[self.neumann_indices] += self.neumann_values
+		ret[self.dirichlet_indices] = 0.
 		return ret
 
 	def bilaplacian(self) -> np.ndarray:

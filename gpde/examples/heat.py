@@ -11,11 +11,7 @@ def heat_grid(n = 10, steady_state=False) -> vertex_pde:
 	G = nx.grid_2d_graph(n, n)
 	if steady_state:
 		''' Steady-state version (for comparison) ''' 
-		def lhs(t, self):
-			ret = self.laplacian()
-			ret[self.dirichlet_indices] = 0. # Note: Laplacian should be zero at dirichlet boundaries
-			return ret
-		return vertex_pde(G, lhs=lhs)
+		return vertex_pde(G, lhs=self.laplacian())
 	else:
 		return vertex_pde(G, dydt=lambda t, self: self.laplacian())
 

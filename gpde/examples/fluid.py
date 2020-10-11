@@ -16,9 +16,7 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	def pressure_fun(t, self):
 		div = -self.gradient.T@velocity.advect_self()
 		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
-		lap = self.laplacian()/density
-		lap[self.dirichlet_indices] = 0. # Laplacian should be zero at dirichlet boundaries
-		return div + lap
+		return div + self.laplacian()/density
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
