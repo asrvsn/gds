@@ -281,14 +281,16 @@ class FluidRenderer(Renderer):
 		super().draw()
 
 if __name__ == '__main__':
-	p, v = poiseuille_asymmetric()
-	d = v.project(GraphDomain.vertices, lambda v: v.div())
-	pv = couple(p, v)
-	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
-	sys.solve_to_disk(20., 1e-3, 'poiseuille_asymmetric')
+	''' Solve ''' 
+	# p, v = poiseuille_asymmetric()
+	# d = v.project(GraphDomain.vertices, lambda v: v.div())
+	# pv = couple(p, v)
+	# sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
+	# sys.solve_to_disk(1, 1e-3, 'poiseuille_asymmetric')
 
-	# sys = System.from_disk('poiseuille')
-	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
+	''' Load from disk ''' 
+	sys = System.from_disk('poiseuille_asymmetric')
+	p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	# renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.03)
-	# renderer.start()
+	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.03)
+	renderer.start()

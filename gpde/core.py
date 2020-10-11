@@ -106,7 +106,7 @@ class System:
 			hkl.dump(np.array(data), f'{path}/{name}.hkl', mode='w', compression='gzip')
 		# Dump system object
 		with open(f'{path}/system.pkl', 'wb') as f:
-			self.dt = dt # Tell the dt (hacky)
+			self.dt = dt # Save the dt (hacky)
 			cloudpickle.dump(self, f)
 
 	@staticmethod
@@ -120,6 +120,7 @@ class System:
 		for name in sys.observables.keys():
 			data[name] = hkl.load(f'{path}/{name}.hkl')
 			n = data[name].shape[0]
+		sys_dt = sys.dt
 
 		class DummyIntegrable(Integrable):
 			def __init__(self):
@@ -129,7 +130,7 @@ class System:
 			def step(self, dt: float):
 				T = self.t + dt
 				while self.t < T and self.i < n:
-					self.t += dt
+					self.t += sys_dt
 					self.i += 1
 
 			def reset(self):
