@@ -67,7 +67,7 @@ def differential_inlets():
 		if x == 4: return 0.1
 		if x == 6: return -0.3
 		return None
-	pressure.set_boundary(neumann=pressure_values, dynamic=False)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
 def poiseuille():
@@ -100,6 +100,7 @@ def poiseuille_asymmetric():
 	blockage = [
 		((k, m-1), (k, m-2)),
 		((k, m-2), (k, m-3)),
+		((k, m-2), (k+1, m-2)),
 		((k, m-3), (k+1, m-3)),
 		((k+1, m-3), (k+1, m-2)),
 		((k+1, m-2), (k+1, m-1)),
@@ -133,12 +134,13 @@ def fluid_on_sphere():
 	pass
 
 def von_karman():
-	w, h = 20, 10
+	w, h = 40, 20
 	G = nx.grid_2d_graph(w, h)
+	j, k = 6, int(h/2)
 	obstacle = [ # Introduce occlusion
-		(6, 4), (6, 5), 
-		(7, 4), (7, 5), 
-		(8, 4),
+		(j, k-1), (j, k), 
+		(j+1, k-1), (j+1, k), 
+		(j+2, k-1),
 	]
 	G.remove_nodes_from(obstacle)
 	pressure, velocity = incompressible_flow(G)
@@ -147,6 +149,11 @@ def von_karman():
 		if x[0] == w-1: return -1.0
 		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+	def no_slip(t, x):
+		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == h-1:
+			return 0.
+		return None
+	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
 	return pressure, velocity
 
 def random_graph():
@@ -282,15 +289,15 @@ class FluidRenderer(Renderer):
 
 if __name__ == '__main__':
 	''' Solve ''' 
-	# p, v = poiseuille_asymmetric()
-	# d = v.project(GraphDomain.vertices, lambda v: v.div())
-	# pv = couple(p, v)
-	# sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
-	# sys.solve_to_disk(1, 1e-3, 'poiseuille_asymmetric')
+	p, v = von_karman()
+	d = v.project(GraphDomain.vertices, lambda v: v.div())
+	pv = couple(p, v)
+	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
+	sys.solve_to_disk(20, 1e-3, 'von_karman')
 
 	''' Load from disk ''' 
-	sys = System.from_disk('poiseuille_asymmetric')
-	p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
+	# sys = System.from_disk('von_karman')
+	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.03)
-	renderer.start()
+	# renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.03)
+	# renderer.start()

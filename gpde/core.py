@@ -94,20 +94,22 @@ class System:
 		for name, obs in obs_items:
 			dump[name] = []
 		t = 0.
-		with tqdm(total=int(T / dt)) as pbar:
-			while t < T:
-				self.integrator.step(dt)
-				for name, obs in obs_items:
-					dump[name].append(obs.y.copy())
-				t += dt
-				pbar.update(1)
-		# Dump simulation data
-		for name, data in dump.items():
-			hkl.dump(np.array(data), f'{path}/{name}.hkl', mode='w', compression='gzip')
-		# Dump system object
-		with open(f'{path}/system.pkl', 'wb') as f:
-			self.dt = dt # Save the dt (hacky)
-			cloudpickle.dump(self, f)
+		try:
+			with tqdm(total=int(T / dt), desc=folder) as pbar:
+				while t < T:
+					self.integrator.step(dt)
+					for name, obs in obs_items:
+						dump[name].append(obs.y.copy())
+					t += dt
+					pbar.update(1)
+		finally:
+			# Dump simulation data
+			for name, data in dump.items():
+				hkl.dump(np.array(data), f'{path}/{name}.hkl', mode='w', compression='gzip')
+			# Dump system object
+			with open(f'{path}/system.pkl', 'wb') as f:
+				self.dt = dt # Save the dt (hacky)
+				cloudpickle.dump(self, f)
 
 	@staticmethod
 	def from_disk(folder: str, parent='runs'):

@@ -103,7 +103,7 @@ class Renderer(ABC):
 		def helper(obs: Observable, plot=None):
 			if plot is None:
 				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
-				# plot.axis.visible = None
+				plot.axis.visible = None
 				# plot.xgrid.grid_line_color = None
 				# plot.ygrid.grid_line_color = None
 				renderer = from_networkx(G, layout)

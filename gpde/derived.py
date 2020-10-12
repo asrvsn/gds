@@ -92,7 +92,7 @@ class edge_pde(gpde):
 		# 		if y[1] in x: # Inward edges receive negative orientation
 		# 			j = self.X_dual[(x,y)]
 		# 			self.oriented_incidence_dual[i, j] = -1
-		def oriented_adj(e1, e2): 
+		def adj_dual(e1, e2): 
 			# TODO: use edge weights
 			if e1 == e2:
 				return 0.
@@ -101,8 +101,7 @@ class edge_pde(gpde):
 			elif e2[1] == e1[0] or e2[0] == e1[1]:
 				return 1.0
 			return 0.
-		# TODO: edge-weighted edge adjacency
-		self.adj_dual = sparse_product(self.edges.keys(), self.edges.keys(), oriented_adj) # |E| x |E| signed edge adjacency matrix
+		self.adj_dual = sparse_product(self.edges.keys(), self.edges.keys(), adj_dual) # |E| x |E| signed edge adjacency matrix
 
 	def __call__(self, x: Edge):
 		return self.orientation[x] * self.y[self.X[x]]
@@ -120,7 +119,7 @@ class edge_pde(gpde):
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		return self.curl3.T@self.curl3@self.y
+		return -self.curl3.T@self.curl3@self.y
 
 	def helmholtzian(self) -> np.ndarray:
 		''' Vector laplacian or discrete Helmholtz operator 
