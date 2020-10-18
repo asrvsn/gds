@@ -20,7 +20,8 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
-		return -self.advect_self() - pressure.grad()/density + viscosity*self.helmholtzian()/density
+		# TODO: momentum diffusion here is wrong.
+		return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
@@ -295,7 +296,7 @@ class FluidRenderer(Renderer):
 
 if __name__ == '__main__':
 	''' Solve ''' 
-	p, v = poiseuille(m=10, n=20)
+	p, v = poiseuille_asymmetric(m=10, n=20)
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	pv = couple(p, v)
 	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])

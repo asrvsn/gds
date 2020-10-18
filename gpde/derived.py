@@ -126,7 +126,7 @@ class edge_pde(gpde):
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		return self.gradient@self.gradient.T@self.y + self.laplacian()
+		return -self.gradient@self.gradient.T@self.y + self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		if type(v_field) is edge_pde and v_field.G is self.G:
