@@ -20,13 +20,36 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
-		return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
+		return -self.advect_self() - pressure.grad()/density + viscosity*self.helmholtzian()/density
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
 
 def compressible_flow(G: nx.Graph, viscosity=1.0) -> (vertex_pde, edge_pde):
 	pass
+
+def no_slip(G: nx.Graph) -> Callable:
+	''' Create no-slip velocity condition along x boundaries of grid graph ''' 
+	boundary = set()
+	nodes = set(G.nodes())
+	for node in nodes:
+		if G.degree(node) < 4:
+			N = (node[0], node[1] - 1)
+			S = (node[0], node[1] + 1)
+			E = (node[0]-1, node[1])
+			W = (node[0]+1, node[1])
+			# Add condition to normal of missing nodes
+			if not (N in nodes and S in nodes):
+				boundary.add((node, E))
+				boundary.add((node, W))
+			if not (E in nodes and W in nodes):
+				boundary.add((node, N))
+				boundary.add((node, S))
+	def bc(t, e):
+		if e in boundary or (e[1], e[0]) in boundary:
+			return 0.
+		return None
+	return bc
 
 ''' Systems ''' 
 
@@ -70,8 +93,7 @@ def differential_inlets():
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
-def poiseuille():
-	m, n = 10, 20
+def poiseuille(m=10, n=20):
 	G = nx.grid_2d_graph(n, m)
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
@@ -79,43 +101,32 @@ def poiseuille():
 		if x[0] == n-1: return -1.0
 		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
-	def no_slip(t, x):
-		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == m-1:
-			return 0.
-		return None
-	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
+	velocity.set_boundary(dirichlet=no_slip(G), dynamic=False)
 	return pressure, velocity
 
-def poiseuille_asymmetric():
+def poiseuille_asymmetric(m=10, n=20):
 	''' Poiseuille flow with a boundary asymmetry '''
-	m, n = 10, 20
 	G = nx.grid_2d_graph(n, m)
-	pressure, velocity = incompressible_flow(G)
-	def pressure_values(t, x):
-		if x[0] == 0: return 1.0
-		if x[0] == n-1: return -1.0
-		return None
-	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	k = 6
 	blockage = [
-		((k, m-1), (k, m-2)),
-		((k, m-2), (k, m-3)),
-		((k, m-2), (k+1, m-2)),
-		((k, m-3), (k+1, m-3)),
-		((k+1, m-3), (k+1, m-2)),
-		((k+1, m-2), (k+1, m-1)),
+		(k, m-1), (k, m-2),
+		(k, m-2), (k, m-3),
+		(k, m-2), (k+1, m-2),
+		(k, m-3), (k+1, m-3),
+		(k+1, m-3), (k+1, m-2),
+		(k+1, m-2), (k+1, m-1),
 	]
-	def no_slip(t, x):
-		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == m-1:
-			return 0.
-		elif x in blockage or (x[1], x[0]) in blockage:
-			return 0.
+	G.remove_nodes_from(blockage)
+	pressure, velocity = incompressible_flow(G)
+	def pressure_values(t, x):
+		if x[0] == 0: return 1.0
+		if x[0] == n-1: return -1.0
 		return None
-	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
+	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+	velocity.set_boundary(dirichlet=no_slip(G), dynamic=False)
 	return pressure, velocity
 
-def couette():
-	m, n = 10, 20
+def couette(m=10, n=20):
 	G = nx.grid_2d_graph(n, m)
 	pressure, velocity = incompressible_flow(G)
 	def vel_boundary(t, x):
@@ -133,10 +144,9 @@ def couette():
 def fluid_on_sphere():
 	pass
 
-def von_karman():
-	w, h = 40, 20
-	G = nx.grid_2d_graph(w, h)
-	j, k = 6, int(h/2)
+def von_karman(m=10, n=20):
+	G = nx.grid_2d_graph(n, m)
+	j, k = 6, int(m/2)
 	obstacle = [ # Introduce occlusion
 		(j, k-1), (j, k), 
 		(j+1, k-1), (j+1, k), 
@@ -146,14 +156,10 @@ def von_karman():
 	pressure, velocity = incompressible_flow(G)
 	def pressure_values(t, x):
 		if x[0] == 0: return 1.0
-		if x[0] == w-1: return -1.0
+		if x[0] == n-1: return -1.0
 		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
-	def no_slip(t, x):
-		if x[0][1] == x[1][1] == 0 or x[0][1] == x[1][1] == h-1:
-			return 0.
-		return None
-	velocity.set_boundary(dirichlet=no_slip, dynamic=False)
+	velocity.set_boundary(dirichlet=no_slip(G), dynamic=False)
 	return pressure, velocity
 
 def random_graph():
@@ -289,15 +295,15 @@ class FluidRenderer(Renderer):
 
 if __name__ == '__main__':
 	''' Solve ''' 
-	p, v = von_karman()
+	p, v = poiseuille(m=10, n=20)
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	pv = couple(p, v)
 	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
-	sys.solve_to_disk(20, 1e-3, 'von_karman')
+	# sys.solve_to_disk(20, 1e-3, 'poiseuille')
 
 	''' Load from disk ''' 
 	# sys = System.from_disk('von_karman')
 	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	# renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, n_spring_iters=2000, node_size=0.03)
-	# renderer.start()
+	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, layout_func=grid_graph_layout, node_size=0.03)
+	renderer.start()

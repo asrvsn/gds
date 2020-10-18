@@ -98,8 +98,13 @@ class Renderer(ABC):
 
 	def create_plot(self, items: List[Observable]):
 		assert all([obs.G is items[0].G for obs in items]), 'Co-rendered observables must use the same graph'
-		G = nx.convert_node_labels_to_integers(items[0].G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-		layout = self.layout_func(G)
+		orig_G = items[0].G
+		layout = self.layout_func(orig_G)
+		G = nx.convert_node_labels_to_integers(orig_G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+		for i, n in enumerate(orig_G.nodes()):
+			v = layout[n]
+			del layout[n]
+			layout[i] = v
 		def helper(obs: Observable, plot=None):
 			if plot is None:
 				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
@@ -253,6 +258,26 @@ def grid_canvas(observables: List[Observable], ncols: int=2) -> Canvas:
 		row = canvas[-1]
 		row.append([(obs,)])
 	return canvas
+
+''' Graph layout functions ''' 
+
+def grid_graph_layout(G: nx.Graph):
+	m, n = 0, 0
+	nodes = set(G.nodes())
+	for node in nodes:
+		n = max(node[0], n)
+		m = max(node[1], m)
+	m += 1
+	n += 1
+	layout = dict()
+	dh = 1/max(m, n)
+	x0 = -n/max(m, n)
+	y0 = -m/max(m, n)
+	for i in range(n):
+		for j in range(m):
+			if (i, j) in nodes:
+				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
+	return layout
 
 ''' Server ''' 
 
