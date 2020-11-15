@@ -74,6 +74,7 @@ class edge_pde(gpde):
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
+		self.edge_laplacian = -nx.laplacian_matrix(self.G_dual)
 		# self.weights_dual = np.zeros(len(self.X_dual))
 		# for i, x in enumerate(self.G_dual.edges()):
 		# 	for n in destructure(x):
@@ -119,7 +120,10 @@ class edge_pde(gpde):
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		return -self.curl3.T@self.curl3@self.y
+		# return -self.curl3.T@self.curl3@self.y
+		ret = self.edge_laplacian@self.y
+		ret[self.dirichlet_indices] = 0.
+		return ret
 
 	def helmholtzian(self) -> np.ndarray:
 		''' Vector laplacian or discrete Helmholtz operator 

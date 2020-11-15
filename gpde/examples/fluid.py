@@ -14,14 +14,16 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	velocity = edge_pde(G, dydt=lambda t, self: None)
 
 	def pressure_fun(t, self):
-		div = -self.gradient.T@velocity.advect_self()
-		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
-		return div + self.laplacian()/density
+		# div = -self.gradient.T@velocity.advect_self()
+		# div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
+		# return div + self.laplacian()/density
+		return self.laplacian()/density
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
 		# TODO: momentum diffusion here is wrong.
-		return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
+		# return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
+		return - pressure.grad()/density + viscosity*self.laplacian()/density
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
@@ -296,11 +298,11 @@ class FluidRenderer(Renderer):
 
 if __name__ == '__main__':
 	''' Solve ''' 
-	p, v = poiseuille_asymmetric(m=10, n=20)
+	p, v = poiseuille(m=11)
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	pv = couple(p, v)
 	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
-	# sys.solve_to_disk(20, 1e-3, 'poiseuille')
+	# sys.solve_to_disk(20, 1e-3, 'von_karman')
 
 	''' Load from disk ''' 
 	# sys = System.from_disk('von_karman')
