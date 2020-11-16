@@ -14,16 +14,16 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	velocity = edge_pde(G, dydt=lambda t, self: None)
 
 	def pressure_fun(t, self):
-		# div = -self.gradient.T@velocity.advect_self()
-		# div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
-		# return div + self.laplacian()/density
-		return self.laplacian()/density
+		div = -self.gradient.T@velocity.advect_self()
+		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
+		return div + self.laplacian()/density
+		# return self.laplacian()/density
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
 		# TODO: momentum diffusion here is wrong.
 		# return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
-		return - pressure.grad()/density + viscosity*self.laplacian()/density
+		return -self.advect_self() - pressure.grad()/density 
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
