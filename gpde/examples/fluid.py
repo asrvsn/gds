@@ -6,6 +6,7 @@ import colorcet as cc
 
 from gpde import *
 from gpde.utils import set_seed
+from gpde.utils.graph import *
 from gpde.render.bokeh import *
 
 ''' Definitions ''' 
@@ -17,13 +18,11 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 		div = -self.gradient.T@velocity.advect_self()
 		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
 		return div + self.laplacian()/density
-		# return self.laplacian()/density
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
 		# TODO: momentum diffusion here is wrong.
-		# return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
-		return -self.advect_self() - pressure.grad()/density 
+		return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
@@ -31,28 +30,14 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 def compressible_flow(G: nx.Graph, viscosity=1.0) -> (vertex_pde, edge_pde):
 	pass
 
-def no_slip(G: nx.Graph) -> Callable:
-	''' Create no-slip velocity condition along x boundaries of grid graph ''' 
-	boundary = set()
-	nodes = set(G.nodes())
-	for node in nodes:
-		if G.degree(node) < 4:
-			N = (node[0], node[1] - 1)
-			S = (node[0], node[1] + 1)
-			E = (node[0]-1, node[1])
-			W = (node[0]+1, node[1])
-			# Add condition to normal of missing nodes
-			if not (N in nodes and S in nodes):
-				boundary.add((node, E))
-				boundary.add((node, W))
-			if not (E in nodes and W in nodes):
-				boundary.add((node, N))
-				boundary.add((node, S))
-	def bc(t, e):
+def no_slip(dG: nx.Graph) -> Callable:
+	''' Create no-slip velocity condition graph boundary ''' 
+	boundary = set(dG.edges())
+	def vel(t, e):
 		if e in boundary or (e[1], e[0]) in boundary:
 			return 0.
 		return None
-	return bc
+	return vel
 
 ''' Systems ''' 
 
@@ -96,15 +81,19 @@ def differential_inlets():
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
 	return pressure, velocity
 
-def poiseuille(m=10, n=20):
-	G = nx.grid_2d_graph(n, m)
+def poiseuille(G: nx.Graph, dG: nx.Graph, dG_L: nx.Graph, dG_R: nx.Graph, p_L=1.0, p_R=-1.0):
+	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	pressure, velocity = incompressible_flow(G)
+	L_nodes = set(dG_L.nodes())
+	R_nodes = set(dG_R.nodes())
 	def pressure_values(t, x):
-		if x[0] == 0: return 1.0
-		if x[0] == n-1: return -1.0
+		if x in L_nodes:
+			return p_L
+		elif x in R_nodes:
+			return p_R
 		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
-	velocity.set_boundary(dirichlet=no_slip(G), dynamic=False)
+	# velocity.set_boundary(dirichlet=no_slip(dG), dynamic=False)
 	return pressure, velocity
 
 def poiseuille_asymmetric(m=10, n=20):
@@ -129,23 +118,21 @@ def poiseuille_asymmetric(m=10, n=20):
 	velocity.set_boundary(dirichlet=no_slip(G), dynamic=False)
 	return pressure, velocity
 
-def couette(m=10, n=20):
-	G = nx.grid_2d_graph(n, m)
+def couette(G: nx.Graph, dG_l: nx.Graph, dG_w: nx.Graph, v_l=1.0):
+	''' Drag-induced flow by velocity on dG_l with no-slip on dG_w ''' 
 	pressure, velocity = incompressible_flow(G)
-	def vel_boundary(t, x):
-		if x[0][1] == x[1][1] == 0:
-			if x[0][0] > x[0][1]:
-				return 1.0
-			else:
-				return -1.0 
-		elif x[0][1] == x[1][1] == m-1:
-			return 0.
+	wall = noslip(dG_w)
+	lid_edges = set(dG_l.edges())
+	def bc(t, e):
+		v = wall(e)
+		if v is None:
+			if e in lid_edges:
+				return v_l
+			elif (e[1], e[0]) in lid_edges:
+				return -v_l
 		return None
-	velocity.set_boundary(dirichlet=vel_boundary, dynamic=False)
+	velocity.set_boundary(dirichlet=bc, dynamic=False)
 	return pressure, velocity
-
-def fluid_on_sphere():
-	pass
 
 def von_karman(m=10, n=20):
 	G = nx.grid_2d_graph(n, m)
@@ -298,7 +285,10 @@ class FluidRenderer(Renderer):
 
 if __name__ == '__main__':
 	''' Solve ''' 
-	p, v = poiseuille(m=11)
+	# G = nx.triangular_lattice_graph(10, 30)
+	G = nx.hexagonal_lattice_graph(10, 21)
+	dG, dG_L, dG_R, dG_T, dG_B = get_lattice_boundary(G)
+	p, v = poiseuille(G, dG, dG_L, dG_R)
 	d = v.project(GraphDomain.vertices, lambda v: v.div())
 	pv = couple(p, v)
 	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
@@ -308,5 +298,5 @@ if __name__ == '__main__':
 	# sys = System.from_disk('von_karman')
 	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, layout_func=grid_graph_layout, node_size=0.03)
+	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
 	renderer.start()

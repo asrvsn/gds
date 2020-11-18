@@ -53,7 +53,9 @@ class Renderer(ABC):
 			def func(G):
 				pos_attr = nx.get_node_attributes(G, 'pos')
 				if len(pos_attr) > 0: # G already has self-defined positions
-					return {k: (np.array(v) - 0.5)*2 for k, v in pos_attr.items()}
+					vmin = min(map(lambda a: min(a), pos_attr.values()))
+					vmax = max(map(lambda a: max(a), pos_attr.values()))
+					return {k: ((np.array(v) - vmin)/(vmax - vmin) - 0.5)*2 for k, v in pos_attr.items()}
 				else:
 					return nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1, dim=dim)
 			self.layout_func = func

@@ -124,7 +124,6 @@ class edge_pde(gpde):
 		# ret = self.edge_laplacian@self.y
 		# ret[self.dirichlet_indices] = 0.
 		# return ret
-		# return -self.gradient@self.gradient.T@self.y
 
 	def helmholtzian(self) -> np.ndarray:
 		''' Vector laplacian or discrete Helmholtz operator 
