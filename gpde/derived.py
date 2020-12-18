@@ -94,16 +94,16 @@ class edge_pde(gpde):
 		# 		if y[1] in x: # Inward edges receive negative orientation
 		# 			j = self.X_dual[(x,y)]
 		# 			self.oriented_incidence_dual[i, j] = -1
-		def adj_dual(e1, e2): 
+		def adj_dual(n, e): 
 			# TODO: use edge weights
-			if e1 == e2:
-				return 0.
-			elif e2[1] == e1[1] or e2[0] == e1[0]:
-				return -1.0
-			elif e2[1] == e1[0] or e2[0] == e1[1]:
-				return 1.0
-			return 0.
-		self.adj_dual = sparse_product(self.edges.keys(), self.edges.keys(), adj_dual) # |E| x |E| signed edge adjacency matrix
+			if n == e:
+				return 0
+			elif n[1] == e[0] or n[0] == e[1]:
+				return 1
+			elif n[0] == e[0] or n[1] == e1[1]:
+				return -1
+			return 0
+		self.adj_dual = sparse_coo(self.edges.keys(), self.edges.keys(), adj_dual) # |E| x |E| signed edge adjacency matrix
 
 	def __call__(self, x: Edge):
 		return self.orientation[x] * self.y[self.X[x]]
