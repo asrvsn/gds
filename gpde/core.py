@@ -67,14 +67,9 @@ class Observable(ABC):
 ''' System objects ''' 
 
 class System:
-	def __init__(self, integrator: Integrable, observables: List[Observable], names: List[str]=None):
-		if names is None:
-			names = [shortuuid.uuid() for obs in observables]
-		else:
-			assert len(names) == len(observables), 'Must give exactly as many names as observables'
-			assert len(set(names)) == len(names), 'Must give unique names'
+	def __init__(self, integrator: Integrable, observables: Dict[str, Observable]):
 		self._integrator = integrator
-		self._observables = {n: o for n, o in zip(names, observables)}
+		self._observables = observables
 
 	@property
 	def integrator(self):
@@ -144,7 +139,7 @@ class System:
 			obs.history = data[name] # Hacky
 			attach_dyn_props(obs, {'y': lambda self: self.history[integ.i], 't': lambda _: integ.t})
 
-		return System(integ, list(sys.observables.values()), names=list(sys.observables.keys()))
+		return System(integ, sys.observables)
 
 
 ''' Base class: PDE on arbitrary domain ''' 
@@ -215,18 +210,18 @@ class pde(Observable, Integrable):
 				self.y_direct[i] = self.y0[i]
 
 	def set_boundary(self, 
-			dirichlet: Callable[[Time, Point], float]=lambda t, x: None, 
-			neumann: Callable[[Time, Point], float]=lambda t, x: None,
-			dynamic: bool=True
+			dirichlet: Callable[[Time, Point], float]=lambda x: None, 
+			neumann: Callable[[Time, Point], float]=lambda x: None,
+			dynamic: bool=False
 		):
 		''' Impose boundary conditions via time-varying values (dirichlet conditions) or fluxes (neumann conditions). 
 		Assumes the domains do not change. If `dynamic` is off, the boundary conditions are assumed to be static for performance improvement.
 		''' 
 		self.dynamic_bc = dynamic
 		self.dirichlet = dirichlet
-		self.dirichlet_X = set({x for x in self.X if (dirichlet(0., x) is not None)}) # Fixed-value domain
+		self.dirichlet_X = set({x for x in self.X if ((dirichlet(0., x) if dynamic else dirichlet(x)) is not None)}) # Fixed-value domain
 		self.dirichlet_indices = np.array([self.X[x] for x in self.dirichlet_X], dtype=np.int64)
-		self.dirichlet_values = np.array([dirichlet(0., x) for x in self.dirichlet_X])
+		self.dirichlet_values = np.array([(dirichlet(0., x) if dynamic else dirichlet(x)) for x in self.dirichlet_X])
 		self.y0 = replace(self.y0, self.dirichlet_indices, self.dirichlet_values)
 		if self.mode is SolveMode.forward:
 			for i, v in zip(self.dirichlet_indices, self.dirichlet_values):
@@ -234,9 +229,9 @@ class pde(Observable, Integrable):
 		else:
 			self.y_direct = self.y0.copy()
 		self.neumann = neumann
-		self.neumann_X = set({x for x in self.X if (neumann(0., x) is not None)}) # Fixed-flux domain
+		self.neumann_X = set({x for x in self.X if ((neumann(0., x) if dynamic else neumann(x)) is not None)}) # Fixed-flux domain
 		self.neumann_indices = np.array([self.X[x] for x in self.neumann_X], dtype=np.int64)
-		self.neumann_values = np.array([neumann(0., x) for x in self.neumann_X])
+		self.neumann_values = np.array([(neumann(0., x) if dynamic else neumann(x)) for x in self.neumann_X])
 		intersect = self.dirichlet_X & self.neumann_X
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 
@@ -373,11 +368,11 @@ class gpde(pde, GraphObservable):
 
 		# Orientation / incidence
 		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
-		self.incidence = nx.incidence_matrix(G, oriented=True)
+		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights))
 
 		# Operators
-		self.vertex_laplacian = -nx.laplacian_matrix(G) # |V| x |V| laplacian operator
-		self.gradient = self.incidence.multiply(np.sqrt(self.weights)).T # |E| x |V| gradient operator; respects implicit orientation
+		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
+		self.edge_laplacian = -self.incidence.T@self.incidence # |E| x |E| laplacian operator
 		def curl_element(tri, edge):
 			if edge[0] in tri and edge[1] in tri:
 				c = np.sqrt(self.weights[self.edges[edge]])

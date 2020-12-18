@@ -1,30 +1,35 @@
 ''' Graph utilities ''' 
 import networkx as nx
+import pdb
 
 def grid_graph_with_pos(m: int, n: int, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
 	# TODO add pos
 	return G
 
-def get_lattice_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
-	''' Get boundary of lattice graph, i.e. graph with tuple-valued nodes ''' 
-	# TODO: doesn't work for hexagonal lattice.
+def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
+	''' Get boundary of planar graph using layout coordinates. ''' 
 	nodes = set(G.nodes())
 	edges = set(G.edges())
-	xmin, xmax = min(map(lambda a: a[0], nodes)), max(map(lambda a: a[0], nodes))
-	ymin, ymax = min(map(lambda a: a[1], nodes)), max(map(lambda a: a[1], nodes))
+	pos = nx.get_node_attributes(G, 'pos')
+	xrng, yrng = list(set([pos[n][0] for n in nodes])), list(set([pos[n][1] for n in nodes]))
+	xmin = dict(zip(yrng, [min([pos[n][0] for n in nodes if pos[n][1]==y]) for y in yrng]))
+	ymin = dict(zip(xrng, [min([pos[n][1] for n in nodes if pos[n][0]==x]) for x in xrng]))
+	xmax = dict(zip(yrng, [max([pos[n][0] for n in nodes if pos[n][1]==y]) for y in yrng]))
+	ymax = dict(zip(xrng, [max([pos[n][1] for n in nodes if pos[n][0]==x]) for x in xrng]))
 	dG, dG_L, dG_R, dG_T, dG_B = nx.Graph(), nx.Graph(), nx.Graph(), nx.Graph(), nx.Graph()
 	for n in nodes:
-		if n[0] == xmin:
+		x, y = pos[n]
+		if x == xmin[y]:
 			dG_L.add_node(n)
 			dG.add_node(n)
-		if n[0] == xmax:
+		if x == xmax[y]:
 			dG_R.add_node(n)
 			dG.add_node(n)
-		if n[1] == ymin:
+		if y == ymin[x]:
 			dG_T.add_node(n)
 			dG.add_node(n)
-		if n[1] == ymax:
+		if y == ymax[x]:
 			dG_T.add_node(n)
 			dG.add_node(n)
 	for _dG in (dG, dG_L, dG_R, dG_T, dG_B):
@@ -36,26 +41,3 @@ def get_lattice_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph
 				elif (m, n) in edges:
 					_dG.add_edge(m, n)
 	return (dG, dG_L, dG_R, dG_T, dG_B)
-
-# def no_slip(G: nx.Graph) -> Callable:
-# 	''' Create no-slip velocity condition along x boundaries of grid graph ''' 
-# 	boundary = set()
-# 	nodes = set(G.nodes())
-# 	for node in nodes:
-# 		if G.degree(node) < 4:
-# 			N = (node[0], node[1] - 1)
-# 			S = (node[0], node[1] + 1)
-# 			E = (node[0]-1, node[1])
-# 			W = (node[0]+1, node[1])
-# 			# Add condition to normal of missing nodes
-# 			if not (N in nodes and S in nodes):
-# 				boundary.add((node, E))
-# 				boundary.add((node, W))
-# 			if not (E in nodes and W in nodes):
-# 				boundary.add((node, N))
-# 				boundary.add((node, S))
-# 	def bc(t, e):
-# 		if e in boundary or (e[1], e[0]) in boundary:
-# 			return 0.
-# 		return None
-# 	return bc

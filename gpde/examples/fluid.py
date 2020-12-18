@@ -15,14 +15,16 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	velocity = edge_pde(G, dydt=lambda t, self: None)
 
 	def pressure_fun(t, self):
-		div = -self.gradient.T@velocity.advect_self()
-		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
-		return div + self.laplacian()/density
+		# div = -self.incidence@velocity.advect()
+		# div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
+		# return div + self.laplacian()/density
+		return self.laplacian()
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
 		# TODO: momentum diffusion here is wrong.
-		return -self.advect_self() - pressure.grad()/density + viscosity*self.laplacian()/density
+		# return -self.advect() - pressure.grad()/density + viscosity*self.laplacian()/density
+		return  - pressure.grad()/density + viscosity*self.laplacian()/density
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
@@ -93,7 +95,7 @@ def poiseuille(G: nx.Graph, dG: nx.Graph, dG_L: nx.Graph, dG_R: nx.Graph, p_L=1.
 			return p_R
 		return None
 	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
-	# velocity.set_boundary(dirichlet=no_slip(dG), dynamic=False)
+	velocity.set_boundary(dirichlet=no_slip(dG), dynamic=False)
 	return pressure, velocity
 
 def poiseuille_asymmetric(m=10, n=20):
@@ -158,11 +160,18 @@ def random_graph():
 	eps = 0.3
 	G = nx.random_geometric_graph(n, eps)
 	pressure, velocity = incompressible_flow(G)
-	def pressure_values(t, x):
-		if x == 4: return 1.0
-		elif x == 21: return -1.0 
-		return None
-	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+	pressure.set_boundary(dirichlet=dict_fun({4: 1.0, 21: -1.0}))
+	return pressure, velocity
+
+def test():
+	G = nx.Graph()
+	G.add_nodes_from([1,2,3,4,5,6])
+	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
+	pressure, velocity = incompressible_flow(G)
+	p_vals = {1: 0.2, 4: 0.1, 6: -0.3}
+	v_vals = {(1, 2): 1.0, (3, 4): -1.0, (5, 6): -1.0, (3, 5): 1.0}
+	pressure.set_boundary(dirichlet=dict_fun(p_vals))
+	velocity.set_boundary(dirichlet=dict_fun(v_vals))
 	return pressure, velocity
 
 ''' Experimentation / observation ''' 
@@ -286,17 +295,30 @@ class FluidRenderer(Renderer):
 if __name__ == '__main__':
 	''' Solve ''' 
 	# G = nx.triangular_lattice_graph(10, 30)
-	G = nx.hexagonal_lattice_graph(10, 21)
-	dG, dG_L, dG_R, dG_T, dG_B = get_lattice_boundary(G)
-	p, v = poiseuille(G, dG, dG_L, dG_R)
-	d = v.project(GraphDomain.vertices, lambda v: v.div())
+	# G = nx.hexagonal_lattice_graph(15, 21)
+	# dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
+	# p, v = poiseuille(G, dG, dG_L, dG_R)
+
+	p, v = test()
+
+	# d = v.project(GraphDomain.vertices, lambda v: v.div())
+	adv = v.project(GraphDomain.edges, lambda v: v.advect())
+	# grad = p.project(GraphDomain.edges, lambda p: p.grad())
 	pv = couple(p, v)
-	sys = System(pv, [p, v, d], ['pressure', 'velocity', 'div_velocity'])
-	# sys.solve_to_disk(20, 1e-3, 'von_karman')
+	sys = System(pv, {
+		'pressure': p,
+		'velocity': v,
+		# 'div_velocity': d,
+		'advection': adv,
+		# 'grad': grad,
+
+	})
+	pdb.set_trace()
+	# sys.solve_to_disk(10, 1e-2, 'poiseuille_hex')
 
 	''' Load from disk ''' 
-	# sys = System.from_disk('von_karman')
+	# sys = System.from_disk('poiseuille_hex')
 	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
+	renderer = LiveRenderer(sys, [[[[p, v]], [[adv]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
 	renderer.start()

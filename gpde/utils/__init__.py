@@ -51,3 +51,6 @@ def sparse_product(X: Iterable[Any], Y: Iterable[Any], fun: Callable[[Any, Any],
 		for j, y in enumerate(Y):
 			data[i, j] = fun(x, y)
 	return csr_matrix(data)
+
+def dict_fun(m: Dict) -> Callable: 
+	return lambda x: m[x] if x in m else None

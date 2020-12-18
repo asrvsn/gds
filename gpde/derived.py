@@ -48,7 +48,7 @@ class vertex_pde(gpde):
 		return np.sqrt(self.weights[self.edges[e]]) * (self(e[1]) - self(e[0])) 
 
 	def grad(self) -> np.ndarray:
-		return self.gradient@self.y
+		return -self.incidence.T@self.y
 
 	def laplacian(self) -> np.ndarray:
 		''' Dirichlet-Neumann Laplacian. TODO: should minimize error from laplacian on interior? ''' 
@@ -62,6 +62,7 @@ class vertex_pde(gpde):
 		return self.vertex_laplacian@self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
+		# TODO: optimize for shared graph
 		return np.array([
 			sum([v_field((x, y)) * self.partial((x, y)) for y in self.G.neighbors(x)])
 			for x in self.X
@@ -110,7 +111,7 @@ class edge_pde(gpde):
 	''' Spatial differential operators '''
 
 	def div(self) -> np.ndarray:
-		return -self.gradient.T@self.y
+		return -self.incidence@self.y
 
 	def curl(self) -> np.ndarray:
 		raise self.curl3@self.y
@@ -120,23 +121,29 @@ class edge_pde(gpde):
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		return -self.curl3.T@self.curl3@self.y
+		# return -self.curl3.T@self.curl3@self.y
 		# ret = self.edge_laplacian@self.y
 		# ret[self.dirichlet_indices] = 0.
 		# return ret
+		return self.edge_laplacian@self.y
 
 	def helmholtzian(self) -> np.ndarray:
 		''' Vector laplacian or discrete Helmholtz operator 
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		return -self.gradient@self.gradient.T@self.y + self.laplacian()
+		return self.laplacian() - self.curl3.T@self.curl3@self.y
 
-	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
-		if type(v_field) is edge_pde and v_field.G is self.G:
+	def advect(self, v_field: Callable[[Edge], float] = None) -> np.ndarray:
+		if v_field is None:
+			ret = -self.incidence.T.multiply(self.y[:, None]).sum(axis=1)
+			ret = np.asarray(ret).squeeze()*self.y
+			return ret
+		elif type(v_field) is edge_pde and v_field.G is self.G:
 			# Since graphs are identical, orientation is implicitly respected
 			return self.y * (self.adj_dual@v_field.y)
 		else:
+			# TODO: check correctness
 			ret = np.zeros(self.ndim)
 			for a, i in self.X.items():
 				u = self(a)
@@ -151,9 +158,6 @@ class edge_pde(gpde):
 					else: # Ingoing edge
 						ret[i] -= u * v_field(b) / w
 			return np.array(ret)
-
-	def advect_self(self) -> np.ndarray:
-		return self.y * (self.adj_dual@self.y)
 
 class face_pde(gpde):
 	''' PDE defined on the faces of a graph ''' 
