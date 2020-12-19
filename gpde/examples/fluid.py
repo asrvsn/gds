@@ -15,16 +15,15 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 	velocity = edge_pde(G, dydt=lambda t, self: None)
 
 	def pressure_fun(t, self):
-		# div = -self.incidence@velocity.advect()
-		# div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
-		# return div + self.laplacian()/density
-		return self.laplacian()
+		div = -self.incidence@velocity.advect()
+		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
+		return div + self.laplacian()/density
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
 		# TODO: momentum diffusion here is wrong.
 		# return -self.advect() - pressure.grad()/density + viscosity*self.laplacian()/density
-		return  - pressure.grad()/density + viscosity*self.laplacian()/density
+		return self.advect() - pressure.grad()/density + viscosity*self.laplacian()/density
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
@@ -75,12 +74,8 @@ def differential_inlets():
 	G.add_nodes_from([1,2,3,4,5,6])
 	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
 	pressure, velocity = incompressible_flow(G)
-	def pressure_values(t, x):
-		if x == 1: return 0.2
-		if x == 4: return 0.1
-		if x == 6: return -0.3
-		return None
-	pressure.set_boundary(dirichlet=pressure_values, dynamic=False)
+	p_vals = {1: 0.2, 4: 0.1, 6: -0.3}
+	pressure.set_boundary(dirichlet=dict_fun(p_vals))
 	return pressure, velocity
 
 def poiseuille(G: nx.Graph, dG: nx.Graph, dG_L: nx.Graph, dG_R: nx.Graph, p_L=1.0, p_R=-1.0):
@@ -164,14 +159,21 @@ def random_graph():
 	return pressure, velocity
 
 def test():
+	# G = nx.Graph()
+	# G.add_nodes_from([1,2,3,4])
+	# G.add_edges_from([(1,2),(2,3),(3,4)])
+	# pressure, velocity = incompressible_flow(G)
+	# p_vals = {}
+	# v_vals = {(1, 2): 1.0, (2, 3): 1.0}
+	# pressure.set_boundary(dirichlet=dict_fun(p_vals))
+	# velocity.set_boundary(dirichlet=dict_fun(v_vals))
+
+	n = 20
 	G = nx.Graph()
-	G.add_nodes_from([1,2,3,4,5,6])
-	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
+	G.add_nodes_from(list(range(n)))
+	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
 	pressure, velocity = incompressible_flow(G)
-	p_vals = {1: 0.2, 4: 0.1, 6: -0.3}
-	v_vals = {(1, 2): 1.0, (3, 4): -1.0, (5, 6): -1.0, (3, 5): 1.0}
-	pressure.set_boundary(dirichlet=dict_fun(p_vals))
-	velocity.set_boundary(dirichlet=dict_fun(v_vals))
+	velocity.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	return pressure, velocity
 
 ''' Experimentation / observation ''' 
@@ -311,9 +313,7 @@ if __name__ == '__main__':
 		# 'div_velocity': d,
 		'advection': adv,
 		# 'grad': grad,
-
 	})
-	pdb.set_trace()
 	# sys.solve_to_disk(10, 1e-2, 'poiseuille_hex')
 
 	''' Load from disk ''' 

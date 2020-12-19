@@ -210,18 +210,30 @@ class pde(Observable, Integrable):
 				self.y_direct[i] = self.y0[i]
 
 	def set_boundary(self, 
-			dirichlet: Callable[[Time, Point], float]=lambda x: None, 
-			neumann: Callable[[Time, Point], float]=lambda x: None,
+			dirichlet: Callable[[Time, Point], float]=None, 
+			neumann: Callable[[Time, Point], float]=None,
 			dynamic: bool=False
 		):
 		''' Impose boundary conditions via time-varying values (dirichlet conditions) or fluxes (neumann conditions). 
 		Assumes the domains do not change. If `dynamic` is off, the boundary conditions are assumed to be static for performance improvement.
 		''' 
+		def populate(fun: Callable) -> Tuple[Set, np.ndarray, np.ndarray]:
+			if fun is None:
+				return set(), np.array([], dtype=np.intp), np.array([])
+			elif dynamic:
+				domain = set({x for x in self.X if (fun(0., x) is not None)})
+				indices = np.array([self.X[x] for x in domain], dtype=np.intp)
+				values = np.array([fun(0., x) for x in domain])
+				return domain, indices, values
+			else:
+				domain = set({x for x in self.X if (fun(x) is not None)})
+				indices = np.array([self.X[x] for x in domain], dtype=np.intp)
+				values = np.array([fun(x) for x in domain])
+				return domain, indices, values
+
 		self.dynamic_bc = dynamic
 		self.dirichlet = dirichlet
-		self.dirichlet_X = set({x for x in self.X if ((dirichlet(0., x) if dynamic else dirichlet(x)) is not None)}) # Fixed-value domain
-		self.dirichlet_indices = np.array([self.X[x] for x in self.dirichlet_X], dtype=np.int64)
-		self.dirichlet_values = np.array([(dirichlet(0., x) if dynamic else dirichlet(x)) for x in self.dirichlet_X])
+		self.dirichlet_X, self.dirichlet_indices, self.dirichlet_values = populate(dirichlet)
 		self.y0 = replace(self.y0, self.dirichlet_indices, self.dirichlet_values)
 		if self.mode is SolveMode.forward:
 			for i, v in zip(self.dirichlet_indices, self.dirichlet_values):
@@ -229,9 +241,7 @@ class pde(Observable, Integrable):
 		else:
 			self.y_direct = self.y0.copy()
 		self.neumann = neumann
-		self.neumann_X = set({x for x in self.X if ((neumann(0., x) if dynamic else neumann(x)) is not None)}) # Fixed-flux domain
-		self.neumann_indices = np.array([self.X[x] for x in self.neumann_X], dtype=np.int64)
-		self.neumann_values = np.array([(neumann(0., x) if dynamic else neumann(x)) for x in self.neumann_X])
+		self.neumann_X, self.neumann_indices, self.neumann_values = populate(neumann)
 		intersect = self.dirichlet_X & self.neumann_X
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 
@@ -312,6 +322,9 @@ class pde(Observable, Integrable):
 			return self.integrator.t
 		else:
 			return self.t_direct
+
+	def system(self, name: str) -> System:
+		return System(self, {name: self})
 
 ''' PDE on graph domain ''' 
 

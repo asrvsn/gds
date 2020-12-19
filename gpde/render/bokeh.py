@@ -248,9 +248,12 @@ class StaticRenderer(Renderer):
 
 ''' Layout creators ''' 
 
-def single_canvas(observables: List[Observable]) -> Canvas:
-	''' Render all observables in the same plot ''' 
-	return [[[observables]]]
+def single_canvas(item: Any) -> Canvas:
+	''' Render all item in the same plot ''' 
+	if isinstance(item, Iterable):
+		return [[[list(item)]]]
+	else:
+		return [[[[item]]]]
 
 def grid_canvas(observables: List[Observable], ncols: int=2) -> Canvas:
 	''' Render all observables separately as items on a grid ''' 

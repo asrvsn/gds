@@ -2,7 +2,7 @@ import numpy as np
 from typing import Tuple, List, Any, Iterable, Callable, Dict, Set
 from scipy.integrate import RK45
 import shortuuid
-from scipy.sparse import csr_matrix, coo_matrix
+from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
 import random
 
 def set_seed(seed=None):
@@ -45,12 +45,14 @@ def attach_dyn_props(instance, props: Dict[str, Callable]):
     instance.__class__ = subclass(instance.__class__, attrs)
 
 
-def dict_fun(m: Dict) -> Callable: 
-	return lambda x: m[x] if x in m else None
+def dict_fun(m: Dict, def_val: Any=None) -> Callable: 
+	return lambda x: m[x] if x in m else def_val
 
-def sparse_coo(X: Iterable[Any], Y: Iterable[Any], fun: Callable[[Any, Any], float]) -> coo_matrix:
-	data = coo_matrix((len(X), len(Y)))
+def sparse_product(X: Iterable[Any], Y: Iterable[Any], fun: Callable[[Any, Any], float]) -> coo_matrix:
+	data = dok_matrix((len(X), len(Y)))
 	for r, x in enumerate(X):
 		for c, y in enumerate(Y):
-			data[r, c] = fun(x, y)
-	return data
+			v = fun(x, y)
+			if v is not None:
+				data[r, c] = v
+	return data.tocoo()

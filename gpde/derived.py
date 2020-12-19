@@ -48,7 +48,7 @@ class vertex_pde(gpde):
 		return np.sqrt(self.weights[self.edges[e]]) * (self(e[1]) - self(e[0])) 
 
 	def grad(self) -> np.ndarray:
-		return -self.incidence.T@self.y
+		return self.incidence.T@self.y
 
 	def laplacian(self) -> np.ndarray:
 		''' Dirichlet-Neumann Laplacian. TODO: should minimize error from laplacian on interior? ''' 
@@ -75,7 +75,7 @@ class edge_pde(gpde):
 		# Vertex dual
 		self.G_dual = nx.line_graph(G)
 		self.X_dual = bidict({x: i for i, x in enumerate(self.G_dual.edges())})
-		self.edge_laplacian = -nx.laplacian_matrix(self.G_dual)
+		# self.edge_laplacian = -nx.laplacian_matrix(self.G_dual) # WRONG
 		# self.weights_dual = np.zeros(len(self.X_dual))
 		# for i, x in enumerate(self.G_dual.edges()):
 		# 	for n in destructure(x):
@@ -98,12 +98,12 @@ class edge_pde(gpde):
 			# TODO: use edge weights
 			if n == e:
 				return 0
-			elif n[1] == e[0] or n[0] == e[1]:
+			elif n[1] == e[1] or n[0] == e[1]:
 				return 1
-			elif n[0] == e[0] or n[1] == e1[1]:
+			elif n[0] == e[0] or n[1] == e[0]:
 				return -1
 			return 0
-		self.adj_dual = sparse_coo(self.edges.keys(), self.edges.keys(), adj_dual) # |E| x |E| signed edge adjacency matrix
+		self.adj_dual = sparse_product(self.edges.keys(), self.edges.keys(), adj_dual) # |E| x |E| signed edge adjacency matrix
 
 	def __call__(self, x: Edge):
 		return self.orientation[x] * self.y[self.X[x]]
@@ -136,9 +136,7 @@ class edge_pde(gpde):
 
 	def advect(self, v_field: Callable[[Edge], float] = None) -> np.ndarray:
 		if v_field is None:
-			ret = -self.incidence.T.multiply(self.y[:, None]).sum(axis=1)
-			ret = np.asarray(ret).squeeze()*self.y
-			return ret
+			return (self.adj_dual@self.y)*self.y
 		elif type(v_field) is edge_pde and v_field.G is self.G:
 			# Since graphs are identical, orientation is implicitly respected
 			return self.y * (self.adj_dual@v_field.y)
