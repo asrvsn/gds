@@ -1,6 +1,6 @@
 import numpy as np 
 from typing import Tuple, Dict, Any
-from scipy.integrate import RK45
+from scipy.integrate import RK45, LSODA
 import pdb
 from itertools import count
 
@@ -168,7 +168,7 @@ class coupled_pde(Integrable):
 	Can be integrated together but not observed directly. 
 	Can couple both forward-solved and direct-solved PDEs.
 	''' 
-	def __init__(self, *pdes: Tuple[pde], max_step=None):
+	def __init__(self, *pdes: Tuple[pde], max_step=None, atol=None):
 		assert len(pdes) >= 2, 'Pass two or more pdes to couple'
 		assert all([p.t == 0. for p in pdes]), 'Pass pdes at initial values only'
 		self.t0 = 0.
@@ -185,13 +185,16 @@ class coupled_pde(Integrable):
 			if max_step is None:
 				max_step = min([p.max_step for p in self.forward_pdes])
 			self.max_step = max_step
+			if atol is None:
+				atol = min([p.atol for p in self.forward_pdes])
+			self.atol = atol
 			y0s = [p.y0 for p in self.forward_pdes]
 			self.views = [slice(0, len(y0s[0]))]
 			for i in range(1, len(self.forward_pdes)):
 				start = self.views[i-1].stop
 				self.views.append(slice(start, start+len(y0s[i])))
 			self.y0 = np.concatenate(y0s)
-			self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=max_step)
+			self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, atol=self.atol)
 			# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
 			for (p, view) in zip(self.forward_pdes, self.views):
 				p.view = view
@@ -230,7 +233,7 @@ class coupled_pde(Integrable):
 
 	def reset(self):
 		if self.has_forward:
-			self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
+			self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step, atol=self.atol)
 		for p in self.direct_pdes:
 			p.reset()
 

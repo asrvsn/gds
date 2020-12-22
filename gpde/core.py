@@ -149,7 +149,7 @@ class pde(Observable, Integrable):
 			X: Domain, 
 			dydt: Callable[[Time, 'pde'], np.ndarray] = None, 
 			lhs: Callable[[Time, 'pde'], np.ndarray] = None,
-			order: int=1, max_step=1e-3, gtol=1e-3
+			order: int=1, max_step=1e-3, gtol=1e-3, atol=1e-6,
 		):
 		''' Create a PDE defined on some domain.
 		Args:
@@ -181,8 +181,9 @@ class pde(Observable, Integrable):
 			self.y0 = np.zeros(self.ndim*order)
 			self.dydt_fun = dydt
 			self.max_step = max_step
+			self.atol = atol
 			self.order = order
-			self.integrator = RK45(lambda t, y: np.zeros_like(self.y0), self.t0, self.y0, np.inf, max_step=max_step)
+			self.integrator = RK45(lambda t, y: np.zeros_like(self.y0), self.t0, self.y0, np.inf, max_step=max_step, atol=atol)
 			self.integrator.fun = self.dydt
 		else:
 			self.t_direct = self.t0
@@ -262,7 +263,7 @@ class pde(Observable, Integrable):
 	def reset(self):
 		''' Reset the system to initial conditions ''' 
 		if self.mode is SolveMode.forward:
-			self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step)
+			self.integrator = RK45(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step, atol=self.atol)
 		else:
 			self.t_direct = self.t0
 			self.y_direct = self.y0.copy()
