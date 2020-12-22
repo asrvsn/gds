@@ -201,9 +201,9 @@ class coupled_pde(Integrable):
 
 
 	def dydt(self, t: Time, y: np.ndarray):
-		res = np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.forward_pdes, self.views)])
 		for p in self.direct_pdes:
 			p.step_direct(0.) # Interleave direct solvers with forward solvers
+		res = np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.forward_pdes, self.views)])
 		return res
 
 	def step(self, dt: float):

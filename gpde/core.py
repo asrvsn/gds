@@ -329,6 +329,11 @@ class pde(Observable, Integrable):
 		else:
 			return self.t_direct
 
+	@property 
+	def dt(self):
+		assert self.mode is SolveMode.forward
+		return self.max_step if self.integrator.step_size is None else self.integrator.step_size
+
 	def system(self, name: str) -> System:
 		return System(self, {name: self})
 

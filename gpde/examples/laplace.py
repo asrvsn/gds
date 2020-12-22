@@ -30,6 +30,5 @@ def sinus_boundary_timevarying() -> vertex_pde:
 
 if __name__ == '__main__':
 	eq = sinus_boundary_timevarying()
-	# pdb.set_trace()
 	renderer = LiveRenderer(eq.system('laplace'), single_canvas(eq), node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
 	renderer.start()
