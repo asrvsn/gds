@@ -8,7 +8,7 @@ from gpde.render.bokeh import *
 def poisson_eq(n: int, f: Callable[[np.ndarray], np.ndarray], boundary: Callable[[Time, Point], float]) -> vertex_pde:
 	G = nx.grid_2d_graph(n, n)
 	eq = vertex_pde(G, lhs=lambda t, self: self.laplacian() + f(self.y))
-	eq.set_boundary(dirichlet=boundary, dynamic=False)
+	eq.set_boundary(dirichlet=boundary)
 	eq.set_initial(y0=lambda _: 1.)
 	return eq
 

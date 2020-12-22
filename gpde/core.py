@@ -168,10 +168,10 @@ class pde(Observable, Integrable):
 		self.t0 = 0.
 		self.dynamic_bc = True
 		self.dirichlet = lambda t, x: None
-		self.dirichlet_X = set()
+		self.dirichlet_X = []
 		self.dirichlet_indices = []
 		self.neumann = lambda t, x: None
-		self.neumann_X = set()
+		self.neumann_X = []
 		self.neumann_indices = []
 		self.neumann_values = []
 		self.erroneous = None
@@ -189,8 +189,11 @@ class pde(Observable, Integrable):
 			self.mode = SolveMode.direct
 			self.y0 = np.zeros(self.ndim)
 			self.lhs_fun = lhs
-			self.y_direct = np.zeros_like(self.y0)
+			self.y_direct = np.zeros(self.ndim)
+			self.sol_indices = np.arange(0, self.ndim, dtype=np.intp)
 			self.gtol = gtol
+
+	''' Dynamics ''' 
 
 	def set_initial(self, t0: float=0., y0: Callable[[Point], float]=lambda _: 0., **kwargs):
 		''' Set initial values. Other optional arguments are taken to be nth-derivative initial values. ''' 
@@ -217,16 +220,16 @@ class pde(Observable, Integrable):
 		''' Impose boundary conditions via time-varying values (dirichlet conditions) or fluxes (neumann conditions). 
 		Assumes the domains do not change. If `dynamic` is off, the boundary conditions are assumed to be static for performance improvement.
 		''' 
-		def populate(fun: Callable) -> Tuple[Set, np.ndarray, np.ndarray]:
+		def populate(fun: Callable) -> Tuple[List, np.ndarray, np.ndarray]:
 			if fun is None:
-				return set(), np.array([], dtype=np.intp), np.array([])
+				return [], np.array([], dtype=np.intp), np.array([])
 			elif dynamic:
-				domain = set({x for x in self.X if (fun(0., x) is not None)})
+				domain = [x for x in self.X if (fun(0., x) is not None)]
 				indices = np.array([self.X[x] for x in domain], dtype=np.intp)
 				values = np.array([fun(0., x) for x in domain])
 				return domain, indices, values
 			else:
-				domain = set({x for x in self.X if (fun(x) is not None)})
+				domain = [x for x in self.X if (fun(x) is not None)]
 				indices = np.array([self.X[x] for x in domain], dtype=np.intp)
 				values = np.array([fun(x) for x in domain])
 				return domain, indices, values
@@ -234,16 +237,20 @@ class pde(Observable, Integrable):
 		self.dynamic_bc = dynamic
 		self.dirichlet = dirichlet
 		self.dirichlet_X, self.dirichlet_indices, self.dirichlet_values = populate(dirichlet)
+		self.neumann = neumann
+		self.neumann_X, self.neumann_indices, self.neumann_values = populate(neumann)
+		intersect = set(self.dirichlet_X) & set(self.neumann_X)
+		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
+		interior = self.X.keys() - set(self.dirichlet_X)
 		self.y0 = replace(self.y0, self.dirichlet_indices, self.dirichlet_values)
 		if self.mode is SolveMode.forward:
 			for i, v in zip(self.dirichlet_indices, self.dirichlet_values):
 				self.integrator.y[i - self.ndim] = v 
 		else:
 			self.y_direct = self.y0.copy()
-		self.neumann = neumann
-		self.neumann_X, self.neumann_indices, self.neumann_values = populate(neumann)
-		intersect = self.dirichlet_X & self.neumann_X
-		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
+			self.sol_indices = np.array([self.X[x] for x in interior], dtype=np.intp)
+
+	''' Stepping ''' 
 
 	def step(self, dt: float):
 		''' Solve system at t+dt ''' 
@@ -262,8 +269,6 @@ class pde(Observable, Integrable):
 
 	def set_erroneous(self, erroneous: Callable[[np.ndarray], bool]):
 		self.erroneous = erroneous
-
-	''' Solving / private methods ''' 
 
 	def step_forward(self, dt: float):
 		''' Integrate forward in time ''' 
@@ -294,15 +299,16 @@ class pde(Observable, Integrable):
 		self.t_direct += dt
 		if self.dynamic_bc:
 			self.update_bcs(self.t_direct)
+			self.y_direct[self.dirichlet_indices] = self.dirichlet_values
 		# TODO: Jacobian?
-		result = least_squares(self.lhs, self.y_direct, gtol=self.gtol)
+		result = least_squares(self.lhs, self.y_direct[self.sol_indices], gtol=self.gtol, method='lm')
 		if result.status >= 1:
-			self.y_direct = result.x
+			self.y_direct[self.sol_indices] = result.x
 		else:
 			raise Exception(f'Direct solver failed: {result.message}')
 
 	def lhs(self, y: np.ndarray):
-		self.y_direct = replace(y, self.dirichlet_indices, self.dirichlet_values) # Do not modify constrained nodes
+		self.y_direct[self.sol_indices] = y
 		return self.lhs_fun(self.t, self)
 
 	def update_bcs(self, t: float):
