@@ -3,6 +3,7 @@ import numpy as np
 import pdb
 from itertools import count
 import colorcet as cc
+import random
 
 from gpde import *
 from gpde.utils import set_seed
@@ -77,8 +78,9 @@ def differential_inlets():
 	pressure.set_boundary(dirichlet=dict_fun(p_vals))
 	return pressure, velocity
 
-def poiseuille(G: nx.Graph, dG: nx.Graph, dG_L: nx.Graph, dG_R: nx.Graph, p_L=1.0, p_R=-1.0):
+def poiseuille(G: nx.Graph, p_L=1.0, p_R=-1.0):
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
+	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
 	pressure, velocity = incompressible_flow(G)
 	L_nodes = set(dG_L.nodes())
 	R_nodes = set(dG_R.nodes())
@@ -92,9 +94,9 @@ def poiseuille(G: nx.Graph, dG: nx.Graph, dG_L: nx.Graph, dG_R: nx.Graph, p_L=1.
 	velocity.set_boundary(dirichlet=no_slip(dG))
 	return pressure, velocity
 
-def poiseuille_asymmetric(m=10, n=20):
+def poiseuille_asymmetric(m=10, n=25):
 	''' Poiseuille flow with a boundary asymmetry '''
-	G = nx.grid_2d_graph(n, m)
+	G = grid_graph(m, n)
 	k = 6
 	blockage = [
 		(k, m-1), (k, m-2),
@@ -111,7 +113,8 @@ def poiseuille_asymmetric(m=10, n=20):
 		if x[0] == n-1: return -1.0
 		return None
 	pressure.set_boundary(dirichlet=pressure_values)
-	velocity.set_boundary(dirichlet=no_slip(G))
+	# dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
+	# velocity.set_boundary(dirichlet=no_slip(dG))
 	return pressure, velocity
 
 def couette(G: nx.Graph, dG_l: nx.Graph, dG_w: nx.Graph, v_l=1.0):
@@ -131,7 +134,7 @@ def couette(G: nx.Graph, dG_l: nx.Graph, dG_w: nx.Graph, v_l=1.0):
 	return pressure, velocity
 
 def von_karman(m=10, n=20):
-	G = nx.grid_2d_graph(n, m)
+	G = grid_graph(m, n)
 	j, k = 6, int(m/2)
 	obstacle = [ # Introduce occlusion
 		(j, k-1), (j, k), 
@@ -139,13 +142,15 @@ def von_karman(m=10, n=20):
 		(j+2, k-1),
 	]
 	G.remove_nodes_from(obstacle)
-	pressure, velocity = incompressible_flow(G)
+	pressure, velocity = incompressible_flow(G, viscosity=0.01)
 	def pressure_values(x):
 		if x[0] == 0: return 1.0
 		if x[0] == n-1: return -1.0
 		return None
 	pressure.set_boundary(dirichlet=pressure_values)
-	velocity.set_boundary(dirichlet=no_slip(G))
+	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
+	dG = nx.compose_all([dG_L, dG_T, dG_B])
+	velocity.set_boundary(dirichlet=no_slip(dG))
 	return pressure, velocity
 
 def random_graph():
@@ -157,16 +162,18 @@ def random_graph():
 	pressure.set_boundary(dirichlet=dict_fun({4: 1.0, 21: -1.0}))
 	return pressure, velocity
 
-def test():
-	# G = nx.Graph()
-	# G.add_nodes_from([1,2,3,4])
-	# G.add_edges_from([(1,2),(2,3),(3,4)])
-	# pressure, velocity = incompressible_flow(G)
-	# p_vals = {}
-	# v_vals = {(1, 2): 1.0, (2, 3): 1.0}
-	# pressure.set_boundary(dirichlet=dict_fun(p_vals))
-	# velocity.set_boundary(dirichlet=dict_fun(v_vals))
+def test1():
+	G = nx.Graph()
+	G.add_nodes_from([1,2,3,4])
+	G.add_edges_from([(1,2),(2,3),(3,4)])
+	pressure, velocity = incompressible_flow(G)
+	p_vals = {}
+	v_vals = {(1, 2): 1.0, (2, 3): 1.0}
+	pressure.set_boundary(dirichlet=dict_fun(p_vals))
+	velocity.set_boundary(dirichlet=dict_fun(v_vals))
+	return pressure, velocity
 
+def test2():
 	n = 20
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
@@ -296,28 +303,28 @@ class FluidRenderer(Renderer):
 if __name__ == '__main__':
 	''' Solve ''' 
 	# G = nx.triangular_lattice_graph(10, 30)
-	G = nx.hexagonal_lattice_graph(15, 21)
-	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
-	p, v = poiseuille(G, dG, dG_L, dG_R)
+	# G = nx.hexagonal_lattice_graph(15, 21)
+	# G = grid_graph(10, 20)
+	# p, v = poiseuille(G)
 
-	# p, v = differential_inlets()
+	# p, v = von_karman(m=15, n=30)
 
-	d = v.project(GraphDomain.vertices, lambda v: v.div())
-	# adv = v.project(GraphDomain.edges, lambda v: v.advect())
-	# grad = p.project(GraphDomain.edges, lambda p: p.grad())
-	pv = couple(p, v)
-	sys = System(pv, {
-		'pressure': p,
-		'velocity': v,
-		'div_velocity': d,
-		# 'advection': adv,
-		# 'grad': grad,
-	})
-	sys.solve_to_disk(10, 1e-2, 'poiseuille_hex')
+	# d = v.project(GraphDomain.vertices, lambda v: v.div())
+	# # adv = v.project(GraphDomain.edges, lambda v: v.advect())
+	# # grad = p.project(GraphDomain.edges, lambda p: p.grad())
+	# pv = couple(p, v)
+	# sys = System(pv, {
+	# 	'pressure': p,
+	# 	'velocity': v,
+	# 	'div_velocity': d,
+	# 	# 'advection': adv,
+	# 	# 'grad': grad,
+	# })
+	# sys.solve_to_disk(20, 1e-2, 'von_karman')
 
 	''' Load from disk ''' 
-	# sys = System.from_disk('poiseuille_hex')
-	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
+	sys = System.from_disk('von_karman')
+	p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	# renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
-	# renderer.start()
+	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
+	renderer.start()

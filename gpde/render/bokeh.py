@@ -158,7 +158,7 @@ class Renderer(ABC):
 			[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in G.edges()],
 			columns=['x1', 'y1', 'x2', 'y2']
 		)
-		data['dx'] = data['x2'] - data['x1']
+		data['dx'] = np.maximum(1e-3, data['x2'] - data['x1'])
 		data['dx_dir'] = np.sign(data['dx'])
 		data['dy'] = data['y2'] - data['y1']
 		data['x_mid'] = data['x1'] + data['dx'] / 2
@@ -264,26 +264,6 @@ def grid_canvas(observables: List[Observable], ncols: int=2) -> Canvas:
 		row = canvas[-1]
 		row.append([(obs,)])
 	return canvas
-
-''' Graph layout functions ''' 
-
-def grid_graph_layout(G: nx.Graph):
-	m, n = 0, 0
-	nodes = set(G.nodes())
-	for node in nodes:
-		n = max(node[0], n)
-		m = max(node[1], m)
-	m += 1
-	n += 1
-	layout = dict()
-	dh = 1/max(m, n)
-	x0 = -n/max(m, n)
-	y0 = -m/max(m, n)
-	for i in range(n):
-		for j in range(m):
-			if (i, j) in nodes:
-				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
-	return layout
 
 ''' Server ''' 
 

@@ -1,10 +1,30 @@
 ''' Graph utilities ''' 
 import networkx as nx
+import numpy as np
 import pdb
 
-def grid_graph_with_pos(m: int, n: int, **kwargs) -> nx.Graph:
+def grid_graph_layout(G: nx.Graph):
+	m, n = 0, 0
+	nodes = set(G.nodes())
+	for node in nodes:
+		n = max(node[0], n)
+		m = max(node[1], m)
+	m += 1
+	n += 1
+	layout = dict()
+	dh = 1/max(m, n)
+	x0 = -n/max(m, n)
+	y0 = -m/max(m, n)
+	for i in range(n):
+		for j in range(m):
+			if (i, j) in nodes:
+				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
+	return layout
+
+def grid_graph(m: int, n: int, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
-	# TODO add pos
+	pos = grid_graph_layout(G)
+	nx.set_node_attributes(G, pos, 'pos')
 	return G
 
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
