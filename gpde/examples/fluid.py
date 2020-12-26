@@ -12,18 +12,19 @@ from gpde.render.bokeh import *
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
-	velocity = edge_pde(G, dydt=lambda t, self: None, atol=1e-3) # Increased error tolerance for velocity of diff. scales
+def incompressible_flow(G: nx.Graph, viscosity=1.002e-3, density=1e3) -> (vertex_pde, edge_pde):
+	''' Default parameters for water at 20C, in SI units ''' 
+	velocity = edge_pde(G, dydt=lambda t, self: None, atol=1e-5) # Increased error tolerance for velocity of diff. scales
 
 	def pressure_fun(t, self):
 		# TODO: check correctness
-		div = -self.incidence@(velocity.y/velocity.dt + velocity.advect())
+		div = -self.incidence@(velocity.y/velocity.dt - velocity.advect())
 		div[self.dirichlet_indices] = 0. # Don't enforce divergence constraint at boundaries
-		return -self.laplacian()/density + div + viscosity*self.vertex_laplacian@velocity.div()/density
+		return div - self.laplacian()/density + viscosity*self.vertex_laplacian@velocity.div()/density
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
-		return self.advect() - pressure.grad()/density + viscosity*self.laplacian()/density
+		return -self.advect() - pressure.grad()/density + viscosity*self.laplacian()/density
 	velocity.dydt_fun = velocity_fun
 
 	return pressure, velocity
@@ -31,14 +32,25 @@ def incompressible_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde,
 def compressible_flow(G: nx.Graph, viscosity=1.0) -> (vertex_pde, edge_pde):
 	pass
 
-def no_slip(dG: nx.Graph) -> Callable:
-	''' Create no-slip velocity condition graph boundary ''' 
-	boundary = set(dG.edges())
+def const_velocity(dG: nx.Graph, v: float) -> Callable:
+	''' Create constant-velocity condition graph boundary ''' 
 	def vel(e):
-		if e in boundary or (e[1], e[0]) in boundary:
-			return 0.
+		if e in dG.edges or (e[1], e[0]) in dG.edges: 
+			return v
 		return None
 	return vel
+
+def no_slip(dG: nx.Graph) -> Callable:
+	''' Create no-slip velocity condition graph boundary ''' 
+	return const_velocity(dG, 0.)
+
+def multi_bc(bcs: List[Callable]) -> Callable:
+	def fun(x):
+		for bc in bcs:
+			v = bc(x)
+			if v is not None: return v
+		return None
+	return fun
 
 ''' Systems ''' 
 
@@ -94,7 +106,7 @@ def poiseuille(G: nx.Graph, p_L=1.0, p_R=-1.0):
 	velocity.set_boundary(dirichlet=no_slip(dG))
 	return pressure, velocity
 
-def poiseuille_asymmetric(m=10, n=25):
+def poiseuille_asymmetric(m=10, n=40):
 	''' Poiseuille flow with a boundary asymmetry '''
 	G = grid_graph(m, n)
 	k = 6
@@ -180,6 +192,15 @@ def test2():
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
 	pressure, velocity = incompressible_flow(G)
 	velocity.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
+	return pressure, velocity
+
+def lid_driven_cavity(m=15):
+	G = grid_graph(m, m)
+	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
+	cavity = nx.compose_all([dG_L, dG_R, dG_B])
+	lid = dG_T
+	pressure, velocity = incompressible_flow(G)
+	velocity.set_boundary(dirichlet=multi_bc([no_slip(cavity), const_velocity(lid, 1.5)]))
 	return pressure, velocity
 
 ''' Experimentation / observation ''' 
@@ -307,24 +328,24 @@ if __name__ == '__main__':
 	# G = grid_graph(10, 20)
 	# p, v = poiseuille(G)
 
-	# p, v = von_karman(m=15, n=30)
+	p, v = lid_driven_cavity()
 
-	# d = v.project(GraphDomain.vertices, lambda v: v.div())
-	# # adv = v.project(GraphDomain.edges, lambda v: v.advect())
-	# # grad = p.project(GraphDomain.edges, lambda p: p.grad())
-	# pv = couple(p, v)
-	# sys = System(pv, {
-	# 	'pressure': p,
-	# 	'velocity': v,
-	# 	'div_velocity': d,
-	# 	# 'advection': adv,
-	# 	# 'grad': grad,
-	# })
+	d = v.project(GraphDomain.vertices, lambda v: v.div())
+	# adv = v.project(GraphDomain.edges, lambda v: v.advect())
+	# grad = p.project(GraphDomain.edges, lambda p: p.grad())
+	pv = couple(p, v)
+	sys = System(pv, {
+		'pressure': p,
+		'velocity': v,
+		'div_velocity': d,
+		# 'advection': adv,
+		# 'grad': grad,
+	})
 	# sys.solve_to_disk(20, 1e-2, 'von_karman')
 
 	''' Load from disk ''' 
-	sys = System.from_disk('von_karman')
-	p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
+	# sys = System.from_disk('poiseuille_asymmetric')
+	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
 	renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
 	renderer.start()

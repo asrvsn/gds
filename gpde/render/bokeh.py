@@ -158,7 +158,10 @@ class Renderer(ABC):
 			[[layout[x1][0], layout[x1][1], layout[x2][0], layout[x2][1]] for (x1, x2) in G.edges()],
 			columns=['x1', 'y1', 'x2', 'y2']
 		)
-		data['dx'] = np.maximum(1e-3, data['x2'] - data['x1'])
+		dx = data['x2'] - data['x1']
+		dx[dx >= 0] = np.maximum(1e-3, dx[dx >= 0])
+		dx[dx < 0] = np.minimum(-1e-3, dx[dx < 0])
+		data['dx'] = dx
 		data['dx_dir'] = np.sign(data['dx'])
 		data['dy'] = data['y2'] - data['y1']
 		data['x_mid'] = data['x1'] + data['dx'] / 2
@@ -175,10 +178,10 @@ class Renderer(ABC):
 		w = 0.1
 		absy = np.abs(y)
 		magn = np.clip(np.log(1 + absy), a_min=None, a_max=self.edge_max)
-		p1x = obs.layout['x_mid']
-		p1y = obs.layout['y_mid']
 		dx = -np.sign(obs.y) * magn * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
 		dy = obs.layout['m'] * dx
+		p1x = obs.layout['x_mid'] - dx/2
+		p1y = obs.layout['y_mid'] - dy/2
 		p2x = -obs.layout['dy'] * magn * w/2 + p1x + dx
 		p2y = obs.layout['dx'] * magn * w/2 + p1y + dy
 		p3x = obs.layout['dy'] * magn * w/2 + p1x + dx

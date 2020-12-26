@@ -47,7 +47,7 @@ def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph,
 			dG_R.add_node(n)
 			dG.add_node(n)
 		if y == ymin[x]:
-			dG_T.add_node(n)
+			dG_B.add_node(n)
 			dG.add_node(n)
 		if y == ymax[x]:
 			dG_T.add_node(n)

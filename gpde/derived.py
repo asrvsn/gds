@@ -136,10 +136,10 @@ class edge_pde(gpde):
 
 	def advect(self, v_field: Callable[[Edge], float] = None) -> np.ndarray:
 		if v_field is None:
-			return (self.adj_dual@self.y)*self.y
+			return -(self.adj_dual@self.y)*self.y # TODO: check the sign?
 		elif type(v_field) is edge_pde and v_field.G is self.G:
 			# Since graphs are identical, orientation is implicitly respected
-			return self.y * (self.adj_dual@v_field.y)
+			return -self.y * (self.adj_dual@v_field.y)
 		else:
 			# TODO: check correctness
 			ret = np.zeros(self.ndim)
