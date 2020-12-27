@@ -37,10 +37,10 @@ class MetricsObservable(Observable):
 ''' Domain-specific gpde's ''' 
 
 class vertex_pde(gpde):
-	''' PDE defined on the vertices of a graph ''' 
+	''' PDE defined on the nodes of a graph ''' 
 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
-		gpde.__init__(self, G, GraphDomain.vertices, *args, **kwargs)
+		gpde.__init__(self, G, GraphDomain.nodes, *args, **kwargs)
 
 	''' Differential operators '''
 

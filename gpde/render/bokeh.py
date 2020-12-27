@@ -118,7 +118,7 @@ class Renderer(ABC):
 				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node'), ('edge', '@edge')]))
 			# Domain-specific rendering
 			if isinstance(obs, GraphObservable):
-				if obs.Gd is GraphDomain.vertices: 
+				if obs.Gd is GraphDomain.nodes: 
 					plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 					plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
 					if isinstance(obs, gpde):
@@ -212,7 +212,7 @@ class LiveRenderer(Renderer):
 	def draw(self):
 		for obs in self.observables:
 			plot = self.plots[obs.plot_id]
-			if obs.Gd is GraphDomain.vertices:
+			if obs.Gd is GraphDomain.nodes:
 				self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
 			elif obs.Gd is GraphDomain.edges:
 				self.draw_arrows(obs, obs.y)
@@ -238,7 +238,7 @@ class StaticRenderer(Renderer):
 		T = self._t + dt
 		while self._t < t:
 			for name, obs in self.system.observables.items():
-				if obs.Gd is GraphDomain.vertices:
+				if obs.Gd is GraphDomain.nodes:
 					self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = self.data[name][self._i]
 				elif obs.Gd is GraphDomain.edges:
 					self.draw_arrows(obs, self.data[name][self._i])

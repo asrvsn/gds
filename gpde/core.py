@@ -345,7 +345,7 @@ Edge = Tuple[Vertex, Vertex]
 Triangle = Tuple[Vertex, Vertex, Vertex]
 Point = Union[Vertex, Edge, Triangle] # A point in the graph domain
 class GraphDomain(Enum):
-	vertices = 0
+	nodes = 0
 	edges = 1
 	triangles = 2
 
@@ -355,7 +355,7 @@ class GraphObservable(Observable):
 		self.G = G
 		self.Gd = Gd
 		# Domains
-		self.vertices = {v: i for i, v in enumerate(G.nodes())}
+		self.nodes = {v: i for i, v in enumerate(G.nodes())}
 		self.edges = bidict({e: i for i, e in enumerate(G.edges())})
 		self.triangles, tri_index = {}, 0
 		for clique in nx.find_cliques(G):
@@ -363,8 +363,8 @@ class GraphObservable(Observable):
 				self.triangles[tuple(clique)] = tri_index
 				tri_index += 1
 
-		if Gd is GraphDomain.vertices:
-			X = self.vertices
+		if Gd is GraphDomain.nodes:
+			X = self.nodes
 		elif Gd is GraphDomain.edges:
 			X = self.edges
 		elif Gd is GraphDomain.triangles:
