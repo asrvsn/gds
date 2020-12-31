@@ -335,16 +335,17 @@ if __name__ == '__main__':
 	# p, v = poiseuille(G, gradP=10.0)
 
 	# p, v = poiseuille_asymmetric(gradP=10.0)
-	p, v = lid_driven_cavity(v=100.)
+	# p, v = lid_driven_cavity(v=10.)
+	p, v = differential_inlets()
 
-	d = v.project(GraphDomain.nodes, lambda v: v.div())
+	div = v.project(GraphDomain.nodes, lambda v: v.div())
 	adv = v.project(GraphDomain.edges, lambda v: v.advect())
 	# grad = p.project(GraphDomain.edges, lambda p: p.grad())
 	pv = couple(p, v)
 	sys = System(pv, {
 		'pressure': p,
 		'velocity': v,
-		# 'div_velocity': d,
+		'divergence': div,
 		'advection': adv,
 		# 'grad': grad,
 	})
@@ -354,5 +355,5 @@ if __name__ == '__main__':
 	# sys = System.from_disk('poiseuille_asymmetric')
 	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[adv]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	renderer = LiveRenderer(sys, [[[[p, v]], [[div]], [[adv]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
 	renderer.start()

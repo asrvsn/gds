@@ -169,11 +169,12 @@ class pde(Observable, Integrable):
 		self.dynamic_bc = True
 		self.dirichlet = lambda t, x: None
 		self.dirichlet_X = []
-		self.dirichlet_indices = []
+		self.dirichlet_indices = np.array([], dtype=np.intp)
+		self.dirichlet_values = np.array([])
 		self.neumann = lambda t, x: None
 		self.neumann_X = []
-		self.neumann_indices = []
-		self.neumann_values = []
+		self.neumann_indices = np.array([], dtype=np.intp)
+		self.neumann_values = np.array([])
 		self.erroneous = None
 		self.nonnegative = nonnegative
 

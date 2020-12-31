@@ -68,8 +68,12 @@ class vertex_pde(gpde):
 			N = M.copy().T
 			N.data[N.data > 0] = 0.
 			N.data *= -1
-			return -M@N@self.y
+			ret = -M@N@self.y
+			ret[self.dirichlet_indices] = 0.
+			return ret
 		else:
+			# This option is broken; need to properly use orientation
+			assert False
 			return np.array([
 				sum([v_field((x, y)) * self.partial((x, y)) for y in self.G.neighbors(x)])
 				for x in self.X
@@ -124,7 +128,7 @@ class edge_pde(gpde):
 		raise self.curl3@self.y
 
 	def laplacian(self) -> np.ndarray:
-		''' Edge laplacian 
+		''' Vector laplacian or discrete Helmholtz operator 
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
@@ -132,25 +136,28 @@ class edge_pde(gpde):
 		# ret = self.edge_laplacian@self.y
 		# ret[self.dirichlet_indices] = 0.
 		# return ret
-		return self.edge_laplacian@self.y
-
-	def helmholtzian(self) -> np.ndarray:
-		''' Vector laplacian or discrete Helmholtz operator 
-		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
-		TODO: neumann conditions
-		''' 
-		return self.laplacian() - self.curl3.T@self.curl3@self.y
+		return self.edge_laplacian@self.y - self.curl3.T@self.curl3@self.y
 
 	def advect(self, v_field: Callable[[Edge], float] = None) -> np.ndarray:
 		if v_field is None:
-			adv = -(self.adj_dual@self.y)*self.y # TODO: check the sign?
-			adv[self.dirichlet_indices] = 0.
-			return adv
-		elif type(v_field) is edge_pde and v_field.G is self.G:
+			# Transpose of scalar advection case.
+			# TODO: does this assume flow is irrotational?
+			M = self.incidence.multiply(self.y).T
+			N = M.copy().T
+			M.data[M.data > 0] = 0.
+			M.data *= -1
+			ret = -M@N@self.y
+			ret[self.dirichlet_indices] = 0.
+			return ret
+		elif isinstance(v_field, edge_pde) and v_field.G is self.G:
 			# Since graphs are identical, orientation is implicitly respected
-			return -self.y * (self.adj_dual@v_field.y)
+			M = self.incidence.multiply(v_field.y).T
+			N = M.copy().T
+			M.data[M.data > 0] = 0.
+			M.data *= -1
+			return -M@N@self.y
 		else:
-			# TODO: check correctness
+			# TODO: incorrect
 			ret = np.zeros(self.ndim)
 			for a, i in self.X.items():
 				u = self(a)

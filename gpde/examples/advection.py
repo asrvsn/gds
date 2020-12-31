@@ -67,11 +67,33 @@ def test():
 	pdb.set_trace()
 	return conc, flow
 
+def vector_advection_circle():
+	n = 10
+	G = nx.Graph()
+	G.add_nodes_from(list(range(n)))
+	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
+	flow = edge_pde(G, dydt=lambda t, self: -self.advect())
+	# flow.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
+	flow.set_initial(y0=lambda e: 1.0 if e == (2, 3) else 0.1)
+	# flow.set_boundary(dirichlet=dict_fun({(2,3): 1.0}))
+	return flow
+
 if __name__ == '__main__':
-	conc, flow = advection_on_grid()
-	sys = System(couple(conc, flow), {
-		'conc': conc,
+	''' Scalar field advection ''' 
+
+	# conc, flow = advection_on_grid()
+	# sys = System(couple(conc, flow), {
+	# 	'conc': conc,
+	# 	'flow': flow,
+	# })
+	# renderer = LiveRenderer(sys, [[[[conc, flow]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	# renderer.start()
+
+	''' Vector field advection ''' 
+
+	flow = vector_advection_circle()
+	sys = System(flow, {
 		'flow': flow,
 	})
-	renderer = LiveRenderer(sys, [[[[conc, flow]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	renderer = LiveRenderer(sys, [[[[flow]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
 	renderer.start()
