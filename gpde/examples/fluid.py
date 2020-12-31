@@ -18,7 +18,7 @@ def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1.0e-3, density=1.0
 	dG: non-divergence-free boundary (inlets/outlets)
 	''' 
 	velocity = edge_pde(G, dydt=lambda t, self: None, atol=1e-4) # Increased error tolerance for velocity of diff. scales
-	dG_nodes = np.array([velocity.nodes[e] for e in dG.nodes], dtype=np.intp)
+	dG_nodes = np.array([velocity.nodes[n] for n in dG.nodes], dtype=np.intp)
 
 	def pressure_fun(t, self):
 		# TODO: check correctness
@@ -196,17 +196,17 @@ def test2():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
-	pressure, velocity = incompressible_flow(G)
+	pressure, velocity = incompressible_flow(G, nx.Graph(), viscosity=0.)
 	velocity.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	return pressure, velocity
 
-def lid_driven_cavity(m=15):
-	G = grid_graph(m, m)
+def lid_driven_cavity(m=15, n=25, v=1.0):
+	G = grid_graph(m, n)
 	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
 	cavity = nx.compose_all([dG_L, dG_R, dG_B])
 	lid = dG_T
-	pressure, velocity = incompressible_flow(G)
-	velocity.set_boundary(dirichlet=multi_bc([no_slip(cavity), const_velocity(lid, 5)]))
+	pressure, velocity = incompressible_flow(G, nx.Graph(), viscosity=0.)
+	velocity.set_boundary(dirichlet=multi_bc([no_slip(cavity), const_velocity(lid, v)]))
 	return pressure, velocity
 
 ''' Experimentation / observation ''' 
@@ -335,24 +335,24 @@ if __name__ == '__main__':
 	# p, v = poiseuille(G, gradP=10.0)
 
 	# p, v = poiseuille_asymmetric(gradP=10.0)
-	p, v = von_karman()
+	p, v = lid_driven_cavity(v=100.)
 
 	d = v.project(GraphDomain.nodes, lambda v: v.div())
-	# adv = v.project(GraphDomain.edges, lambda v: v.advect())
+	adv = v.project(GraphDomain.edges, lambda v: v.advect())
 	# grad = p.project(GraphDomain.edges, lambda p: p.grad())
 	pv = couple(p, v)
 	sys = System(pv, {
 		'pressure': p,
 		'velocity': v,
-		'div_velocity': d,
-		# 'advection': adv,
+		# 'div_velocity': d,
+		'advection': adv,
 		# 'grad': grad,
 	})
-	sys.solve_to_disk(20, 1e-2, 'von_karman')
+	# sys.solve_to_disk(20, 1e-2, 'von_karman')
 
 	''' Load from disk ''' 
 	# sys = System.from_disk('poiseuille_asymmetric')
 	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
 
-	# renderer = LiveRenderer(sys, [[[[p, v]], [[d]]]], node_palette=cc.rainbow, node_rng=(-1,1), edge_max=0.3, node_size=0.03)
-	# renderer.start()
+	renderer = LiveRenderer(sys, [[[[p, v]], [[adv]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	renderer.start()

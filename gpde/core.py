@@ -2,7 +2,6 @@
 
 import numpy as np
 import networkx as nx
-# import networkx.linalg.graphmatrix as nx
 from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
 from scipy.integrate import RK45
 from scipy.optimize import least_squares
@@ -42,6 +41,7 @@ class Integrable(ABC):
 class Observable(ABC):
 	def __init__(self, X: Domain):
 		self.X = X # Domain
+		self.Xi = {i: x for x, i in X.items()} # Reverse-lookup domain
 		self.ndim = len(X)
 
 	@property
@@ -150,6 +150,7 @@ class pde(Observable, Integrable):
 			dydt: Callable[[Time, 'pde'], np.ndarray] = None, 
 			lhs: Callable[[Time, 'pde'], np.ndarray] = None,
 			order: int=1, max_step=1e-3, gtol=1e-3, atol=1e-6,
+			nonnegative=False,
 		):
 		''' Create a PDE defined on some domain.
 		Args:
@@ -164,7 +165,6 @@ class pde(Observable, Integrable):
 		''' 
 		assert (dydt is not None or lhs is not None), 'Either pass a time-difference or LHS of equation to be satisfied'
 		Observable.__init__(self, X)
-		self.Xi = list(X.values())
 		self.t0 = 0.
 		self.dynamic_bc = True
 		self.dirichlet = lambda t, x: None
@@ -175,6 +175,7 @@ class pde(Observable, Integrable):
 		self.neumann_indices = []
 		self.neumann_values = []
 		self.erroneous = None
+		self.nonnegative = nonnegative
 
 		if dydt is not None:
 			self.mode = SolveMode.forward
@@ -278,7 +279,9 @@ class pde(Observable, Integrable):
 		while self.integrator.status != 'finished':
 			self.integrator.step()
 			if self.dynamic_bc:
-				self.integrator.y[self.dirichlet_indices - ndim] = self.dirichlet_values
+				self.integrator.y[self.dirichlet_indices - self.ndim] = self.dirichlet_values
+			if self.nonnegative:
+				self.integrator.y[:self.ndim] = self.integrator.y[:self.ndim].clip(0.)
 		if self.erroneous is not None and self.erroneous(self.y):
 			raise ValueError('Erroneous state encountered')
 
@@ -356,7 +359,9 @@ class GraphObservable(Observable):
 		self.Gd = Gd
 		# Domains
 		self.nodes = {v: i for i, v in enumerate(G.nodes())}
+		self.nodes_i = {i: v for v, i in self.nodes.items()}
 		self.edges = bidict({e: i for i, e in enumerate(G.edges())})
+		self.edges_i = {i: e for e, i in self.edges.items()}
 		self.triangles, tri_index = {}, 0
 		for clique in nx.find_cliques(G):
 			if len(clique) == 3:
@@ -393,7 +398,7 @@ class gpde(pde, GraphObservable):
 
 		# Orientation / incidence
 		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
-		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights))
+		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights)) # |V| x |E| incidence
 
 		# Operators
 		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator

@@ -1,6 +1,7 @@
 import numpy as np 
 from typing import Tuple, Dict, Any
 from scipy.integrate import RK45, LSODA
+import scipy.sparse as sp
 import pdb
 from itertools import count
 
@@ -62,11 +63,17 @@ class vertex_pde(gpde):
 		return self.vertex_laplacian@self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
-		# TODO: optimize for shared graph
-		return np.array([
-			sum([v_field((x, y)) * self.partial((x, y)) for y in self.G.neighbors(x)])
-			for x in self.X
-		])
+		if isinstance(v_field, edge_pde) and v_field.G is self.G:
+			M = self.incidence.multiply(v_field.y)
+			N = M.copy().T
+			N.data[N.data > 0] = 0.
+			N.data *= -1
+			return -M@N@self.y
+		else:
+			return np.array([
+				sum([v_field((x, y)) * self.partial((x, y)) for y in self.G.neighbors(x)])
+				for x in self.X
+			])
 
 class edge_pde(gpde):
 	''' PDE defined on the edges of a graph ''' 
@@ -136,7 +143,9 @@ class edge_pde(gpde):
 
 	def advect(self, v_field: Callable[[Edge], float] = None) -> np.ndarray:
 		if v_field is None:
-			return -(self.adj_dual@self.y)*self.y # TODO: check the sign?
+			adv = -(self.adj_dual@self.y)*self.y # TODO: check the sign?
+			adv[self.dirichlet_indices] = 0.
+			return adv
 		elif type(v_field) is edge_pde and v_field.G is self.G:
 			# Since graphs are identical, orientation is implicitly respected
 			return -self.y * (self.adj_dual@v_field.y)
@@ -215,11 +224,13 @@ class coupled_pde(Integrable):
 			self.integrator.status = 'running'
 			while self.integrator.status != 'finished':
 				self.integrator.step()
-				# Apply all boundary conditions
+				# Apply all constraints
 				for p, view in zip(self.forward_pdes, self.views):
 					if p.dynamic_bc:
 						for x in p.dirichlet_X:
 							self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
+					if p.nonnegative:
+						self.integrator.y[view][:p.ndim] = self.integrator.y[view][:p.ndim].clip(0.)
 		else:
 			# In the case of no forward-solved PDE's, this class is merely a utility for simultaneously solving direct PDE's
 			for p in self.direct_pdes:
