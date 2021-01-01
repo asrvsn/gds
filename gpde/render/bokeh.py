@@ -150,7 +150,7 @@ class Renderer(ABC):
 		for obs in items:
 			plot = helper(obs, plot)
 			obs.plot_id = plot_id
-			self.plots[plot_id] = plot
+		self.plots[plot_id] = plot
 		return plot
 
 	def prep_layout_data(self, obs, G, layout):
@@ -211,11 +211,12 @@ class LiveRenderer(Renderer):
 
 	def draw(self):
 		for obs in self.observables:
-			plot = self.plots[obs.plot_id]
-			if obs.Gd is GraphDomain.nodes:
-				self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
-			elif obs.Gd is GraphDomain.edges:
-				self.draw_arrows(obs, obs.y)
+			if hasattr(obs, 'plot_id'):
+				plot = self.plots[obs.plot_id]
+				if obs.Gd is GraphDomain.nodes:
+					self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
+				elif obs.Gd is GraphDomain.edges:
+					self.draw_arrows(obs, obs.y)
 
 	@property
 	def t(self):

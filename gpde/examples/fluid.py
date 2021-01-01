@@ -37,6 +37,12 @@ def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1.0e-3, density=1.0
 def compressible_flow(G: nx.Graph, viscosity=1.0) -> (vertex_pde, edge_pde):
 	pass
 
+def lagrangian_tracer(velocity: edge_pde, inlets: list) -> vertex_pde:
+	''' Passive tracer ''' 
+	tracer = vertex_pde(velocity.G, dydt=lambda t, self: -self.advect(velocity))
+	tracer.set_boundary(dirichlet=dict_fun({i: 1.0 for i in inlets}))
+	return tracer
+
 def const_velocity(dG: nx.Graph, v: float) -> Callable:
 	''' Create constant-velocity condition graph boundary ''' 
 	def vel(e):
@@ -61,15 +67,13 @@ def multi_bc(bcs: List[Callable]) -> Callable:
 
 def fluid_on_grid():
 	G = grid_graph(10, 10)
-	pressure, velocity = incompressible_flow(G)
-	def pressure_values(x):
-		if x == (2,2):
-			return 1.0
-		if x == (6,5):
-			return -1.0
-		return None
-	pressure.set_boundary(dirichlet=pressure_values)
-	return pressure, velocity
+	i, o = (3,3), (6,6)
+	dG = nx.Graph()
+	dG.add_nodes_from([i, o])
+	pressure, velocity = incompressible_flow(G, dG)
+	pressure.set_boundary(dirichlet=dict_fun({i: 10.0, o: -10.0}))
+	tracer = lagrangian_tracer(velocity, [i])
+	return pressure, velocity, tracer
 
 def fluid_on_circle():
 	n = 10
@@ -169,7 +173,8 @@ def von_karman(m=12, n=30, gradP=10.0):
 		return None
 	pressure.set_boundary(dirichlet=pressure_values)
 	velocity.set_boundary(dirichlet=no_slip(nx.compose_all([dG_L, dG_T, dG_B])))
-	return pressure, velocity
+	tracer = lagrangian_tracer(velocity, [(0, 2*i+1) for i in range(int(m/2))])
+	return pressure, velocity, tracer
 
 def random_graph():
 	set_seed(1001)
@@ -205,7 +210,7 @@ def lid_driven_cavity(m=15, n=25, v=1.0):
 	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
 	cavity = nx.compose_all([dG_L, dG_R, dG_B])
 	lid = dG_T
-	pressure, velocity = incompressible_flow(G, nx.Graph(), viscosity=0.)
+	pressure, velocity = incompressible_flow(G, nx.Graph())
 	velocity.set_boundary(dirichlet=multi_bc([no_slip(cavity), const_velocity(lid, v)]))
 	return pressure, velocity
 
@@ -329,31 +334,36 @@ class FluidRenderer(Renderer):
 
 if __name__ == '__main__':
 	''' Solve ''' 
-	# G = grid_graph(10, 20)
+	# G = grid_graph(15, 30)
 	# G = nx.triangular_lattice_graph(10, 30)
 	# G = nx.hexagonal_lattice_graph(15, 30)
 	# p, v = poiseuille(G, gradP=10.0)
 
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v = lid_driven_cavity(v=10.)
-	p, v = differential_inlets()
+	p, v, t = fluid_on_grid()
+	# p, v = differential_inlets()
+	# p, v = von_karman(n=50, gradP=20)
 
-	div = v.project(GraphDomain.nodes, lambda v: v.div())
-	adv = v.project(GraphDomain.edges, lambda v: v.advect())
+	d = v.project(GraphDomain.nodes, lambda v: v.div())
+	a = v.project(GraphDomain.edges, lambda v: v.advect())
 	# grad = p.project(GraphDomain.edges, lambda p: p.grad())
-	pv = couple(p, v)
+	pv = couple(p, v, t)
 	sys = System(pv, {
 		'pressure': p,
 		'velocity': v,
-		'divergence': div,
-		'advection': adv,
+		'divergence': d,
+		'advection': a,
+		'tracer': t,
 		# 'grad': grad,
 	})
-	# sys.solve_to_disk(20, 1e-2, 'von_karman')
+
+	''' Save to disk ''' 
+	# sys.solve_to_disk(20, 1e-2, 'poiseuille')
 
 	''' Load from disk ''' 
-	# sys = System.from_disk('poiseuille_asymmetric')
-	# p, v, d = sys.observables['pressure'], sys.observables['velocity'], sys.observables['div_velocity']
+	# sys = System.from_disk('von_karman')
+	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[div]], [[adv]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	renderer = LiveRenderer(sys, [[[[p, v]], [[t]], [[a]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
 	renderer.start()
