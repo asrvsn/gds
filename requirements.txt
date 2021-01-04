@@ -10,3 +10,4 @@ cloudpickle
 hickle
 tqdm
 networkx
+cvxpy

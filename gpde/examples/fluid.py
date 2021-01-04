@@ -4,6 +4,7 @@ import pdb
 from itertools import count
 import colorcet as cc
 import random
+import cvxpy as cp
 
 from gpde import *
 from gpde.utils import set_seed
@@ -20,12 +21,13 @@ def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1.0e-3, density=1.0
 	velocity = edge_pde(G, dydt=lambda t, self: None, atol=1e-4) # Increased error tolerance for velocity of diff. scales
 	dG_nodes = np.array([velocity.nodes[n] for n in dG.nodes], dtype=np.intp)
 
-	def pressure_fun(t, self):
+	def pressure_fun(self, t, y):
 		# TODO: check correctness
 		div1 = -self.incidence@(velocity.y/velocity.dt - velocity.advect())
 		div2 = velocity.div()
+		# TODO: check why corners behave strangely here
 		div1[dG_nodes], div2[dG_nodes] = 0., 0. # do not enforce divergence-free constraint at specified boundaries
-		return div1 - self.laplacian()/density + viscosity*self.vertex_laplacian@div2/density
+		return div1 - self.laplacian(y)/density + viscosity*self.dirichlet_laplacian@div2/density
 	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
 
 	def velocity_fun(t, self):
@@ -339,12 +341,12 @@ class FluidRenderer(Renderer):
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	p, v = poiseuille(gradP=5.0)
+	p, v = poiseuille(gradP=10.0)
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v = lid_driven_cavity(v=10.)
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
-	# p, v = von_karman(n=50, gradP=20)
+	# p, v, t = von_karman(n=50, gradP=20)
 	# p, v = test2()
 
 	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
@@ -355,7 +357,7 @@ if __name__ == '__main__':
 	sys = System(pv, {
 		'pressure': p,
 		'velocity': v,
-		# 'divergence': d,
+		'divergence': d,
 		'mass flux': f,
 		'advection': a,
 		# 'tracer': t,
@@ -369,5 +371,5 @@ if __name__ == '__main__':
 	# sys = System.from_disk('von_karman')
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[f]], [[a]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	renderer = LiveRenderer(sys, [[[[p, v]], [[f]], [[d]]], [[[a]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
 	renderer.start()

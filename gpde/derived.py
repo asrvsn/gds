@@ -51,16 +51,15 @@ class vertex_pde(gpde):
 	def grad(self) -> np.ndarray:
 		return self.incidence.T@self.y
 
-	def laplacian(self) -> np.ndarray:
+	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' Dirichlet-Neumann Laplacian. TODO: should minimize error from laplacian on interior? ''' 
-		ret = self.vertex_laplacian@self.y
-		ret[self.neumann_indices] += self.neumann_values
-		ret[self.dirichlet_indices] = 0.
-		return ret
+		if y is None:
+			y = self.y
+		return self.dirichlet_laplacian@y + self.neumann_correction
 
 	def bilaplacian(self) -> np.ndarray:
 		# TODO correct way to handle Neumann in this case? (Gradient constraint only specifies one neighbor beyond)
-		return self.vertex_laplacian@self.laplacian()
+		return self.dirichlet_laplacian@self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float]) -> np.ndarray:
 		if isinstance(v_field, edge_pde) and v_field.G is self.G:
@@ -144,11 +143,7 @@ class edge_pde(gpde):
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		# return -self.curl3.T@self.curl3@self.y
-		# ret = self.edge_laplacian@self.y
-		# ret[self.dirichlet_indices] = 0.
-		# return ret
-		return self.edge_laplacian@self.y - self.curl3.T@self.curl3@self.y
+		return self.dirichlet_laplacian@self.y - self.curl3.T@self.curl3@self.y
 
 	def advect(self, v_field: Callable[[Edge], float] = None) -> np.ndarray:
 		if v_field is None:

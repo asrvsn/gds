@@ -13,6 +13,7 @@ import os
 import hickle as hkl
 import cloudpickle
 from tqdm import tqdm
+import cvxpy as cp
 
 from .utils import *
 
@@ -193,7 +194,6 @@ class pde(Observable, Integrable):
 			self.y0 = np.zeros(self.ndim)
 			self.lhs_fun = lhs
 			self.y_direct = np.zeros(self.ndim)
-			self.sol_indices = np.arange(0, self.ndim, dtype=np.intp)
 			self.gtol = gtol
 
 	''' Dynamics ''' 
@@ -251,7 +251,6 @@ class pde(Observable, Integrable):
 				self.integrator.y[i - self.ndim] = v 
 		else:
 			self.y_direct = self.y0.copy()
-			self.sol_indices = np.array([self.X[x] for x in interior], dtype=np.intp)
 
 	''' Stepping ''' 
 
@@ -305,16 +304,14 @@ class pde(Observable, Integrable):
 		if self.dynamic_bc:
 			self.update_bcs(self.t_direct)
 			self.y_direct[self.dirichlet_indices] = self.dirichlet_values
-		# TODO: Jacobian?
-		result = least_squares(self.lhs, self.y_direct[self.sol_indices], gtol=self.gtol, method='lm')
-		if result.status >= 1:
-			self.y_direct[self.sol_indices] = result.x
-		else:
-			raise Exception(f'Direct solver failed: {result.message}')
-
-	def lhs(self, y: np.ndarray):
-		self.y_direct[self.sol_indices] = y
-		return self.lhs_fun(self.t, self)
+		# TODO: clean up usage of cvxpy (cache problem; use warm start; feed vars transparently)
+		y_sol = cp.Variable(self.y_direct.size)
+		cost = cp.sum(cp.abs(self.lhs_fun(self, self.t_direct, y_sol)))
+		constraints = [y_sol[self.dirichlet_indices] == self.dirichlet_values]
+		problem = cp.Problem(cp.Minimize(cost), constraints)
+		problem.solve()
+		assert problem.status == 'optimal', f'CVXPY solve unsuccessful, status is: {problem.status}'
+		self.y_direct = y_sol.value
 
 	def update_bcs(self, t: float):
 		self.neumann_values = np.array([self.neumann(t, x) for x in self.neumann_X])
@@ -414,3 +411,21 @@ class gpde(pde, GraphObservable):
 		self.curl3 = sparse_product(self.triangles.keys(), self.edges.keys(), curl_element) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
 
 		pde.__init__(self, self.X, *args, **kwargs)
+
+	def set_boundary(self, 
+			dirichlet: Callable[[Time, Point], float]=None, 
+			neumann: Callable[[Time, Point], float]=None,
+			dynamic: bool=False
+		):
+		pde.set_boundary(self, dirichlet, neumann, dynamic)
+		if self.Gd is GraphDomain.nodes:
+			self.dirichlet_laplacian = self.vertex_laplacian.copy()
+			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
+			self.dirichlet_laplacian.eliminate_zeros()
+			self.neumann_correction = np.zeros_like(self.y)
+			self.neumann_correction[self.neumann_indices] = self.neumann_values
+		else:
+			self.dirichlet_laplacian = self.edge_laplacian.copy()
+			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
+			self.dirichlet_laplacian.eliminate_zeros()
+			# TODO: neumann conditions
