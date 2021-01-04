@@ -124,6 +124,18 @@ class edge_pde(gpde):
 	def div(self) -> np.ndarray:
 		return -self.incidence@self.y
 
+	def influx(self) -> np.ndarray:
+		''' In-flux through nodes ''' 
+		f = self.incidence.multiply(self.y)
+		f.data[f.data < 0] = 0.
+		return f.sum(axis=1)
+
+	def outflux(self) -> np.ndarray:
+		''' Out-flux through nodes ''' 
+		f = -self.incidence.multiply(self.y)
+		f.data[f.data < 0] = 0.
+		return f.sum(axis=1)
+
 	def curl(self) -> np.ndarray:
 		raise self.curl3@self.y
 

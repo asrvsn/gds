@@ -27,6 +27,29 @@ def grid_graph(m: int, n: int, **kwargs) -> nx.Graph:
 	nx.set_node_attributes(G, pos, 'pos')
 	return G
 
+def lattice45(m: int, n: int) -> nx.Graph:
+	''' Creates 45-degree rotated square lattice; make n odd for symmetric boundaries '''
+	G = nx.Graph()
+	layout = dict()
+	dy = 2/(m-1)
+	dx = 2/(n-1)
+	for i in range(n):
+		if i % 2 == 0:
+			for j in range(m-1):
+				G.add_node((i, j))
+				layout[(i, j)] = np.array([-1+i*dx, -1+dy/2+j*dy])
+				if i > 0:
+					G.add_edges_from([((i-1, j), (i, j)), ((i-1, j+1), (i, j))])
+		else:
+			for j in range(m):
+				G.add_node((i, j))
+				layout[(i, j)] = np.array([-1+i*dx, -1+j*dy])
+				if j > 0:
+					G.add_edges_from([((i-1, j-1), (i, j-1)), ((i-1, j-1), (i, j))])
+	nx.set_node_attributes(G, layout, 'pos')
+	return G
+
+
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
 	''' Get boundary of planar graph using layout coordinates. ''' 
 	nodes = set(G.nodes())
@@ -61,3 +84,7 @@ def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph,
 				elif (m, n) in edges:
 					_dG.add_edge(m, n)
 	return (dG, dG_L, dG_R, dG_T, dG_B)
+
+
+if __name__ == '__main__':
+	G = lattice45(4, 6)

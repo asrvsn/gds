@@ -101,9 +101,13 @@ def differential_inlets():
 	pressure.set_boundary(dirichlet=dict_fun(p_vals))
 	return pressure, velocity
 
-def poiseuille(G: nx.Graph, gradP: float=1.0):
+def poiseuille(m=10, n=23, gradP: float=1.0):
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
+	assert n % 2 == 1
+	G = lattice45(m, n)
 	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
+	dG_L.remove_nodes_from([(1, j) for j in range(m)])
+	dG_R.remove_nodes_from([(n-2, j) for j in range(m)])
 	pressure, velocity = incompressible_flow(G, nx.compose_all([dG_L, dG_R]))
 	def pressure_values(x):
 		if x in dG_L.nodes:
@@ -334,27 +338,27 @@ class FluidRenderer(Renderer):
 
 if __name__ == '__main__':
 	''' Solve ''' 
-	# G = grid_graph(15, 30)
-	# G = nx.triangular_lattice_graph(10, 30)
-	# G = nx.hexagonal_lattice_graph(15, 30)
-	# p, v = poiseuille(G, gradP=10.0)
 
+	p, v = poiseuille(gradP=5.0)
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v = lid_driven_cavity(v=10.)
-	p, v, t = fluid_on_grid()
+	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
 	# p, v = von_karman(n=50, gradP=20)
+	# p, v = test2()
 
-	d = v.project(GraphDomain.nodes, lambda v: v.div())
-	a = v.project(GraphDomain.edges, lambda v: v.advect())
-	# grad = p.project(GraphDomain.edges, lambda p: p.grad())
-	pv = couple(p, v, t)
+	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
+	a = v.project(GraphDomain.edges, lambda v: v.advect()) # advective strength
+	f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
+	# g = p.project(GraphDomain.edges, lambda p: p.grad())
+	pv = couple(p, v)
 	sys = System(pv, {
 		'pressure': p,
 		'velocity': v,
-		'divergence': d,
+		# 'divergence': d,
+		'mass flux': f,
 		'advection': a,
-		'tracer': t,
+		# 'tracer': t,
 		# 'grad': grad,
 	})
 
@@ -365,5 +369,5 @@ if __name__ == '__main__':
 	# sys = System.from_disk('von_karman')
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[t]], [[a]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	renderer = LiveRenderer(sys, [[[[p, v]], [[f]], [[a]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
 	renderer.start()
