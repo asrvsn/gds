@@ -143,7 +143,10 @@ class edge_pde(gpde):
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		return self.dirichlet_laplacian@self.y - self.curl3.T@self.curl3@self.y
+		return self.dirichlet_laplacian@self.y 
+
+	def bilaplacian(self) -> np.ndarray:
+		return self.dirichlet_laplacian@self.laplacian()
 
 	def advect(self, v_field: Callable[[Edge], float] = None) -> np.ndarray:
 		if v_field is None:
@@ -179,6 +182,19 @@ class edge_pde(gpde):
 					else: # Ingoing edge
 						ret[i] -= u * v_field(b) / w
 			return np.array(ret)
+
+	def dual(self) -> GraphObservable:
+		''' View the dual graph; TODO unify this interface across domains ''' 
+		G_ = nx.line_graph(self.G)
+		edge_map = np.array([self.X[e] for e in G_.nodes], dtype=np.intp)
+		class DualGraphObservable(GraphObservable):
+			@property
+			def y(other):
+				return self.y[edge_map]
+			@property
+			def t(other):
+				return self.t
+		return DualGraphObservable(G_, GraphDomain.nodes)
 
 class face_pde(gpde):
 	''' PDE defined on the faces of a graph ''' 

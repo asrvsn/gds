@@ -13,7 +13,7 @@ from gpde.render.bokeh import *
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1.0e-3, density=1.0) -> (vertex_pde, edge_pde):
+def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
 	''' 
 	G: graph
 	dG: non-divergence-free boundary (inlets/outlets)
@@ -103,13 +103,16 @@ def differential_inlets():
 	pressure.set_boundary(dirichlet=dict_fun(p_vals))
 	return pressure, velocity
 
-def poiseuille(m=10, n=23, gradP: float=1.0):
+def poiseuille(m=14, n=21, gradP: float=1.0):
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	assert n % 2 == 1
-	G = lattice45(m, n)
+	# G = lattice45(m, n)
+	G = nx.triangular_lattice_graph(m, n)
 	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
-	dG_L.remove_nodes_from([(1, j) for j in range(m)])
-	dG_R.remove_nodes_from([(n-2, j) for j in range(m)])
+	# dG_L.remove_nodes_from([(1, j) for j in range(m)])
+	# dG_R.remove_nodes_from([(n-2, j) for j in range(m)])
+	dG_L.remove_nodes_from([(0, 2*j+1) for j in range(int(m/2))])
+	dG_R.remove_nodes_from([(int(n/2), 2*j+1) for j in range(int(m/2))])
 	pressure, velocity = incompressible_flow(G, nx.compose_all([dG_L, dG_R]))
 	def pressure_values(x):
 		if x in dG_L.nodes:

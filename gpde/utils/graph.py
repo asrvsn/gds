@@ -2,6 +2,7 @@
 import networkx as nx
 import numpy as np
 import pdb
+import matplotlib.pyplot as plt
 
 def grid_graph_layout(G: nx.Graph):
 	m, n = 0, 0
@@ -49,7 +50,6 @@ def lattice45(m: int, n: int) -> nx.Graph:
 	nx.set_node_attributes(G, layout, 'pos')
 	return G
 
-
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
 	''' Get boundary of planar graph using layout coordinates. ''' 
 	nodes = set(G.nodes())
@@ -87,4 +87,16 @@ def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph,
 
 
 if __name__ == '__main__':
-	G = lattice45(4, 6)
+	# G = lattice45(4, 6)
+	G = grid_graph(10, 10)
+	G_ = nx.line_graph(G)
+	G__ = nx.line_graph(G_)
+
+	plt.figure()
+	nx.draw_spectral(G)
+	plt.figure()
+	nx.draw_spectral(G_)
+	plt.figure()
+	nx.draw_spectral(G__)
+
+	plt.show()
