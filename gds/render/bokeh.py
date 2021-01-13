@@ -122,7 +122,7 @@ class Renderer(ABC):
 					plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 					plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
 					if isinstance(obs, gpde):
-						plot.renderers[0].node_renderer.data_source.data['thickness'] = [3 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
+						plot.renderers[0].node_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
 						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.node_palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
 					else:
 						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.node_palette, self.node_rng[0], self.node_rng[1]))
@@ -137,7 +137,7 @@ class Renderer(ABC):
 						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
 					if isinstance(obs, gpde):
-						plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.dirichlet_X or x in obs.neumann_X) else 1 for x in obs.X] 
+						plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
 						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
 					arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]))
 					plot.add_glyph(obs.arr_source, arrows)
@@ -197,16 +197,16 @@ class LiveRenderer(Renderer):
 	''' Simultaneously solves & renders the system ''' 
 	def __init__(self, sys: System, *args, **kwargs):
 		self.system = sys
-		self.integrator = sys.integrator
+		self.stepper = sys.stepper
 		self.observables = list(sys.observables.values())
 		super().__init__(*args, **kwargs)
 
 	def step(self, dt: float):
-		self.integrator.step(dt)
+		self.stepper.step(dt)
 		self.draw()
 
 	def reset(self):
-		self.integrator.reset()
+		self.stepper.reset()
 		self.draw()
 
 	def draw(self):
@@ -220,7 +220,7 @@ class LiveRenderer(Renderer):
 
 	@property
 	def t(self):
-		return self.integrator.t
+		return self.stepper.t
 
 class StaticRenderer(Renderer):
 	''' Reads a solution from disk & renders it ''' 

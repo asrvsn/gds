@@ -1,9 +1,10 @@
 import numpy as np
 from typing import Tuple, List, Any, Iterable, Callable, Dict, Set
-from scipy.integrate import RK45
 import shortuuid
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
 import random
+from functools import reduce
+from inspect import signature
 
 def set_seed(seed=None):
 	random.seed(seed)
@@ -56,3 +57,10 @@ def sparse_product(X: Iterable[Any], Y: Iterable[Any], fun: Callable[[Any, Any],
 			if v is not None:
 				data[r, c] = v
 	return data.tocoo()
+
+def oneof(xs: List[boolean]):
+	return reduce(lambda x, y: x ^ y, xs)
+
+def fun_ary(f: Callable) -> int:
+	''' Returns number of arguments required by function ''' 
+	return len(signature(f).parameters)

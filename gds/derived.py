@@ -257,7 +257,7 @@ class coupled_pde(Integrable):
 				# Apply all constraints
 				for p, view in zip(self.forward_pdes, self.views):
 					if p.dynamic_bc:
-						for x in p.dirichlet_X:
+						for x in p.X_dirichlet:
 							self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
 					if p.nonnegative:
 						self.integrator.y[view][:p.ndim] = self.integrator.y[view][:p.ndim].clip(0.)

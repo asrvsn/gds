@@ -22,8 +22,12 @@ def grid_graph_layout(G: nx.Graph):
 				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
 	return layout
 
-def grid_graph(m: int, n: int, **kwargs) -> nx.Graph:
+def grid_graph(m: int, n: int, diagonals=False, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
+	if diagonals:
+		for i in range(n-1):
+			for j in range(m-1):
+				G.add_edges_from([((i, j), (i+1, j+1)), ((i, j+1), (i+1, j))])
 	pos = grid_graph_layout(G)
 	nx.set_node_attributes(G, pos, 'pos')
 	return G
