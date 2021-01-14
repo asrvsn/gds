@@ -1,123 +1,24 @@
-''' Specifying partial differential equations on graph domains ''' 
-
 import numpy as np
-import networkx as nx
 from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
 from scipy.integrate import DOP853, LSODA
-from scipy.optimize import least_squares
 from abc import ABC, abstractmethod
 import pdb
 from enum import Enum
-import os.path
-import os
-import hickle as hkl
-import cloudpickle
-from tqdm import tqdm
 import cvxpy as cp
 
 from .types import *
 from .utils import *
-
-''' System objects ''' 
-
-class System:
-	def __init__(self, stepper: Steppable, observables: Dict[str, Observable]):
-		self._stepper = stepper
-		self._observables = observables
-
-	@property
-	def stepper(self):
-		return self._stepper
-
-	@property 
-	def observables(self) -> Dict[str, Observable]:
-		return self._observables
-
-	def solve_to_disk(self, T: float, dt: float, folder: str, parent='runs'): 
-		assert os.path.isdir(parent), f'Parent directory "{parent}" does not exist'
-		path = parent + '/' + folder
-		if not os.path.isdir(path):
-			os.mkdir(path)
-		dump = dict()
-		obs_items = self.observables.items()
-		for name, obs in obs_items:
-			dump[name] = []
-		t = 0.
-		try:
-			with tqdm(total=int(T / dt), desc=folder) as pbar:
-				while t < T:
-					self.stepper.step(dt)
-					for name, obs in obs_items:
-						dump[name].append(obs.y.copy())
-					t += dt
-					pbar.update(1)
-		finally:
-			# Dump simulation data
-			for name, data in dump.items():
-				hkl.dump(np.array(data), f'{path}/{name}.hkl', mode='w', compression='gzip')
-			# Dump system object
-			with open(f'{path}/system.pkl', 'wb') as f:
-				self.dt = dt # Save the dt (hacky)
-				cloudpickle.dump(self, f)
-
-	@staticmethod
-	def from_disk(folder: str, parent='runs'):
-		path = parent + '/' + folder
-		assert os.path.isdir(path), 'The given path does not exist'
-		with open(f'{path}/system.pkl', 'rb') as f:
-			sys = cloudpickle.load(f)
-		data = dict()
-		n = 0
-		for name in sys.observables.keys():
-			data[name] = hkl.load(f'{path}/{name}.hkl')
-			n = data[name].shape[0]
-		sys_dt = sys.dt
-
-		class DummyIntegrable(Steppable):
-			def __init__(self):
-				self.t = 0.
-				self.i = 0
-
-			def step(self, dt: float):
-				T = self.t + dt
-				while self.t < T and self.i < n:
-					self.t += sys_dt
-					self.i += 1
-
-			def reset(self):
-				self.t = 0.
-				self.i = 0
-
-		integ = DummyIntegrable()
-		for name, obs in sys.observables.items():
-			obs.history = data[name] # Hacky
-			attach_dyn_props(obs, {'y': lambda self: self.history[integ.i], 't': lambda _: integ.t})
-
-		return System(integ, sys.observables)
-
+from .system import *
 
 ''' Base class: dynamical system on arbitrary finite domain ''' 
 
 class fds(Observable, Steppable):
-	def __init__(self, 
-			X: Domain, 
-			nonnegative=False,
-		):
+	def __init__(self, X: Domain):
 		''' 
+		Finite-space dynamical system.
 		''' 
-		assert (dydt is not None or lhs is not None), 'Either pass a time-difference or LHS of equation to be satisfied'
 		Observable.__init__(self, X)
 		Steppable.__init__(self, IterationMode.none)
-		self.dynamic_bc = True
-		self.dirichlet = lambda t, x: None
-		self.X_dirichlet = []
-		self.dirichlet_indices = np.array([], dtype=np.intp)
-		self.dirichlet_values = np.array([])
-		self.neumann = lambda t, x: None
-		self.X_neumann = []
-		self.neumann_indices = np.array([], dtype=np.intp)
-		self.neumann_values = np.array([])
-		self.nonnegative = nonnegative
 
 	''' Dynamics ''' 
 
@@ -402,84 +303,88 @@ class fds(Observable, Steppable):
 	def system(self, name: str) -> System:
 		return System(self, {name: self})
 
-''' PDE on graph domain ''' 
 
-class GraphObservable(Observable):
-	''' Graph-domain observable ''' 
-	def __init__(self, G: nx.Graph, Gd: GraphDomain):
-		self.G = G
-		self.Gd = Gd
-		# Domains
-		self.nodes = {v: i for i, v in enumerate(G.nodes())}
-		self.nodes_i = {i: v for v, i in self.nodes.items()}
-		self.edges = bidict({e: i for i, e in enumerate(G.edges())})
-		self.edges_i = {i: e for e, i in self.edges.items()}
-		self.triangles, tri_index = {}, 0
-		for clique in nx.find_cliques(G):
-			if len(clique) == 3:
-				self.triangles[tuple(clique)] = tri_index
-				tri_index += 1
+''' Coupled dynamical systems on the same domain ''' 
 
-		if Gd is GraphDomain.nodes:
-			X = self.nodes
-		elif Gd is GraphDomain.edges:
-			X = self.edges
-		elif Gd is GraphDomain.triangles:
-			X = self.triangles
-		Observable.__init__(self, X)
+class coupled_pde(Integrable):
+	''' Multiple PDEs coupled in time. 
+	Can be integrated together but not observed directly. 
+	Can couple both forward-solved and direct-solved PDEs.
+	''' 
+	def __init__(self, *pdes: Tuple[pde], max_step=None, atol=None):
+		assert len(pdes) >= 2, 'Pass two or more pdes to couple'
+		assert all([p.t == 0. for p in pdes]), 'Pass pdes at initial values only'
+		self.t0 = 0.
+		self.forward_pdes = []
+		self.direct_pdes = []
+		for p in pdes:
+			if p.mode is SolveMode.forward:
+				self.forward_pdes.append(p)
+			else:
+				self.direct_pdes.append(p)
+		self.has_forward = len(self.forward_pdes) > 0
 
-	def project(self, Gd: GraphDomain, view: Callable[['GraphObservable'], np.ndarray]) -> 'GraphObservable':
-		class ProjectedObservable(GraphObservable):
-			@property
-			def y(other):
-				return view(self)
-			@property
-			def t(other):
-				return self.t
-		return ProjectedObservable(self.G, Gd)
+		if self.has_forward:
+			if max_step is None:
+				max_step = min([p.max_step for p in self.forward_pdes])
+			self.max_step = max_step
+			if atol is None:
+				atol = min([p.atol for p in self.forward_pdes])
+			self.atol = atol
+			y0s = [p.y0 for p in self.forward_pdes]
+			self.views = [slice(0, len(y0s[0]))]
+			for i in range(1, len(self.forward_pdes)):
+				start = self.views[i-1].stop
+				self.views.append(slice(start, start+len(y0s[i])))
+			self.y0 = np.concatenate(y0s)
+			self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, atol=self.atol)
+			# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
+			for (p, view) in zip(self.forward_pdes, self.views):
+				p.view = view
+				attach_dyn_props(p, {'y': lambda p: self.integrator.y[p.view], 't': lambda _: self.integrator.t})
+			for p in self.direct_pdes:
+				attach_dyn_props(p, {'t': lambda _: self.integrator.t})
 
-class gpde(pde, GraphObservable):
-	def __init__(self, G: nx.Graph, Gd: GraphDomain, *args, w_key: str=None, **kwargs):
-		GraphObservable.__init__(self, G, Gd)
 
-		# Weights
-		self.weights = np.ones(len(G.edges()))
-		if w_key is not None:
-			for i, e in enumerate(G.edges()):
-				self.weights[i] = G[e[0]][e[1]][w_key]
+	def dydt(self, t: Time, y: np.ndarray):
+		for p in self.direct_pdes:
+			p.step_direct(0.) # Interleave direct solvers with forward solvers
+		res = np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.forward_pdes, self.views)])
+		return res
 
-		# Orientation / incidence
-		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
-		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights)) # |V| x |E| incidence
-
-		# Operators
-		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
-		self.edge_laplacian = -self.incidence.T@self.incidence # |E| x |E| laplacian operator
-		def curl_element(tri, edge):
-			if edge[0] in tri and edge[1] in tri:
-				c = np.sqrt(self.weights[self.edges[edge]])
-				if edge == (tri[0], tri[1]) or edge == (tri[1], tri[2]) or edge == (tri[2], tri[0]): # Orientation of triangle
-					return c
-				return -c
-			return 0
-		self.curl3 = sparse_product(self.triangles.keys(), self.edges.keys(), curl_element) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
-
-		pde.__init__(self, self.X, *args, **kwargs)
-
-	def set_boundary(self, 
-			dirichlet: Callable[[Time, Point], float]=None, 
-			neumann: Callable[[Time, Point], float]=None,
-			dynamic: bool=False
-		):
-		pde.set_boundary(self, dirichlet, neumann, dynamic)
-		if self.Gd is GraphDomain.nodes:
-			self.dirichlet_laplacian = self.vertex_laplacian.copy()
-			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
-			self.dirichlet_laplacian.eliminate_zeros()
-			self.neumann_correction = np.zeros_like(self.y)
-			self.neumann_correction[self.neumann_indices] = self.neumann_values
+	def step(self, dt: float):
+		if self.has_forward:
+			self.integrator.t_bound = self.t + dt
+			self.integrator.status = 'running'
+			while self.integrator.status != 'finished':
+				self.integrator.step()
+				# Apply all constraints
+				for p, view in zip(self.forward_pdes, self.views):
+					if p.dynamic_bc:
+						for x in p.X_dirichlet:
+							self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
+					if p.nonnegative:
+						self.integrator.y[view][:p.ndim] = self.integrator.y[view][:p.ndim].clip(0.)
 		else:
-			self.dirichlet_laplacian = self.edge_laplacian.copy()
-			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
-			self.dirichlet_laplacian.eliminate_zeros()
-			# TODO: neumann conditions
+			# In the case of no forward-solved PDE's, this class is merely a utility for simultaneously solving direct PDE's
+			for p in self.direct_pdes:
+				p.step_direct(dt)
+
+	def observables(self) -> List[Observable]:
+		return self.forward_pdes + self.direct_pdes
+
+	def system(self) -> System:
+		return (self, self.observables())
+
+	def reset(self):
+		if self.has_forward:
+			self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step, atol=self.atol)
+		for p in self.direct_pdes:
+			p.reset()
+
+	@property
+	def t(self):
+		if self.has_forward:
+			return self.integrator.t
+		else:
+			return self.direct_pdes[0].t
