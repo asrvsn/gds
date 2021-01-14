@@ -64,7 +64,7 @@ class fds(Observable, Steppable):
 				self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 			except:
 				print('Failed to use LSODA, falling back to DOP853')
-				self.integrator = RK45(lambda t, y: y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
+				self.integrator = DOP853(lambda t, y: y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 				self.integrator.fun = self.dydt
 
 		elif cost != None:
@@ -237,9 +237,9 @@ class fds(Observable, Steppable):
 	def step_cvx(self, dt: float):
 		# Update boundary conditions
 		self._t += dt
-		self._t_prb.value = self._t
-		self.update_constraints(self._t)
-		self._y_prb.value = self._y
+		self._t_prb.value = self.t
+		self.update_constraints(self.t)
+		self._y_prb.value = self.y
 		self._prb.solve(warm_start=True)
 		assert self._prb.status == 'optimal', f'CVXPY solve unsuccessful, status is: {self._prb.status}'
 		self._y = self._prb.value
@@ -251,8 +251,8 @@ class fds(Observable, Steppable):
 		self._t += dt
 		if (self._t - self._n) >= 1.0:
 			self._n += 1
-			self.update_constraints(self._t)
-			self._y = self.map_fun(self._y) 
+			self.update_constraints(self.t)
+			self._y = self.map_fun(self.y) 
 			self.set_constraints()
 			self._y[self.dirichlet_indices] = self.dirichlet_values
 
@@ -270,7 +270,7 @@ class fds(Observable, Steppable):
 	def set_constraints(self):
 		''' Set the state constraints ''' 
 		if self.iter_mode is IterationMode.dydt:
-			self.integrator.y[self.dirichlet_indices] = self.dirichlet_values
+			self.integrator.y[self.dirichlet_indices - self.ndim] = self.dirichlet_values
 			self.integrator.y = self.project_fun(self.integrator.y)
 		elif self.iter_mode is IterationMode.cvx:
 			# No need to set boundary conditions since guaranteed by solution
@@ -306,85 +306,106 @@ class fds(Observable, Steppable):
 
 ''' Coupled dynamical systems on the same domain ''' 
 
-class coupled_pde(Integrable):
-	''' Multiple PDEs coupled in time. 
-	Can be integrated together but not observed directly. 
-	Can couple both forward-solved and direct-solved PDEs.
+class coupled_fds(Integrable):
+	''' Coupling multiple fds objects in time, including those with different evolution laws.
 	''' 
-	def __init__(self, *pdes: Tuple[pde], max_step=None, atol=None):
-		assert len(pdes) >= 2, 'Pass two or more pdes to couple'
-		assert all([p.t == 0. for p in pdes]), 'Pass pdes at initial values only'
+	def __init__(self, *systems: Tuple[fds]):
+		assert len(systems) >= 2, 'Pass two or more systems to couple'
+		assert all([sys.t == 0. for sys in systems]), 'All systems must be at zero-time initial conditions.'
+		assert all([sys.iter_mode != IterationMode.none for sys in systems]), 'All systems must have evolution laws.'
 		self.t0 = 0.
-		self.forward_pdes = []
-		self.direct_pdes = []
-		for p in pdes:
-			if p.mode is SolveMode.forward:
-				self.forward_pdes.append(p)
-			else:
-				self.direct_pdes.append(p)
-		self.has_forward = len(self.forward_pdes) > 0
+		for sys in systems:
+			sys.uuid = shortuuid.uuid() # Hacky..
+		self.systems = {
+			IterationMode.dydt: list(filter(lambda sys: sys.iter_mode is IterationMode.dydt, systems)),
+			IterationMode.cvx: list(filter(lambda sys: sys.iter_mode is IterationMode.cvx, systems)),
+			IterationMode.map: list(filter(lambda sys: sys.iter_mode is IterationMode.map, systems)),
+		}
 
-		if self.has_forward:
-			if max_step is None:
-				max_step = min([p.max_step for p in self.forward_pdes])
-			self.max_step = max_step
-			if atol is None:
-				atol = min([p.atol for p in self.forward_pdes])
-			self.atol = atol
-			y0s = [p.y0 for p in self.forward_pdes]
-			self.views = [slice(0, len(y0s[0]))]
-			for i in range(1, len(self.forward_pdes)):
-				start = self.views[i-1].stop
-				self.views.append(slice(start, start+len(y0s[i])))
-			self.y0 = np.concatenate(y0s)
-			self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, atol=self.atol)
-			# Patch all PDEs to refer to values from current integrator (TODO: better way...?)
-			for (p, view) in zip(self.forward_pdes, self.views):
-				p.view = view
-				attach_dyn_props(p, {'y': lambda p: self.integrator.y[p.view], 't': lambda _: self.integrator.t})
-			for p in self.direct_pdes:
-				attach_dyn_props(p, {'t': lambda _: self.integrator.t})
+		# Common state for discrete systems
+		self.discrete_t = self.t0 
+		self.discrete_y = {
+			sys.uuid: sys.y0 for sys in self.systems[IterationMode.cvx] + self.systems[IterationMode.map]
+		}
+
+		# Common state for continuous systems
+		self.has_integrator = len(self.systems[IterationMode.dydt]) > 0
+		if self.has_integrator:
+			dydt_systems = self.systems[IterationMode.dydt]
+			self.dydt_max_step = min([sys.max_step for sys in dydt_systems])
+			self.dydt_solver_args = merge_dicts([sys.solver_args for sys in dydt_systems])
+			self.dydt_y0 = np.concatenate([sys.y0 for sys in self.systems[IterationMode.dydt]])
+			self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+
+		# Attach views to state
+		last_index = 0
+		for sys in self.systems[IterationMode.dydt]:
+			sys.view = slice(last_index, sys.y0.size)
+			attach_dyn_props(sys, {'y': lambda sys: self.integrator.y[sys.view], 't': lambda _: self.t})
+			last_index += sys.y0.size
+
+		for sys in self.systems[IterationMode.cvx] + self.systems[IterationMode.map]:
+			attach_dyn_props(sys, {'y': lambda sys: self.discrete_y[sys.uuid], 't': lambda _: self.t})
 
 
-	def dydt(self, t: Time, y: np.ndarray):
-		for p in self.direct_pdes:
-			p.step_direct(0.) # Interleave direct solvers with forward solvers
-		res = np.concatenate([p.dydt(t, y[view]) for (p, view) in zip(self.forward_pdes, self.views)])
-		return res
+	''' Stepping ''' 
 
 	def step(self, dt: float):
-		if self.has_forward:
-			self.integrator.t_bound = self.t + dt
-			self.integrator.status = 'running'
-			while self.integrator.status != 'finished':
-				self.integrator.step()
-				# Apply all constraints
-				for p, view in zip(self.forward_pdes, self.views):
-					if p.dynamic_bc:
-						for x in p.X_dirichlet:
-							self.integrator.y[view][p.X[x] - p.ndim] = p.dirichlet(self.integrator.t, x)
-					if p.nonnegative:
-						self.integrator.y[view][:p.ndim] = self.integrator.y[view][:p.ndim].clip(0.)
+		if self.has_integrator:
+			self.step_continuous(dt)
 		else:
-			# In the case of no forward-solved PDE's, this class is merely a utility for simultaneously solving direct PDE's
-			for p in self.direct_pdes:
-				p.step_direct(dt)
+			self.step_discrete(dt)
 
-	def observables(self) -> List[Observable]:
-		return self.forward_pdes + self.direct_pdes
+	def step_continuous(self, dt: float):
+		self.integrator.t_bound = self.t + dt
+		self.integrator.status = 'running'
+		while self.integrator.status != 'finished':
+			self.integrator.step()
+			# Make final step on discrete systems if necessary
+			if self.integrator.t > self.discrete_t:
+				self.step_discrete(self.integrator.t - self.discrete_t)
+			# Apply constraints to continuous subsystems
+			for sys in self.systems[IterationMode.dydt]:
+				sys.update_constraints(self.integrator.t)
+				self.integrator.y[sys.view][sys.dirichlet_indices - sys.ndim] = sys.dirichlet_values
+				self.integrator.y[sys.view] = sys.project_fun(self.integrator.y[sys.view])
 
-	def system(self) -> System:
-		return (self, self.observables())
+	def step_discrete(self, dt: float):
+		for sys in self.systems[IterationMode.cvx]:
+			sys.step(dt)
+		for sys in self.systems[IterationMode.map]:
+			sys.step(dt)
+		for sys in self.systems[IterationMode.cvx]:
+			self.discrete_y[sys.uuid] = sys._y.copy()
+		for sys in self.systems[IterationMode.map]:
+			self.discrete_y[sys.uuid] = sys._y.copy()
+		self.discrete_t += dt
+
+	def dydt(self, t: Time, y: np.ndarray):
+		self.step_discrete(t - self.discrete_t) # Interleave discrete system with continuous one
+		return np.concatenate([sys.dydt(t, y[sys.view]) for sys in self.systems[IterationMode.dydt]])
 
 	def reset(self):
-		if self.has_forward:
-			self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=self.max_step, atol=self.atol)
-		for p in self.direct_pdes:
-			p.reset()
+		if self.has_integrator:
+			self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+		for sys in self.systems[IterationMode.cvx] + self.systems[IterationMode.map]:
+			sys.reset()
+			self.discrete_y[sys.uuid] = sys._y.copy()
+
+	''' Observation ''' 
+
+	def observables(self) -> List[Observable]:
+		return flatten(list(self.systems.values()))
 
 	@property
 	def t(self):
-		if self.has_forward:
+		if self.has_integrator:
 			return self.integrator.t
 		else:
 			return self.direct_pdes[0].t
+
+
+def couple(observables: Dict[str, Observable]) -> System:
+	''' Couple multiple observables ''' 
+	stepper = coupled_fds(*observables.values())
+	return System(stepper, observables)

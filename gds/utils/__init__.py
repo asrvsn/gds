@@ -5,6 +5,7 @@ from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
 import random
 from functools import reduce
 from inspect import signature
+from itertools import chain
 
 def set_seed(seed=None):
 	random.seed(seed)
@@ -64,3 +65,12 @@ def oneof(xs: List[boolean]):
 def fun_ary(f: Callable) -> int:
 	''' Returns number of arguments required by function ''' 
 	return len(signature(f).parameters)
+
+def merge_dicts(xs: Iterable[Dict]) -> Dict:
+	ret = dict()
+	for x in xs:
+		ret.update(x)
+	return ret
+
+def flatten(arr: List[Any]) -> List:
+	return list(chain.from_iterable(arr))

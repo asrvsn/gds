@@ -79,9 +79,9 @@ class System:
 				self.t = 0.
 				self.i = 0
 
-		integ = DummySteppable()
+		stepper = DummySteppable()
 		for name, obs in sys.observables.items():
 			obs.history = data[name] # Hacky
-			attach_dyn_props(obs, {'y': lambda self: self.history[integ.i], 't': lambda _: integ.t})
+			attach_dyn_props(obs, {'y': lambda self: self.history[stepper.i], 't': lambda _: stepper.t})
 
-		return System(integ, sys.observables)
+		return System(stepper, sys.observables)
