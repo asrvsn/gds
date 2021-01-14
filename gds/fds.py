@@ -26,6 +26,7 @@ class fds(Observable, Steppable):
 			dydt: Callable[[Time, np.ndarray], np.ndarray]=None, order: int=1, max_step: float=1e-3, solver_args: Dict={},
 			cost: Callable[[Time, np.ndarray], np.ndarray]=None, 
 			map_fun: Callable[[Time, np.ndarray], np.ndarray]=None, dt: float=1.0,
+			traj_t: Iterable[Time]=None, traj_y: Iterable[np.ndarray]=None,
 		): 
 		''' Define evolution law for the dynamics.
 
@@ -50,8 +51,12 @@ class fds(Observable, Steppable):
 				RHS of recurrence relation
 			dt: float
 				[default 1.0] time delta for stepping 
+
+		Option 4: As a data-derived trajectory
+			traj_t: Iterable[Time]
+			traj_y: Iterable[np.ndarray]
 		'''
-		assert oneof([dydt != None, cost != None, fun != None]), 'Exactly one evolution law must be specified'
+		assert oneof([dydt != None, cost != None, map_fun != None, traj_t != None]), 'Exactly one evolution law must be specified'
 		self.t0 = 0.
 		if dydt != None:
 			self.iter_mode = IterationMode.dydt
@@ -90,6 +95,13 @@ class fds(Observable, Steppable):
 			self._n = int(self._t)
 			self._y = self.t0.copy()
 
+		elif traj_t != None:
+			assert traj_t[0] == self.t0, 'Ensure trajectory starts at t=0'
+			self.iter_mode = IterationMode.traj
+			self.traj_t, self.traj_y = traj_t, traj_y
+			self._t = self.t0
+			self._i = 0
+
 	def set_initial(self, 
 			t0: float=0., 
 			y0: Union[Callable[[Point], float], np.ndarray]=lambda _: 0.,
@@ -103,6 +115,7 @@ class fds(Observable, Steppable):
 		TODO: support for higher-order initial conditions in differential equations.
 		'''
 		assert self.iter_mode != IterationMode.none, 'Use set_evolution() before setting initial conditions'
+		assert self.iter_mode != IterationMode.traj, 'Cannot set initial conditions on trajectory-derived system'
 		if type(y0) is np.ndarray:
 			y0 = lambda x: y0[self.X[x]]
 		self.t0 = t0
@@ -140,6 +153,7 @@ class fds(Observable, Steppable):
 			Project solutions onto feasible set.
 		''' 
 		assert self.iter_mode != IterationMode.none, 'Use set_evolution() before setting boundary conditions'
+		assert self.iter_mode != IterationMode.traj, 'Cannot set constraints on trajectory-derived system'
 		if type(dirichlet) is dict:
 			dirichlet = dict_fun(dirichlet)
 		if type(neumann) is dict:
@@ -192,11 +206,15 @@ class fds(Observable, Steppable):
 		assert self.iter_mode != IterationMode.none
 		if self.iter_mode is IterationMode.dydt:
 			self.set_evolution(dydt=self.dydt_fun, order=self.order, max_step=self.max_step, solver_args=self.solver_args)
+			self.set_initial(t0=self.t0, y0=self.y0_fun)
 		elif self.iter_mode is IterationMode.cvx:
 			self.set_evolution(cost=self.cost_fun, solver_args=self.solver_args)
+			self.set_initial(t0=self.t0, y0=self.y0_fun)
 		elif self.iter_mode is IterationMode.map:
 			self.set_evolution(map_fun=self.map_fun)
-		self.set_initial(t0=self.t0, y0=self.y0_fun)
+			self.set_initial(t0=self.t0, y0=self.y0_fun)
+		elif self.iter_mode is IterationMode.traj:
+			self._i = 0
 
 	def step(self, dt: float):
 		''' Step the system to t+dt ''' 
@@ -208,6 +226,8 @@ class fds(Observable, Steppable):
 			self.step_cvx(dt)
 		elif self.iter_mode is IterationMode.map:
 			self.step_map(dt)
+		elif self.iter_mode is IterationMode.traj:
+			self.step_traj(dt)
 		else:
 			raise Exception(f'Unsupported evolution law: {self.iter_mode}')
 
@@ -256,6 +276,13 @@ class fds(Observable, Steppable):
 			self.set_constraints()
 			self._y[self.dirichlet_indices] = self.dirichlet_values
 
+	''' Trajectory stepping ''' 
+
+	def step_traj(self, dt: float):
+		self._t += dt
+		if self._t >= self.traj_t[self._n]:
+			self._n += 1
+
 	''' Constaint setting '''
 
 	def update_constraints(self, t: float):
@@ -287,6 +314,8 @@ class fds(Observable, Steppable):
 			return self.integrator.y[:self.ndim]
 		elif self.iter_mode is IterationMode.cvx or self.iter_mode is IterationMode.map:
 			return self._y
+		elif self.iter_mode is IterationMode.traj:
+			return self.traj_y[self._n]
 
 	@property
 	def t(self):
@@ -294,6 +323,8 @@ class fds(Observable, Steppable):
 			return self.integrator.t
 		elif self.iter_mode is IterationMode.cvx or self.iter_mode is IterationMode.map:
 			return self._t
+		elif self.iter_mode is IterationMode.traj:
+			return self.traj_t[self._n]
 
 	@property 
 	def dt(self):
@@ -320,6 +351,7 @@ class coupled_fds(Integrable):
 			IterationMode.dydt: list(filter(lambda sys: sys.iter_mode is IterationMode.dydt, systems)),
 			IterationMode.cvx: list(filter(lambda sys: sys.iter_mode is IterationMode.cvx, systems)),
 			IterationMode.map: list(filter(lambda sys: sys.iter_mode is IterationMode.map, systems)),
+			IterationMode.traj: list(filter(lambda sys: sys.iter_mode is IterationMode.traj, systems)),
 		}
 
 		# Common state for discrete systems
@@ -375,6 +407,8 @@ class coupled_fds(Integrable):
 			sys.step(dt)
 		for sys in self.systems[IterationMode.map]:
 			sys.step(dt)
+		for sys in self.systems[IterationMode.traj]:
+			sys.step(dt)
 		for sys in self.systems[IterationMode.cvx]:
 			self.discrete_y[sys.uuid] = sys._y.copy()
 		for sys in self.systems[IterationMode.map]:
@@ -391,6 +425,8 @@ class coupled_fds(Integrable):
 		for sys in self.systems[IterationMode.cvx] + self.systems[IterationMode.map]:
 			sys.reset()
 			self.discrete_y[sys.uuid] = sys._y.copy()
+		for sys in self.systems[IterationMode.traj]:
+			sys.reset()
 
 	''' Observation ''' 
 

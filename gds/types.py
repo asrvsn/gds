@@ -26,9 +26,10 @@ Orientation = Dict[Edge, Sign]
 
 class IterationMode(Enum):
 	none = 0
-	dydt = 1
-	cvx = 2
-	map = 3
+	dydt = 1 # Differential
+	cvx = 2 # Convex program
+	map = 3 # Recurrence relation
+	traj = 4 # Recorded trajectory
 
 class Steppable(ABC):
 	''' An object which can be stepped through time ''' 
