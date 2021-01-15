@@ -254,13 +254,19 @@ class fds(Observable, Steppable):
 
 	''' Convex stepping ''' 
 
+	def rebuild_cvx(self):
+		_cost = self.cost_fun(self._t_prb, self._y_prb)
+		if _cost.shape != (): # Cost is not scalar
+			_cost = cp.sum(cp.abs(_cost))
+		assert _cost.is_dcp(), 'Problem is not disciplined-convex'
+		self._prb = cp.Problem(cp.Minimize(_cost), self._prb.constraints)
+
 	def step_cvx(self, dt: float):
 		# Update boundary conditions
 		self._t += dt
 		self._t_prb.value = self.t
 		self.update_constraints(self.t)
-		self._y_prb.value = self.y
-		self._prb.solve(warm_start=True)
+		self._prb.solve(warm_start=True, **self.solver_args)
 		assert self._prb.status == 'optimal', f'CVXPY solve unsuccessful, status is: {self._prb.status}'
 		self._y = self._y_prb.value
 		self.apply_constraints()
@@ -341,7 +347,7 @@ class coupled_fds(Steppable):
 	''' Coupling multiple fds objects in time, including those with different evolution laws.
 	''' 
 	def __init__(self, *systems: Tuple[fds]):
-		assert len(systems) >= 2, 'Pass two or more systems to couple'
+		assert len(systems) >= 1, 'Pass one or more systems to couple'
 		assert all([sys.t == 0. for sys in systems]), 'All systems must be at zero-time initial conditions.'
 		assert all([sys.iter_mode != IterationMode.none for sys in systems]), 'All systems must have evolution laws.'
 		self.t0 = 0.
@@ -376,7 +382,10 @@ class coupled_fds(Steppable):
 			attach_dyn_props(sys, {'y': lambda sys: self.integrator.y[sys.view], 't': lambda _: self.t})
 			last_index += sys.y0.size
 
-		for sys in self.systems[IterationMode.cvx] + self.systems[IterationMode.map]:
+		for sys in self.systems[IterationMode.cvx]:
+			attach_dyn_props(sys, {'y': lambda sys: self.discrete_y[sys.uuid], 't': lambda _: self.t})
+
+		for sys in self.systems[IterationMode.map]:
 			attach_dyn_props(sys, {'y': lambda sys: self.discrete_y[sys.uuid], 't': lambda _: self.t})
 
 
@@ -404,15 +413,16 @@ class coupled_fds(Steppable):
 
 	def step_discrete(self, dt: float):
 		for sys in self.systems[IterationMode.cvx]:
+			# sys.rebuild_cvx()
 			sys.step(dt)
 		for sys in self.systems[IterationMode.map]:
 			sys.step(dt)
 		for sys in self.systems[IterationMode.traj]:
 			sys.step(dt)
 		for sys in self.systems[IterationMode.cvx]:
-			self.discrete_y[sys.uuid] = sys._y.copy()
+			np.copyto(self.discrete_y[sys.uuid], sys._y)
 		for sys in self.systems[IterationMode.map]:
-			self.discrete_y[sys.uuid] = sys._y.copy()
+			np.copyto(self.discrete_y[sys.uuid], sys._y)
 		self.discrete_t += dt
 
 	def dydt(self, t: Time, y: np.ndarray):
@@ -438,7 +448,7 @@ class coupled_fds(Steppable):
 		if self.has_integrator:
 			return self.integrator.t
 		else:
-			return self.direct_pdes[0].t
+			return self.discrete_t
 
 
 def couple(observables: Dict[str, Observable]) -> System:

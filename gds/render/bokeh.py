@@ -24,12 +24,7 @@ from tornado.ioloop import IOLoop
 
 from gds import *
 from gds.utils.zmq import *
-
-''' Common types ''' 
-
-Canvas = List[List[List[List[Observable]]]]
-Plot = Any
-PlotID = NewType('PlotID', str)
+from .base import *
 
 ''' Classes ''' 
 
@@ -198,6 +193,8 @@ class LiveRenderer(Renderer):
 	def __init__(self, sys: System, *args, **kwargs):
 		self.system = sys
 		self.stepper = sys.stepper
+		self.stepper.step(0) # Uncover any immediate issues at construction
+
 		self.observables = list(sys.observables.values())
 		super().__init__(*args, **kwargs)
 
@@ -249,25 +246,6 @@ class StaticRenderer(Renderer):
 	@property
 	def t(self):
 		return self._t
-
-''' Layout creators ''' 
-
-def single_canvas(item: Any) -> Canvas:
-	''' Render all item in the same plot ''' 
-	if isinstance(item, Iterable):
-		return [[[list(item)]]]
-	else:
-		return [[[[item]]]]
-
-def grid_canvas(observables: List[Observable], ncols: int=2) -> Canvas:
-	''' Render all observables separately as items on a grid ''' 
-	canvas = []
-	for i, obs in enumerate(observables):
-		if i % ncols == 0:
-			canvas.append([])
-		row = canvas[-1]
-		row.append([(obs,)])
-	return canvas
 
 ''' Server ''' 
 

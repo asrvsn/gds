@@ -8,6 +8,7 @@ import cloudpickle
 from tqdm import tqdm
 
 from .types import *
+from .render.base import *
 
 ''' System objects ''' 
 
@@ -23,6 +24,9 @@ class System:
 	@property 
 	def observables(self) -> Dict[str, Observable]:
 		return self._observables
+
+	def arrange(self, ncols: int=np.inf) -> Canvas:
+		return grid_canvas(list(self._observables.values()), ncols=ncols)
 
 	def solve_to_disk(self, T: float, dt: float, folder: str, parent='runs'): 
 		assert os.path.isdir(parent), f'Parent directory "{parent}" does not exist'

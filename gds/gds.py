@@ -93,11 +93,7 @@ class gds(fds, GraphObservable):
 
 		if self.iter_mode is IterationMode.cvx:
 			# Rebuild cost function since operators may have changed
-			_cost = self.cost_fun(self._t_prb, self._y_prb)
-			if _cost.shape != (): # Cost is not scalar
-				_cost = cp.sum(cp.abs(_cost))
-			assert _cost.is_dcp(), 'Problem is not disciplined-convex'
-			self._prb = cp.Problem(cp.Minimize(_cost), self._prb.constraints)
+			self.rebuild_cvx()
 
 ''' Dynamical systems on specific graph domains ''' 
 
