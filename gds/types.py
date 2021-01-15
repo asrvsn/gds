@@ -1,12 +1,7 @@
-from typing import Tuple, Any, Union
+from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
 from enum import Enum
+from abc import ABC, abstractmethod
 import numpy as np
-
-''' Types for dynamics on generic domains '''
-
-Time = NewType('Time', float)
-Domain = Dict[Point, int] # Mapping from points into array indices
-Sign = NewType('Sign', int)
 
 ''' Graph domains ''' 
 
@@ -14,6 +9,13 @@ Vertex = Any
 Edge = Tuple[Vertex, Vertex]
 Triangle = Tuple[Vertex, Vertex, Vertex]
 Point = Union[Vertex, Edge, Triangle] # A point in the graph domain
+
+''' Types for dynamics on graph domains '''
+
+Time = NewType('Time', float)
+Domain = Dict[Point, int] # Mapping from points into array indices
+Sign = NewType('Sign', int)
+
 
 class GraphDomain(Enum):
 	nodes = 0

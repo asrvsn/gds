@@ -59,7 +59,7 @@ def sparse_product(X: Iterable[Any], Y: Iterable[Any], fun: Callable[[Any, Any],
 				data[r, c] = v
 	return data.tocoo()
 
-def oneof(xs: List[boolean]):
+def oneof(xs: List[bool]):
 	return reduce(lambda x, y: x ^ y, xs)
 
 def fun_ary(f: Callable) -> int:

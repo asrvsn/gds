@@ -4,6 +4,8 @@ import numpy as np
 import pdb
 import matplotlib.pyplot as plt
 
+''' Graph generators ''' 
+
 def grid_graph_layout(G: nx.Graph):
 	m, n = 0, 0
 	nodes = set(G.nodes())

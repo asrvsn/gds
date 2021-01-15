@@ -11,8 +11,8 @@ from bokeh.models import ColumnDataSource, Slider, Select, Button, Oval
 from bokeh.layouts import row, column, gridplot, widgetbox
 from bokeh.models.widgets import Div, TextInput
 
-from gpde.utils.zmq import *
-from gpde.render.bokeh import *
+from gds.utils.zmq import *
+from gds.render.bokeh import *
 
 # Save curdoc() to make sure all threads see the same document.
 doc = curdoc()

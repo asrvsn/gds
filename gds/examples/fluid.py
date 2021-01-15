@@ -6,64 +6,46 @@ import colorcet as cc
 import random
 import cvxpy as cp
 
-from gpde import *
-from gpde.utils import set_seed
-from gpde.utils.graph import *
-from gpde.render.bokeh import *
+from gds import *
+from gds.utils import set_seed
+from gds.utils.graph import *
+from gds.utils.boundary import *
+from gds.render.bokeh import *
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1.0, density=1.0) -> (vertex_pde, edge_pde):
+def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1e-3, density=1.0) -> (node_gds, edge_gds):
 	''' 
 	G: graph
 	dG: non-divergence-free boundary (inlets/outlets)
+
+	viscosity & density in SI units / 1000
 	''' 
-	velocity = edge_pde(G, dydt=lambda t, self: None, atol=1e-4) # Increased error tolerance for velocity of diff. scales
-	dG_nodes = np.array([velocity.nodes[n] for n in dG.nodes], dtype=np.intp)
+	pressure = node_gds(G)
+	velocity = edge_gds(G)
 
-	def pressure_fun(self, t, y):
-		# TODO: check correctness
-		div1 = -self.incidence@(velocity.y/velocity.dt - velocity.advect())
-		div2 = velocity.div()
-		# TODO: check why corners behave strangely here
-		div1[dG_nodes], div2[dG_nodes] = 0., 0. # do not enforce divergence-free constraint at specified boundaries
-		return div1 - self.laplacian(y)/density + viscosity*self.dirichlet_laplacian@div2/density
-	pressure = vertex_pde(G, lhs=pressure_fun, gtol=1e-8)
+	def pressure_dt(t, y):
+		div1 = pressure.div(velocity.y/velocity.dt) - velocity.advect()
+		div2 = pressure.laplacian(velocity.div()) * viscosity/density
+		return div1 + div2 - pressure.laplacian(y)
 
-	def velocity_fun(t, self):
-		return -self.advect() - pressure.grad()/density + viscosity*self.laplacian()/density
-	velocity.dydt_fun = velocity_fun
+	def velocity_dt(t, y):
+		return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
+
+	pressure.set_evolution(dydt=pressure_dt)
+	velocity.set_evolution(dydt=velocity_dt)
 
 	return pressure, velocity
 
-def compressible_flow(G: nx.Graph, viscosity=1.0) -> (vertex_pde, edge_pde):
-	pass
+def compressible_flow(G: nx.Graph, viscosity=1.0) -> (node_gds, edge_gds):
+	raise Exception('Not implemented')
 
-def lagrangian_tracer(velocity: edge_pde, inlets: list) -> vertex_pde:
+def lagrangian_tracer(velocity: edge_gds, inlets: List[Node]) -> node_gds:
 	''' Passive tracer ''' 
-	tracer = vertex_pde(velocity.G, dydt=lambda t, self: -self.advect(velocity))
-	tracer.set_boundary(dirichlet=dict_fun({i: 1.0 for i in inlets}))
+	tracer = node_gds(velocity.G)
+	tracer.set_evolution(dydt=lambda t, y: -tracer.advect(velocity))
+	tracer.set_constraints(dirichlet={i: 1.0 for i in inlets})
 	return tracer
-
-def const_velocity(dG: nx.Graph, v: float) -> Callable:
-	''' Create constant-velocity condition graph boundary ''' 
-	def vel(e):
-		if e in dG.edges or (e[1], e[0]) in dG.edges: 
-			return v
-		return None
-	return vel
-
-def no_slip(dG: nx.Graph) -> Callable:
-	''' Create no-slip velocity condition graph boundary ''' 
-	return const_velocity(dG, 0.)
-
-def multi_bc(bcs: List[Callable]) -> Callable:
-	def fun(x):
-		for bc in bcs:
-			v = bc(x)
-			if v is not None: return v
-		return None
-	return fun
 
 ''' Systems ''' 
 
@@ -73,7 +55,7 @@ def fluid_on_grid():
 	dG = nx.Graph()
 	dG.add_nodes_from([i, o])
 	pressure, velocity = incompressible_flow(G, dG)
-	pressure.set_boundary(dirichlet=dict_fun({i: 10.0, o: -10.0}))
+	pressure.set_constraints(dirichlet={i: 10.0, o: -10.0})
 	tracer = lagrangian_tracer(velocity, [i])
 	return pressure, velocity, tracer
 
@@ -83,13 +65,7 @@ def fluid_on_circle():
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
 	pressure, velocity = incompressible_flow(G)
-	def pressure_values(x):
-		if x == 0:
-			return 1.0
-		if x == n-1:
-			return -1.0
-		return None
-	pressure.set_boundary(dirichlet=pressure_values)
+	pressure.set_constraints(dirichlet={0: 1.0, n-1: -1.0})
 	return pressure, velocity
 
 def differential_inlets():
@@ -99,8 +75,7 @@ def differential_inlets():
 	dG = nx.Graph()
 	dG.add_nodes_from([1, 4, 6])
 	pressure, velocity = incompressible_flow(G, dG)
-	p_vals = {1: 1.0, 4: 0.5, 6: -1.0}
-	pressure.set_boundary(dirichlet=dict_fun(p_vals))
+	pressure.set_constraints(dirichlet={1: 1.0, 4: 0.5, 6: -1.0})
 	return pressure, velocity
 
 def poiseuille(m=14, n=21, gradP: float=1.0):
@@ -114,14 +89,14 @@ def poiseuille(m=14, n=21, gradP: float=1.0):
 	dG_L.remove_nodes_from([(0, 2*j+1) for j in range(int(m/2))])
 	dG_R.remove_nodes_from([(int(n/2), 2*j+1) for j in range(int(m/2))])
 	pressure, velocity = incompressible_flow(G, nx.compose_all([dG_L, dG_R]))
-	def pressure_values(x):
+	def pressure_bc(x):
 		if x in dG_L.nodes:
 			return gradP/2
 		elif x in dG_R.nodes:
 			return -gradP/2
 		return None
-	pressure.set_boundary(dirichlet=pressure_values)
-	velocity.set_boundary(dirichlet=no_slip(nx.compose_all([dG_T, dG_B])))
+	pressure.set_constraints(dirichlet=pressure_bc)
+	velocity.set_constraints(dirichlet=no_slip(nx.compose_all([dG_T, dG_B])))
 	return pressure, velocity
 
 def poiseuille_asymmetric(m=12, n=24, gradP: float=1.0):
@@ -145,8 +120,8 @@ def poiseuille_asymmetric(m=12, n=24, gradP: float=1.0):
 		if x[0] == 0: return gradP/2
 		if x[0] == n-1: return -gradP/2
 		return None
-	pressure.set_boundary(dirichlet=pressure_values)
-	velocity.set_boundary(dirichlet=no_slip(nx.compose_all([dG_T, dG_B])))
+	pressure.set_constraints(dirichlet=pressure_values)
+	velocity.set_constraints(dirichlet=no_slip(nx.compose_all([dG_T, dG_B])))
 	return pressure, velocity
 
 def couette(G: nx.Graph, dG_l: nx.Graph, dG_w: nx.Graph, v_l=1.0):
@@ -162,7 +137,7 @@ def couette(G: nx.Graph, dG_l: nx.Graph, dG_w: nx.Graph, v_l=1.0):
 			elif (e[1], e[0]) in lid_edges:
 				return -v_l
 		return None
-	velocity.set_boundary(dirichlet=bc)
+	velocity.set_constraints(dirichlet=bc)
 	return pressure, velocity
 
 def von_karman(m=12, n=30, gradP=10.0):
@@ -180,8 +155,8 @@ def von_karman(m=12, n=30, gradP=10.0):
 		if x[0] == 0: return gradP/2
 		if x[0] == n-1: return -gradP/2
 		return None
-	pressure.set_boundary(dirichlet=pressure_values)
-	velocity.set_boundary(dirichlet=no_slip(nx.compose_all([dG_L, dG_T, dG_B])))
+	pressure.set_constraints(dirichlet=pressure_values)
+	velocity.set_constraints(dirichlet=no_slip(nx.compose_all([dG_L, dG_T, dG_B])))
 	tracer = lagrangian_tracer(velocity, [(0, 2*i+1) for i in range(int(m/2))])
 	return pressure, velocity, tracer
 
@@ -191,7 +166,7 @@ def random_graph():
 	eps = 0.3
 	G = nx.random_geometric_graph(n, eps)
 	pressure, velocity = incompressible_flow(G)
-	pressure.set_boundary(dirichlet=dict_fun({4: 1.0, 21: -1.0}))
+	pressure.set_constraints(dirichlet=dict_fun({4: 1.0, 21: -1.0}))
 	return pressure, velocity
 
 def test1():
@@ -201,8 +176,8 @@ def test1():
 	pressure, velocity = incompressible_flow(G)
 	p_vals = {}
 	v_vals = {(1, 2): 1.0, (2, 3): 1.0}
-	pressure.set_boundary(dirichlet=dict_fun(p_vals))
-	velocity.set_boundary(dirichlet=dict_fun(v_vals))
+	pressure.set_constraints(dirichlet=dict_fun(p_vals))
+	velocity.set_constraints(dirichlet=dict_fun(v_vals))
 	return pressure, velocity
 
 def test2():
@@ -220,126 +195,8 @@ def lid_driven_cavity(m=15, n=25, v=1.0):
 	cavity = nx.compose_all([dG_L, dG_R, dG_B])
 	lid = dG_T
 	pressure, velocity = incompressible_flow(G, nx.Graph())
-	velocity.set_boundary(dirichlet=multi_bc([no_slip(cavity), const_velocity(lid, v)]))
+	velocity.set_constraints(dirichlet=combine_bc([no_slip(cavity), const_velocity(lid, v)]))
 	return pressure, velocity
-
-''' Experimentation / observation ''' 
-
-class TurbulenceObservable(Observable):
-	def __init__(self, velocity: edge_pde):
-		self.velocity = velocity
-		self.metrics = {
-			'n': 0,
-			'v_mu': 0.,
-			'v_M2': 0.,
-			'v_sigma': 0,
-		}
-		# Warning: do not allow rendered metrics to be None, or Bokeh won't render it
-		self.rendered = ['v_sigma',]
-		self.cycle_indices = {}
-		self.cycle_signs = {}
-		for cycle in nx.cycle_basis(velocity.G):
-			n = len(cycle)
-			id = f'{n}-cycle flow'
-			self.metrics[id] = 0.
-			G_cyc = nx.Graph()
-			nx.add_cycle(G_cyc, cycle)
-			cyc_orient = {}
-			for i in range(n):
-				if i == n-1:
-					cyc_orient[(cycle[i], cycle[0])] = 1
-					cyc_orient[(cycle[0], cycle[i])] = -1
-				else:
-					cyc_orient[(cycle[i], cycle[i+1])] = 1
-					cyc_orient[(cycle[i+1], cycle[i])] = -1
-			indices = [velocity.edges[e] for e in G_cyc.edges()]
-			signs = np.array([velocity.orientation[e]*cyc_orient[e] for e in G_cyc.edges()])
-			if id in self.cycle_indices:
-				self.cycle_indices[id].append(indices)
-				self.cycle_signs[id].append(signs)
-			else:
-				self.cycle_indices[id] = [indices]
-				self.cycle_signs[id] = [signs]
-		self.rendered += list(self.cycle_indices.keys())
-		super().__init__({})
-
-	def observe(self):
-		y = self.velocity.y
-		if self['n'] == 0:
-			self['v_mu'] = y
-			self['v_M2'] = np.zeros_like(y)
-			self['v_sigma'] = 0.
-		else:
-			n = self['n'] + 1
-			new_mu = self['v_mu'] + (y - self['v_mu']) / n
-			self['v_M2'] += (y - self['v_mu']) * (y - new_mu)
-			self['v_sigma'] = np.sqrt((self['v_M2'] / n).sum())
-			self['v_mu'] = new_mu
-		self['n'] += 1
-		for id, cycles in self.cycle_indices.items():
-			self[id] = sum([(y[cyc] ** 2).sum() for cyc in cycles])
-		return self.y
-
-	def __getitem__(self, idx):
-		return self.metrics.__getitem__(idx)
-
-	def __setitem__(self, idx, val):
-		return self.metrics.__setitem__(idx, val)
-
-	@property 
-	def t(self):
-		return self.velocity.t
-
-	@property
-	def y(self):
-		ret = {k: [self.metrics[k]] for k in self.rendered}
-		ret['t'] = [self.t]
-		return ret
-	
-from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource
-from bokeh.layouts import column
-import colorcet as cc
-
-class FluidRenderer(Renderer):
-	def __init__(self, pressure: vertex_pde, velocity: edge_pde, **kwargs):
-		self.pressure = pressure
-		self.velocity = velocity
-		self.turbulence = TurbulenceObservable(velocity)
-		sys = couple(pressure, velocity)
-		super().__init__(sys, **kwargs)
-
-	def setup_canvas(self):
-		return [
-			[[[self.pressure, self.velocity]], [[self.turbulence]]]
-		]
-
-	def create_plot(self, items: List[Observable]):
-		if len(items) == 1 and items[0] is self.turbulence:
-			cats = list(self.turbulence.rendered)
-			src = ColumnDataSource({cat: [] for cat in ['t'] + cats})
-			plots = []
-			for i, cat in enumerate(cats):
-				plot = figure(title=cat, tooltips=[(cat, '@'+cat)])
-				if i == 0:
-					plot.toolbar_location = 'above'
-					plot.x_range.follow = 'end'
-					plot.x_range.follow_interval = 10.0
-					plot.x_range.range_padding = 0
-				else:
-					plot.toolbar_location = None
-					plot.x_range = plots[0].x_range
-				plot.line('t', cat, line_color='black', source=src)
-				# plot.varea(x='t', y1=0, y2=cat, fill_color=cc.glasbey[i], alpha=0.6, source=src)
-				plots.append(plot)
-			self.turbulence.src = src
-			return column(plots, sizing_mode='stretch_both')
-		else:
-			return super().create_plot(items)
-
-	def draw(self):
-		self.turbulence.src.stream(self.turbulence.observe(), 200)
-		super().draw()
 
 if __name__ == '__main__':
 	''' Solve ''' 
@@ -354,14 +211,13 @@ if __name__ == '__main__':
 
 	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
 	a = v.project(GraphDomain.edges, lambda v: v.advect()) # advective strength
-	f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
-	# g = p.project(GraphDomain.edges, lambda p: p.grad())
-	pv = couple(p, v)
-	sys = System(pv, {
+	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
+
+	sys = couple({
 		'pressure': p,
 		'velocity': v,
 		'divergence': d,
-		'mass flux': f,
+		# 'mass flux': f,
 		'advection': a,
 		# 'tracer': t,
 		# 'grad': grad,
@@ -374,5 +230,9 @@ if __name__ == '__main__':
 	# sys = System.from_disk('von_karman')
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
-	renderer = LiveRenderer(sys, [[[[p, v]], [[f]], [[d]]], [[[a]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	canvas = [
+		[[[p, v]], [[f]], [[d]]], [[[a]]]
+	]
+
+	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
 	renderer.start()

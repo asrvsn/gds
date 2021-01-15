@@ -63,7 +63,7 @@ class fds(Observable, Steppable):
 			self.dydt_fun = dydt
 			self.max_step = max_step
 			self.order = order
-			self.solver_args = self.solver_args
+			self.solver_args = solver_args
 			self.y0 = np.zeros(self.ndim*order)
 			try:
 				self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
@@ -75,7 +75,7 @@ class fds(Observable, Steppable):
 		elif cost != None:
 			self.iter_mode = IterationMode.cvx
 			self.cost_fun = cost
-			self.solver_args = self.solver_args
+			self.solver_args = solver_args
 			self.y0 = np.zeros(self.ndim)
 			self._t = self.t0
 			self._y = self.y0.copy()
@@ -194,7 +194,7 @@ class fds(Observable, Steppable):
 			self._y = self.y0.copy()
 			self._y_cstr = cp.Parameter(self.dirichlet_values.size)
 			self._y_cstr.value = self.dirichlet_values
-			constr = [self._y_prb[self.dirichlet_indices] == self.y_cstr]
+			constr = [self._y_prb[self.dirichlet_indices] == self._y_cstr]
 			self._prb = cp.Problem(self._prb.objective, constr)
 		elif self.iter_mode is IterationMode.map:
 			self._y = self.y0.copy()
@@ -239,7 +239,7 @@ class fds(Observable, Steppable):
 		while self.integrator.status != 'finished':
 			self.integrator.step()
 			self.update_constraints(self.t)
-			self.set_constraints()
+			self.apply_constraints()
 
 	def dydt(self, t: Time, y: np.ndarray):
 		self.update_constraints(t)
@@ -262,8 +262,8 @@ class fds(Observable, Steppable):
 		self._y_prb.value = self.y
 		self._prb.solve(warm_start=True)
 		assert self._prb.status == 'optimal', f'CVXPY solve unsuccessful, status is: {self._prb.status}'
-		self._y = self._prb.value
-		self.set_constraints()
+		self._y = self._y_prb.value
+		self.apply_constraints()
 
 	''' Discrete stepping ''' 
 
@@ -273,14 +273,14 @@ class fds(Observable, Steppable):
 			self._n += 1
 			self.update_constraints(self.t)
 			self._y = self.map_fun(self.y) 
-			self.set_constraints()
+			self.apply_constraints()
 			self._y[self.dirichlet_indices] = self.dirichlet_values
 
 	''' Trajectory stepping ''' 
 
 	def step_traj(self, dt: float):
 		self._t += dt
-		if self._t >= self.traj_t[self._n]:
+		if self._t >= self.traj_t[self._n+1]:
 			self._n += 1
 
 	''' Constaint setting '''
@@ -294,7 +294,7 @@ class fds(Observable, Steppable):
 		if self.dynamic_neumann:
 			self.neumann_values = np.array([self.neumann_fun(t, x) for x in self.X_neumann])
 
-	def set_constraints(self):
+	def apply_constraints(self):
 		''' Set the state constraints ''' 
 		if self.iter_mode is IterationMode.dydt:
 			self.integrator.y[self.dirichlet_indices - self.ndim] = self.dirichlet_values
@@ -337,7 +337,7 @@ class fds(Observable, Steppable):
 
 ''' Coupled dynamical systems on the same domain ''' 
 
-class coupled_fds(Integrable):
+class coupled_fds(Steppable):
 	''' Coupling multiple fds objects in time, including those with different evolution laws.
 	''' 
 	def __init__(self, *systems: Tuple[fds]):

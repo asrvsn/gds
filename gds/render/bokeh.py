@@ -22,8 +22,8 @@ from bokeh.server.server import Server
 from bokeh.util.browser import view
 from tornado.ioloop import IOLoop
 
-from gpde import *
-from gpde.utils.zmq import *
+from gds import *
+from gds.utils.zmq import *
 
 ''' Common types ''' 
 
@@ -121,7 +121,7 @@ class Renderer(ABC):
 				if obs.Gd is GraphDomain.nodes: 
 					plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 					plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
-					if isinstance(obs, gpde):
+					if isinstance(obs, gds):
 						plot.renderers[0].node_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
 						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.node_palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
 					else:
@@ -136,7 +136,7 @@ class Renderer(ABC):
 					if self.colorbars:
 						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
-					if isinstance(obs, gpde):
+					if isinstance(obs, gds):
 						plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
 						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
 					arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]))

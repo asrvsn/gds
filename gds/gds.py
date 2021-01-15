@@ -60,6 +60,11 @@ class gds(fds, GraphObservable):
 		# Operators
 		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
 		self.edge_laplacian = -self.incidence.T@self.incidence # |E| x |E| laplacian operator
+		if Gd is GraphDomain.nodes:
+			self.dirichlet_laplacian = self.vertex_laplacian
+		elif Gd is GraphDomain.edges:
+			self.dirichlet_laplacian = self.edge_laplacian
+		self.neumann_correction = np.zeros(self.ndim)	
 		def curl_element(tri, edge):
 			if edge[0] in tri and edge[1] in tri:
 				c = np.sqrt(self.weights[self.edges[edge]])
@@ -71,12 +76,9 @@ class gds(fds, GraphObservable):
 
 		fds.__init__(self, self.X)
 
-	def set_boundary(self, 
-			dirichlet: Callable[[Time, Point], float]=None, 
-			neumann: Callable[[Time, Point], float]=None,
-			dynamic: bool=False
-		):
-		pde.set_boundary(self, dirichlet, neumann, dynamic)
+	def set_constraints(self, *args, **kwargs):
+		fds.set_constraints(self, *args, **kwargs)
+
 		if self.Gd is GraphDomain.nodes:
 			self.dirichlet_laplacian = self.vertex_laplacian.copy()
 			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
@@ -89,10 +91,18 @@ class gds(fds, GraphObservable):
 			self.dirichlet_laplacian.eliminate_zeros()
 			# TODO: neumann conditions
 
+		if self.iter_mode is IterationMode.cvx:
+			# Rebuild cost function since operators may have changed
+			_cost = self.cost_fun(self._t_prb, self._y_prb)
+			if _cost.shape != (): # Cost is not scalar
+				_cost = cp.sum(cp.abs(_cost))
+			assert _cost.is_dcp(), 'Problem is not disciplined-convex'
+			self._prb = cp.Problem(cp.Minimize(_cost), self._prb.constraints)
+
 ''' Dynamical systems on specific graph domains ''' 
 
-class vertex_gds(gds):
-	''' PDE defined on the nodes of a graph ''' 
+class node_gds(gds):
+	''' Dynamical system defined on the nodes of a graph ''' 
 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
 		gds.__init__(self, G, GraphDomain.nodes, *args, **kwargs)
@@ -103,33 +113,35 @@ class vertex_gds(gds):
 		return np.sqrt(self.weights[self.edges[e]]) * (self(e[1]) - self(e[0])) 
 
 	def grad(self, y: np.ndarray=None) -> np.ndarray:
-		if y is None: y = self.y
-		return self.incidence.T@self.y
+		if y is None: y=self.y
+		return self.incidence.T@y
 
 	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' Dirichlet-Neumann Laplacian. TODO: should minimize error from laplacian on interior? ''' 
-		if y is None: y = self.y
+		if y is None: y=self.y
 		return self.dirichlet_laplacian@y + self.neumann_correction
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:
 		# TODO correct way to handle Neumann in this case? (Gradient constraint only specifies one neighbor beyond)
-		return self.dirichlet_laplacian@self.laplacian(y=y)
+		if y is None: y=self.y
+		return self.dirichlet_laplacian@self.laplacian(y)
 
-	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray]) -> np.ndarray:
+	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		# TODO: check application of dirichlet conditions
 		if isinstance(v_field, edge_gds):
 			assert v_field.G is self.G, 'Incompatible domains'
-			y = v_field.y
-		M = self.incidence.multiply(y)
+			v_field = v_field.y
+		if y is None: y=self.y
+		M = self.incidence.multiply(v_field)
 		N = M.copy().T
 		N.data[N.data > 0] = 0.
 		N.data *= -1
-		ret = -M@N@self.y
+		ret = -M@N@y
 		ret[self.dirichlet_indices] = 0.
 		return ret
 
 class edge_gds(gds):
-	''' PDE defined on the edges of a graph ''' 
+	''' Dynamical system defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
 		gds.__init__(self, G, GraphDomain.edges, *args, **kwargs)
 
@@ -139,25 +151,25 @@ class edge_gds(gds):
 	''' Differential operators: all of the following are CVXPY-compatible '''
 
 	def div(self, y: np.ndarray=None) -> np.ndarray:
-		if y is None: y = self.y
+		if y is None: y=self.y
 		return -self.incidence@y
 
 	def influx(self, y: np.ndarray=None) -> np.ndarray:
 		''' In-flux through nodes ''' 
-		if y is None: y = self.y
+		if y is None: y=self.y
 		f = self.incidence.multiply(y)
 		f.data[f.data < 0] = 0.
 		return f.sum(axis=1)
 
 	def outflux(self, y: np.ndarray=None) -> np.ndarray:
 		''' Out-flux through nodes ''' 
-		if y is None: y = self.y
+		if y is None: y=self.y
 		f = -self.incidence.multiply(y)
 		f.data[f.data < 0] = 0.
 		return f.sum(axis=1)
 
 	def curl(self, y: np.ndarray=None) -> np.ndarray:
-		if y is None: y = self.y
+		if y is None: y=self.y
 		raise self.curl3@y
 
 	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
@@ -166,7 +178,7 @@ class edge_gds(gds):
 		TODO: neumann conditions
 		TODO: check curl term?
 		''' 
-		if y is None: y = self.y
+		if y is None: y=self.y
 		return self.dirichlet_laplacian@y - self.curl3.T@self.curl3@y
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:
@@ -174,20 +186,21 @@ class edge_gds(gds):
 		TODO: neumann conditions
 		TODO: check curl term?
 		''' 
-		return self.dirichlet_laplacian@self.laplacian(y=y)
+		return self.dirichlet_laplacian@self.laplacian(y)
 
-	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None) -> np.ndarray:
+	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None) -> np.ndarray:
 		'''
 		Adjoint of scalar advection case.
 		# TODO: does this assume flow is irrotational?
 		# TODO: check application of dirichlet conditions
 		'''
+		if y is None: y=self.y
 		if v_field is None:
-			M = self.incidence.multiply(self.y).T
+			M = self.incidence.multiply(y).T
 			N = M.copy().T
 			M.data[M.data > 0] = 0.
 			M.data *= -1
-			ret = -M@N@self.y
+			ret = -M@N@y
 			ret[self.dirichlet_indices] = 0.
 			return ret
 		else:
@@ -199,7 +212,7 @@ class edge_gds(gds):
 			N = M.copy().T
 			M.data[M.data > 0] = 0.
 			M.data *= -1
-			ret = -M@N@self.y
+			ret = -M@N@y
 			ret[self.dirichlet_indices] = 0.
 			return ret
 
@@ -217,5 +230,5 @@ class edge_gds(gds):
 		return DualGraphObservable(G_, GraphDomain.nodes)
 
 class face_gds(gds):
-	''' PDE defined on the faces of a graph ''' 
+	''' Dynamical system defined on the faces of a graph ''' 
 	pass		
