@@ -46,11 +46,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
-
-Here's a blank template to get started:
-**To avoid retyping too much info. Do a search and replace with your text editor for the following:**
-`github_username`, `repo_name`, `twitter_handle`, `email`, `project_title`, `project_description`
+![Product Name Screen Shot][product-screenshot]
 
 
 ### Features
@@ -140,6 +136,7 @@ See the [open issues](https://github.com/github_username/repo_name/issues) for a
 * Detailed docs
 * Lyapunov exponent calculation for continuous-time systems (requiring use of differentiable integrators)
 * Probabilistic cellular automata
+* Observables on faces, tets, and higher-dimensional objects
 
 
 <!-- LICENSE -->
