@@ -13,7 +13,7 @@ def heat_grid(n = 10, steady_state=False) -> node_gds:
 	temp = node_gds(G)
 	if steady_state:
 		''' Steady-state version (for comparison) ''' 
-		temp.set_evolution(cost=lambda t, y: temp.vertex_laplacian@y)
+		temp.set_evolution(cost=lambda t, y: temp.laplacian(y))
 	else:
 		temp.set_evolution(dydt=lambda t, y: temp.laplacian(y))
 	return temp
@@ -66,12 +66,12 @@ def grid_linear(steady_state=False) -> node_gds:
 
 if __name__ == '__main__':
 	# Use coupling to visualize multiple PDEs simultaneously
-	p1 = grid_linear()
+	p1 = grid_linear(steady_state=True)
 	p3 = grid_sinus_boundary(steady_state=True)
 	p4 = grid_sinus_boundary(steady_state=True, phi=np.pi/4)
 	sys = couple({
 		'heat0': p1,
-		# 'heat1': p3,
-		# 'heat2': p4
+		'heat1': p3,
+		'heat2': p4
 	})
 	LiveRenderer(sys, sys.arrange()).start()

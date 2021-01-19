@@ -24,16 +24,16 @@ def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1e-3, density=1.0) 
 	pressure = node_gds(G)
 	velocity = edge_gds(G)
 
-	def pressure_dt(t, y):
-		div1 = pressure.div(velocity.y/velocity.dt) - velocity.advect()
+	def pressure_f(t, y):
+		div1 = pressure.div(velocity.y/velocity.dt - velocity.advect())
 		div2 = pressure.laplacian(velocity.div()) * viscosity/density
 		return div1 + div2 - pressure.laplacian(y)
 
-	def velocity_dt(t, y):
+	def velocity_f(t, y):
 		return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
 
-	pressure.set_evolution(dydt=pressure_dt)
-	velocity.set_evolution(dydt=velocity_dt)
+	pressure.set_evolution(cost=pressure_f)
+	velocity.set_evolution(dydt=velocity_f)
 
 	return pressure, velocity
 
