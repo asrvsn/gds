@@ -1,1 +1,5 @@
 runs/
+build
+dist
+*.egg-info
+__pyache__

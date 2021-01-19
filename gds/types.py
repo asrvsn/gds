@@ -24,6 +24,12 @@ class GraphDomain(Enum):
 
 Orientation = Dict[Edge, Sign]
 
+BoundaryCondition = Union[
+	Dict[Point, float],
+	Callable[[Point], float],
+	Callable[[Time, Point], float]
+]
+
 ''' Base interfaces ''' 
 
 class IterationMode(Enum):

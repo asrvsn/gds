@@ -139,8 +139,8 @@ class fds(Observable, Steppable):
 				self._y[i] = y
 
 	def set_constraints(self, 
-			dirichlet: Union[Callable[[Time, Point], float], Callable[[Point], float], Dict[Point, float]]={}, 
-			neumann: Union[Callable[[Time, Point], float], Callable[[Point], float], Dict[Point, float]]={},
+			dirichlet: BoundaryCondition={}, 
+			neumann: BoundaryCondition={},
 			project: Callable[[np.ndarray], np.ndarray]=lambda x: x,
 		):
 		''' Impose constraints. Assumes domain boundaries do not change.

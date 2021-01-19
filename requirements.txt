@@ -4,7 +4,6 @@ bokeh
 numpy
 scipy
 pandas
-webbrowser
 pyzmq
 cloudpickle
 hickle

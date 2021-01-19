@@ -106,11 +106,11 @@ setup(
     # Note that this is a list of additional keywords, separated
     # by commas, to be used to assist searching for the distribution in a
     # larger catalog.
-    keywords='sample, setuptools, development',  # Optional
+    keywords='differential-geometry, partial-differential-equations, network-dynamics, reduced-order-models',  # Optional
 
     # When your source code is in a subdirectory under the project root, e.g.
     # `src/`, it is necessary to specify the `package_dir` argument.
-    package_dir={'': 'src'},  # Optional
+    # package_dir={'': ''},  # Optional
 
     # You can just specify package directories manually here if your project is
     # simple. Or you can use find_packages().
@@ -121,7 +121,7 @@ setup(
     #
     #   py_modules=["my_module"],
     #
-    packages=find_packages(where='src'),  # Required
+    packages=find_packages(),  # Required
 
     # Specify which Python versions you support. In contrast to the
     # 'Programming Language' classifiers above, 'pip install' will check this
@@ -142,7 +142,6 @@ setup(
         'numpy',
         'scipy',
         'pandas',
-        'webbrowser',
         'pyzmq',
         'cloudpickle',
         'hickle',

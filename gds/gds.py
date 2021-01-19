@@ -3,8 +3,8 @@ import networkx as nx
 from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
 
 from .types import *
-from .utils import *
 from .fds import *
+from .utils import *
 
 ''' Observables on graph domains ''' 
 
