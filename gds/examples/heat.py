@@ -70,8 +70,8 @@ if __name__ == '__main__':
 	p3 = grid_sinus_boundary(steady_state=True)
 	p4 = grid_sinus_boundary(steady_state=True, phi=np.pi/4)
 	sys = couple({
-		'heat0': p1,
+		# 'heat0': p1,
 		'heat1': p3,
 		'heat2': p4
 	})
-	LiveRenderer(sys, sys.arrange()).start()
+	LiveRenderer(sys, sys.arrange(), colorbars=False).start()

@@ -10,3 +10,4 @@ hickle
 tqdm
 networkx
 cvxpy
+selenium

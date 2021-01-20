@@ -6,6 +6,7 @@ import random
 from functools import reduce
 from inspect import signature
 from itertools import chain
+import datetime
 
 def set_seed(seed=None):
 	random.seed(seed)
@@ -74,3 +75,6 @@ def merge_dicts(xs: Iterable[Dict]) -> Dict:
 
 def flatten(arr: List[Any]) -> List:
 	return list(chain.from_iterable(arr))
+
+def now():
+	return datetime.datetime.now()

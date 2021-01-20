@@ -2,7 +2,7 @@
 <br />
 <p align="center">
   <a href="https://github.com/github_username/repo_name">
-    <img src="logo.png" alt="Logo" width="80" height="80">
+    <img src="images/logo.png" alt="Logo" width="80" height="80">
   </a>
 
   <h3 align="center">gds: graph dynamical systems library</h3>
@@ -99,8 +99,8 @@ G = gds.grid_graph(10, 10)
 temperature = gds.node_gds(G)
 temperature.set_evolution(dydt=lambda t, y: temperature.laplacian())
 temperature.set_constraints(dirichlet=gds.combine_bcs([
-	lambda t, x: 0 if x[0] == 0,
-	lambda t, x: np.sin(t+x[1]/4)**2 if x[0] == 9
+	lambda t, x: 0 if x[0] == 0 else None,
+	lambda t, x: np.sin(t+x[1]/4)**2 if x[0] == 9 else None
 ]))
 gds.render(temperature)
 ```

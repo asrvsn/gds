@@ -20,10 +20,12 @@ from bokeh.transform import linear_cmap
 from bokeh.command.util import build_single_handler_applications
 from bokeh.server.server import Server
 from bokeh.util.browser import view
+from bokeh.io import export_png
 from tornado.ioloop import IOLoop
 
 from gds import *
 from gds.utils.zmq import *
+from gds.utils import now
 from .base import *
 
 ''' Classes ''' 
@@ -91,7 +93,8 @@ class Renderer(ABC):
 					nsubcols = int(np.sqrt(len(subplots)))
 					cols.append(gridplot(subplots, ncols=nsubcols, sizing_mode='scale_both'))
 			rows.append(row(cols, sizing_mode='scale_both'))
-		root.children.append(column(rows, sizing_mode='scale_both'))
+		self.root_plot = column(rows, sizing_mode='scale_both')
+		root.children.append(self.root_plot)
 
 	def create_plot(self, items: List[Observable]):
 		assert all([obs.G is items[0].G for obs in items]), 'Co-rendered observables must use the same graph'
@@ -106,11 +109,12 @@ class Renderer(ABC):
 			if plot is None:
 				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
 				plot.axis.visible = None
-				# plot.xgrid.grid_line_color = None
-				# plot.ygrid.grid_line_color = None
+				plot.xgrid.grid_line_color = None
+				plot.ygrid.grid_line_color = None
 				renderer = from_networkx(G, layout)
 				plot.renderers.append(renderer)
 				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node'), ('edge', '@edge')]))
+				plot.toolbar_location = None
 			# Domain-specific rendering
 			if isinstance(obs, GraphObservable):
 				if obs.Gd is GraphDomain.nodes: 
@@ -185,7 +189,6 @@ class Renderer(ABC):
 		obs.arr_source.data['ys'] = np.stack((p1y, p2y, p3y), axis=1).tolist()
 		obs.arr_source.data['value'] = absy
 
-
 ''' Derivations ''' 
 
 class LiveRenderer(Renderer):
@@ -194,6 +197,9 @@ class LiveRenderer(Renderer):
 		self.system = sys
 		self.stepper = sys.stepper
 		self.stepper.step(0) # Uncover any immediate issues at construction
+
+		self.rec_name = None
+		self.rec_ctr = None
 
 		self.observables = list(sys.observables.values())
 		super().__init__(*args, **kwargs)
@@ -214,6 +220,24 @@ class LiveRenderer(Renderer):
 					self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
 				elif obs.Gd is GraphDomain.edges:
 					self.draw_arrows(obs, obs.y)
+		if self.rec_name != None:
+			self.dump_frame()
+
+	def start_recording(self):
+		self.rec_ctr = 0
+		if not os.path.exists('recordings'):
+			os.makedirs('recordings')
+		self.rec_name = f'recordings/{now().strftime("%m-%d-%y %H:%M:%S")}'
+		os.makedirs(self.rec_name)
+		self.dump_frame()
+
+	def dump_frame(self):
+		export_png(self.root_plot, filename=f'{self.rec_name}/{self.rec_ctr}.png', timeout=10)
+		self.rec_ctr += 1
+
+	def stop_recording(self):
+		self.rec_name = None
+		self.rec_ctr = None
 
 	@property
 	def t(self):

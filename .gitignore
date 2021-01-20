@@ -2,4 +2,5 @@ runs/
 build
 dist
 *.egg-info
-__pyache__
+__pyache__/
+recordings/
