@@ -46,7 +46,11 @@
 <!-- ABOUT THE PROJECT -->
 ## About
 
-![Product Name Screen Shot][product-screenshot]
+<p float="left">
+  <img src="images/diff_geo.png" width="32%" />
+  <img src="images/sh_hex.gif" width="32%" /> 
+  <img src="images/wave_simp.gif" width="32%" />
+</p>
 
 
 ### Features

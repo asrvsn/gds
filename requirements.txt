@@ -11,3 +11,4 @@ tqdm
 networkx
 cvxpy
 selenium
+pillow

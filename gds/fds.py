@@ -20,6 +20,10 @@ class fds(Observable, Steppable):
 		Observable.__init__(self, X)
 		Steppable.__init__(self, IterationMode.none)
 
+		self._set_bcs()
+		self.t0 = 0.
+		self.y0_fun = lambda _: 0.
+
 	''' Dynamics ''' 
 
 	def set_evolution(self,
@@ -57,8 +61,7 @@ class fds(Observable, Steppable):
 			traj_y: Iterable[np.ndarray]
 		'''
 		assert oneof([dydt != None, cost != None, map_fun != None, traj_t != None]), 'Exactly one evolution law must be specified'
-		self.t0 = 0.
-		self.y0_fun = lambda _: 0.
+
 		if dydt != None:
 			self.iter_mode = IterationMode.dydt
 			self.dydt_fun = dydt
@@ -155,6 +158,27 @@ class fds(Observable, Steppable):
 		''' 
 		assert self.iter_mode != IterationMode.none, 'Use set_evolution() before setting boundary conditions'
 		assert self.iter_mode != IterationMode.traj, 'Cannot set constraints on trajectory-derived system'
+		
+		self._set_bcs(dirichlet, neumann, project)
+
+		self.y0 = project(replace(self.y0, self.dirichlet_indices, self.dirichlet_values))
+
+		if self.iter_mode is IterationMode.dydt:
+			self.integrator.y[self.dirichlet_indices - self.ndim] = self.dirichlet_values
+		elif self.iter_mode is IterationMode.cvx:
+			self._y = self.y0.copy()
+			self._y_cstr = cp.Parameter(self.dirichlet_values.size)
+			self._y_cstr.value = self.dirichlet_values
+			constr = [self._y_prb[self.dirichlet_indices] == self._y_cstr]
+			self._prb = cp.Problem(self._prb.objective, constr)
+		elif self.iter_mode is IterationMode.map:
+			self._y = self.y0.copy()
+
+	def _set_bcs(self, 
+			dirichlet: BoundaryCondition={}, 
+			neumann: BoundaryCondition={},
+			project: Callable[[np.ndarray], np.ndarray]=lambda x: x,
+		):
 		if type(dirichlet) is dict:
 			dirichlet = dict_fun(dirichlet)
 		if type(neumann) is dict:
@@ -187,18 +211,6 @@ class fds(Observable, Steppable):
 		intersect = set(self.X_dirichlet) & set(self.X_neumann)
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 
-		self.y0 = project(replace(self.y0, self.dirichlet_indices, self.dirichlet_values))
-
-		if self.iter_mode is IterationMode.dydt:
-			self.integrator.y[self.dirichlet_indices - self.ndim] = self.dirichlet_values
-		elif self.iter_mode is IterationMode.cvx:
-			self._y = self.y0.copy()
-			self._y_cstr = cp.Parameter(self.dirichlet_values.size)
-			self._y_cstr.value = self.dirichlet_values
-			constr = [self._y_prb[self.dirichlet_indices] == self._y_cstr]
-			self._prb = cp.Problem(self._prb.objective, constr)
-		elif self.iter_mode is IterationMode.map:
-			self._y = self.y0.copy()
 
 	''' Stepping ''' 
 
@@ -207,15 +219,16 @@ class fds(Observable, Steppable):
 		assert self.iter_mode != IterationMode.none
 		if self.iter_mode is IterationMode.dydt:
 			self.set_evolution(dydt=self.dydt_fun, order=self.order, max_step=self.max_step, solver_args=self.solver_args)
-			self.set_initial(t0=self.t0, y0=self.y0_fun)
 		elif self.iter_mode is IterationMode.cvx:
 			self.set_evolution(cost=self.cost_fun, solver_args=self.solver_args)
-			self.set_initial(t0=self.t0, y0=self.y0_fun)
 		elif self.iter_mode is IterationMode.map:
 			self.set_evolution(map_fun=self.map_fun)
-			self.set_initial(t0=self.t0, y0=self.y0_fun)
 		elif self.iter_mode is IterationMode.traj:
 			self._i = 0
+
+		if self.iter_mode != IterationMode.traj:
+			self.set_initial(t0=self.t0, y0=self.y0_fun)
+			self.set_constraints(dirichlet=self.dirichlet_fun, neumann=self.neumann_fun, project=self.project_fun)
 
 	def step(self, dt: float):
 		''' Step the system to t+dt ''' 
@@ -248,7 +261,10 @@ class fds(Observable, Steppable):
 		ret = np.zeros_like(y)
 		for i in range(order-1):
 			ret[n*i:n*(i+1)] = y[n*(i+1):n*(i+2)]
-		diff = self.dydt_fun(t, self)
+		if self.order > 1:
+			diff = self.dydt_fun(t, y[n*(order-1):])
+		else:
+			diff = self.dydt_fun(t, y)
 		diff[self.dirichlet_indices] = 0. # Do not modify constrained nodes
 		ret[n*(order-1):] = diff
 		return ret

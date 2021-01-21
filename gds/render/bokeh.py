@@ -22,6 +22,7 @@ from bokeh.command.util import build_single_handler_applications
 from bokeh.server.server import Server
 from bokeh.util.browser import view
 from bokeh.io import export_png
+from bokeh.models.widgets import Div
 from tornado.ioloop import IOLoop
 
 from gds import *
@@ -37,6 +38,7 @@ class Renderer(ABC):
 				node_palette=cc.fire, edge_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
 				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
+				title=None,
 			):
 		self.canvas: Canvas = canvas
 		self.plots: Dict[PlotID, Plot] = dict()
@@ -52,6 +54,7 @@ class Renderer(ABC):
 		self.plot_width = plot_width
 		self.plot_height = plot_height
 		self.dynamic_ranges = dynamic_ranges
+		self.title = title
 		if layout_func is None:
 			def func(G):
 				pos_attr = nx.get_node_attributes(G, 'pos')
@@ -87,6 +90,8 @@ class Renderer(ABC):
 	def draw_plots(self, root):
 		''' Draw plots to bokeh element ''' 
 		rows = []
+		if self.title != None:
+			rows.append(Div(text=self.title, style={'font-size':'200%'}))
 		for i in range(len(self.canvas)):
 			cols = []
 			for j in range(len(self.canvas[i])):
@@ -113,7 +118,7 @@ class Renderer(ABC):
 			layout[i] = v
 		def helper(obs: Observable, plot=None):
 			if plot is None:
-				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[], width=self.plot_width, height=self.plot_height)
+				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[], width=self.plot_width, height=self.plot_height) 
 				plot.axis.visible = None
 				plot.xgrid.grid_line_color = None
 				plot.ygrid.grid_line_color = None

@@ -83,7 +83,6 @@ class gds(fds, GraphObservable):
 			self.dirichlet_laplacian = self.vertex_laplacian.copy()
 			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
 			self.dirichlet_laplacian.eliminate_zeros()
-			self.neumann_correction = np.zeros_like(self.y)
 			self.neumann_correction[self.neumann_indices] = self.neumann_values
 		else:
 			self.dirichlet_laplacian = self.edge_laplacian.copy()

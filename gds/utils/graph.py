@@ -56,6 +56,27 @@ def lattice45(m: int, n: int) -> nx.Graph:
 	nx.set_node_attributes(G, layout, 'pos')
 	return G
 
+def triangular_lattice(*args, **kwargs) -> nx.Graph:
+	''' Sanitize networkx properties for Bokeh consumption ''' 
+	if 'periodic' in kwargs:
+		kwargs['with_positions'] = False
+		G = nx.triangular_lattice_graph(*args, **kwargs)
+		nx.set_node_attributes(G, None, 'contraction')
+		return G
+	else:
+		return nx.triangular_lattice_graph(*args, **kwargs)
+
+def hexagonal_lattice(*args, **kwargs) -> nx.Graph:
+	''' Sanitize networkx properties for Bokeh consumption ''' 
+	if 'periodic' in kwargs:
+		kwargs['with_positions'] = False
+		G = nx.hexagonal_lattice_graph(*args, **kwargs)
+		nx.set_node_attributes(G, None, 'contraction')
+		return G
+	else:
+		return nx.triangular_lattice_graph(*args, **kwargs)
+
+
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
 	''' Get boundary of planar graph using layout coordinates. ''' 
 	nodes = set(G.nodes())
