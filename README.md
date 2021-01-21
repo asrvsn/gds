@@ -47,7 +47,7 @@
 ## About
 
 <p float="left">
-  <img src="images/diff_geo.png" width="32%" />
+  <img src="images/diff_geo.gif" width="32%" />
   <img src="images/sh_hex.gif" width="32%" /> 
   <img src="images/wave_simp.gif" width="32%" />
 </p>
