@@ -12,10 +12,11 @@ import networkx as nx
 import os.path
 import cloudpickle
 
+from bokeh.core.properties import field
 from bokeh.plotting import figure, from_networkx
 from bokeh.layouts import row, column, gridplot, widgetbox
 from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead, ColumnDataSource
-from bokeh.models.glyphs import Oval, MultiLine, Patches
+from bokeh.models.glyphs import Ellipse, MultiLine, Patches
 from bokeh.transform import linear_cmap
 from bokeh.command.util import build_single_handler_applications
 from bokeh.server.server import Server
@@ -35,10 +36,12 @@ class Renderer(ABC):
 				canvas: Canvas,
 				node_palette=cc.fire, edge_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
 				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, 
-				node_size=0.04
+				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
 			):
 		self.canvas: Canvas = canvas
 		self.plots: Dict[PlotID, Plot] = dict()
+		self.node_cmaps: Dict[PlotID, ColorBar] = dict()
+		self.edge_cmaps: Dict[PlotID, ColorBar] = dict()
 		self.node_palette = node_palette
 		self.edge_palette = edge_palette
 		self.node_rng = node_rng
@@ -46,6 +49,9 @@ class Renderer(ABC):
 		self.colorbars = colorbars
 		self.edge_max = edge_max
 		self.node_size = node_size
+		self.plot_width = plot_width
+		self.plot_height = plot_height
+		self.dynamic_ranges = dynamic_ranges
 		if layout_func is None:
 			def func(G):
 				pos_attr = nx.get_node_attributes(G, 'pos')
@@ -91,9 +97,9 @@ class Renderer(ABC):
 					for k in range(len(self.canvas[i][j])):
 						subplots.append(self.create_plot(self.canvas[i][j][k]))
 					nsubcols = int(np.sqrt(len(subplots)))
-					cols.append(gridplot(subplots, ncols=nsubcols, sizing_mode='scale_both'))
-			rows.append(row(cols, sizing_mode='scale_both'))
-		self.root_plot = column(rows, sizing_mode='scale_both')
+					cols.append(gridplot(subplots, ncols=nsubcols))
+			rows.append(row(cols))
+		self.root_plot = column(rows)
 		root.children.append(self.root_plot)
 
 	def create_plot(self, items: List[Observable]):
@@ -107,7 +113,7 @@ class Renderer(ABC):
 			layout[i] = v
 		def helper(obs: Observable, plot=None):
 			if plot is None:
-				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
+				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[], width=self.plot_width, height=self.plot_height)
 				plot.axis.visible = None
 				plot.xgrid.grid_line_color = None
 				plot.ygrid.grid_line_color = None
@@ -120,26 +126,30 @@ class Renderer(ABC):
 				if obs.Gd is GraphDomain.nodes: 
 					plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 					plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
+					cmap = LinearColorMapper(palette=self.node_palette, low=self.node_rng[0], high=self.node_rng[1])
+					self.node_cmaps[obs.plot_id] = cmap
 					if isinstance(obs, gds):
 						plot.renderers[0].node_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
-						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.node_palette, self.node_rng[0], self.node_rng[1]), line_width='thickness')
+						plot.renderers[0].node_renderer.glyph = Ellipse(height=self.node_size, width=self.node_size, fill_color=field('value', cmap), line_width='thickness')
 					else:
-						plot.renderers[0].node_renderer.glyph = Oval(height=self.node_size, width=self.node_size, fill_color=linear_cmap('value', self.node_palette, self.node_rng[0], self.node_rng[1]))
+						plot.renderers[0].node_renderer.glyph = Ellipse(height=self.node_size, width=self.node_size, fill_color=field('value', cmap))
 					if self.colorbars:
-						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.node_palette, low=self.node_rng[0], high=self.node_rng[1]), ticker=BasicTicker(), title='node')
+						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='node')
 						plot.add_layout(cbar, 'right')
 				elif obs.Gd is GraphDomain.edges:
 					self.prep_layout_data(obs, G, layout)
 					obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
 					self.draw_arrows(obs, obs.y)
+					cmap = LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1])
+					self.edge_cmaps[obs.plot_id] = cmap
+					arrows = Patches(xs='xs', ys='ys', fill_color=field('value', cmap))
+					plot.add_glyph(obs.arr_source, arrows)
 					if self.colorbars:
-						cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]), ticker=BasicTicker(), title='edge')
+						cbar = ColorBar(color_mapper=field('value', cmap), ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
 					if isinstance(obs, gds):
 						plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
 						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
-					arrows = Patches(xs='xs', ys='ys', fill_color=linear_cmap('value', self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1]))
-					plot.add_glyph(obs.arr_source, arrows)
 				else:
 					raise Exception('unknown graph domain.')
 			return plot
@@ -147,8 +157,8 @@ class Renderer(ABC):
 		plot = None
 		plot_id = shortuuid.uuid()
 		for obs in items:
-			plot = helper(obs, plot)
 			obs.plot_id = plot_id
+			plot = helper(obs, plot)
 		self.plots[plot_id] = plot
 		return plot
 
@@ -218,8 +228,14 @@ class LiveRenderer(Renderer):
 				plot = self.plots[obs.plot_id]
 				if obs.Gd is GraphDomain.nodes:
 					self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
+					if self.dynamic_ranges:
+						self.node_cmaps[obs.plot_id].low = obs.y.min()
+						self.node_cmaps[obs.plot_id].high = obs.y.max()
 				elif obs.Gd is GraphDomain.edges:
 					self.draw_arrows(obs, obs.y)
+					if self.dynamic_ranges:
+						self.edge_cmaps[obs.plot_id].low = obs.y.min()
+						self.edge_cmaps[obs.plot_id].high = obs.y.max()
 		if self.rec_name != None:
 			self.dump_frame()
 

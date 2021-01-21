@@ -74,4 +74,4 @@ if __name__ == '__main__':
 		'heat1': p3,
 		'heat2': p4
 	})
-	LiveRenderer(sys, sys.arrange(), colorbars=False).start()
+	LiveRenderer(sys, sys.arrange(), dynamic_ranges=True).start()

@@ -58,6 +58,7 @@ class fds(Observable, Steppable):
 		'''
 		assert oneof([dydt != None, cost != None, map_fun != None, traj_t != None]), 'Exactly one evolution law must be specified'
 		self.t0 = 0.
+		self.y0_fun = lambda _: 0.
 		if dydt != None:
 			self.iter_mode = IterationMode.dydt
 			self.dydt_fun = dydt
