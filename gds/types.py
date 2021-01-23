@@ -5,10 +5,10 @@ import numpy as np
 
 ''' Graph domains ''' 
 
-Vertex = Any
-Edge = Tuple[Vertex, Vertex]
-Triangle = Tuple[Vertex, Vertex, Vertex]
-Point = Union[Vertex, Edge, Triangle] # A point in the graph domain
+Node = Any
+Edge = Tuple[Node, Node]
+Triangle = Tuple[Node, Node, Node]
+Point = Union[Node, Edge, Triangle] # A point in the graph domain
 
 ''' Types for dynamics on graph domains '''
 

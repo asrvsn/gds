@@ -275,7 +275,7 @@ class fds(Observable, Steppable):
 		_cost = self.cost_fun(self._t_prb, self._y_prb)
 		if _cost.shape != (): # Cost is not scalar
 			_cost = cp.sum(cp.abs(_cost))
-		assert _cost.is_dcp(), 'Problem is not disciplined-convex'
+		# assert _cost.is_dcp(), 'Problem is not disciplined-convex'
 		self._prb = cp.Problem(cp.Minimize(_cost), self._prb.constraints)
 
 	def step_cvx(self, dt: float):
@@ -283,6 +283,7 @@ class fds(Observable, Steppable):
 		self._t += dt
 		self._t_prb.value = self.t
 		self.update_constraints(self.t)
+		self.rebuild_cvx() # TODO: see if there are other ways to pass time-varying parameters explicitly...
 		self._prb.solve(warm_start=True, **self.solver_args)
 		assert self._prb.status == 'optimal', f'CVXPY solve unsuccessful, status is: {self._prb.status}'
 		self._y = self._y_prb.value
@@ -333,7 +334,9 @@ class fds(Observable, Steppable):
 
 	@property
 	def y(self):
-		if self.iter_mode is IterationMode.dydt:
+		if self.iter_mode is IterationMode.none:
+			return np.zeros(self.ndim)
+		elif self.iter_mode is IterationMode.dydt:
 			return self.integrator.y[:self.ndim]
 		elif self.iter_mode is IterationMode.cvx or self.iter_mode is IterationMode.map:
 			return self._y
@@ -351,8 +354,11 @@ class fds(Observable, Steppable):
 
 	@property 
 	def dt(self):
-		assert self.iter_mode is IterationMode.dydt, 'Can only get step size of differential stepper'
-		return self.max_step if self.stepper.step_size is None else self.stepper.step_size
+		# assert self.iter_mode is IterationMode.dydt, 'Can only get step size of differential stepper'
+		if self.iter_mode is IterationMode.dydt:
+			return self.max_step if self.stepper.step_size is None else self.stepper.step_size
+		else:
+			return self.max_step
 
 	def system(self, name: str) -> System:
 		return System(self, {name: self})
@@ -469,6 +475,7 @@ class coupled_fds(Steppable):
 
 
 def couple(observables: Dict[str, Observable]) -> System:
-	''' Couple multiple observables ''' 
-	stepper = coupled_fds(*observables.values())
+	''' Couple multiple observables, stepping those which can be together '''
+	steppables = [obs for obs in observables.values() if isinstance(obs, Steppable)] 
+	stepper = coupled_fds(*steppables)
 	return System(stepper, observables)

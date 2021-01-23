@@ -14,20 +14,16 @@ from gds.render.bokeh import *
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, dG: nx.Graph, viscosity=1e-3, density=1.0) -> (node_gds, edge_gds):
+def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0) -> (node_gds, edge_gds):
 	''' 
 	G: graph
-	dG: non-divergence-free boundary (inlets/outlets)
-
 	viscosity & density in SI units / 1000
 	''' 
 	pressure = node_gds(G)
 	velocity = edge_gds(G)
 
 	def pressure_f(t, y):
-		div1 = pressure.div(velocity.y/velocity.dt - velocity.advect())
-		div2 = pressure.laplacian(velocity.div()) * viscosity/density
-		return div1 + div2 - pressure.laplacian(y)
+		return velocity.div(velocity.y/1e-3 - velocity.advect()) - pressure.laplacian(y)/density + pressure.laplacian(velocity.div()) * viscosity/density
 
 	def velocity_f(t, y):
 		return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
@@ -80,23 +76,18 @@ def differential_inlets():
 
 def poiseuille(m=14, n=21, gradP: float=1.0):
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
-	assert n % 2 == 1
+	# assert n % 2 == 1
 	# G = lattice45(m, n)
-	G = nx.triangular_lattice_graph(m, n)
-	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
-	# dG_L.remove_nodes_from([(1, j) for j in range(m)])
-	# dG_R.remove_nodes_from([(n-2, j) for j in range(m)])
-	dG_L.remove_nodes_from([(0, 2*j+1) for j in range(int(m/2))])
-	dG_R.remove_nodes_from([(int(n/2), 2*j+1) for j in range(int(m/2))])
-	pressure, velocity = incompressible_flow(G, nx.compose_all([dG_L, dG_R]))
-	def pressure_bc(x):
-		if x in dG_L.nodes:
-			return gradP/2
-		elif x in dG_R.nodes:
-			return -gradP/2
-		return None
-	pressure.set_constraints(dirichlet=pressure_bc)
-	velocity.set_constraints(dirichlet=no_slip(nx.compose_all([dG_T, dG_B])))
+	G, (l, r, t, b) = triangular_lattice(m, n, with_boundaries=True)
+	pressure, velocity = incompressible_flow(G)
+	pressure.set_constraints(dirichlet=combine_bcs(
+		{n: gradP/2 for n in l.nodes},
+		{n: -gradP/2 for n in r.nodes}
+	))
+	velocity.set_constraints(dirichlet=combine_bcs(
+		zero_edge_bc(t),
+		zero_edge_bc(b),
+	))
 	return pressure, velocity
 
 def poiseuille_asymmetric(m=12, n=24, gradP: float=1.0):
@@ -121,23 +112,19 @@ def poiseuille_asymmetric(m=12, n=24, gradP: float=1.0):
 		if x[0] == n-1: return -gradP/2
 		return None
 	pressure.set_constraints(dirichlet=pressure_values)
-	velocity.set_constraints(dirichlet=no_slip(nx.compose_all([dG_T, dG_B])))
+	velocity.set_constraints(dirichlet=zero_edge_bc(nx.compose_all([dG_T, dG_B])))
 	return pressure, velocity
 
-def couette(G: nx.Graph, dG_l: nx.Graph, dG_w: nx.Graph, v_l=1.0):
-	''' Drag-induced flow by velocity on dG_l with no-slip on dG_w ''' 
+def lid_driven_cavity(m=14, n=21, v=1.0):
+	''' Drag-induced flow ''' 
+	G, (l, r, t, b) = grid_graph(m, n, with_boundaries=True)
+	# G, (l, r, t, b) = triangular_lattice(m, n*2, with_boundaries=True)
 	pressure, velocity = incompressible_flow(G)
-	wall = noslip(dG_w)
-	lid_edges = set(dG_l.edges())
-	def bc(t, e):
-		v = wall(e)
-		if v is None:
-			if e in lid_edges:
-				return v_l
-			elif (e[1], e[0]) in lid_edges:
-				return -v_l
-		return None
-	velocity.set_constraints(dirichlet=bc)
+	velocity.set_constraints(dirichlet=combine_bcs(
+		const_edge_bc(t, v),
+		zero_edge_bc(b),
+	))
+	pressure.set_constraints(dirichlet={(0, 0): 0.})
 	return pressure, velocity
 
 def von_karman(m=12, n=30, gradP=10.0):
@@ -189,36 +176,29 @@ def test2():
 	velocity.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	return pressure, velocity
 
-def lid_driven_cavity(m=15, n=25, v=1.0):
-	G = grid_graph(m, n)
-	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
-	cavity = nx.compose_all([dG_L, dG_R, dG_B])
-	lid = dG_T
-	pressure, velocity = incompressible_flow(G, nx.Graph())
-	velocity.set_constraints(dirichlet=combine_bc([no_slip(cavity), const_velocity(lid, v)]))
-	return pressure, velocity
-
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	p, v = poiseuille(gradP=10.0)
+	# p, v = poiseuille(gradP=10.0)
 	# p, v = poiseuille_asymmetric(gradP=10.0)
-	# p, v = lid_driven_cavity(v=10.)
+	p, v = lid_driven_cavity(v=10.)
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
 	# p, v, t = von_karman(n=50, gradP=20)
-	# p, v = test2()
+	# p, v = couette()
 
 	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
 	a = v.project(GraphDomain.edges, lambda v: v.advect()) # advective strength
-	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
+	f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
+	m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = couple({
 		'pressure': p,
 		'velocity': v,
 		'divergence': d,
-		# 'mass flux': f,
+		'mass flux': f,
 		'advection': a,
+		'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
 	})
@@ -231,8 +211,8 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		[[[p, v]], [[f]], [[d]]], [[[a]]]
+		[[[p, v]], [[d]]], [[[a]], [[f]]], [[[m]]]
 	]
 
-	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
+	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800)
 	renderer.start()

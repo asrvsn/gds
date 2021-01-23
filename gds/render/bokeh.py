@@ -150,7 +150,7 @@ class Renderer(ABC):
 					arrows = Patches(xs='xs', ys='ys', fill_color=field('value', cmap))
 					plot.add_glyph(obs.arr_source, arrows)
 					if self.colorbars:
-						cbar = ColorBar(color_mapper=field('value', cmap), ticker=BasicTicker(), title='edge')
+						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
 					if isinstance(obs, gds):
 						plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
@@ -218,6 +218,15 @@ class LiveRenderer(Renderer):
 
 		self.observables = list(sys.observables.values())
 		super().__init__(*args, **kwargs)
+
+	def draw_plots(self, root):
+		super().draw_plots(root)
+		for plot_id, plot in self.plots.items():
+			names = []
+			for name, obs in self.system.observables.items():
+				if obs.plot_id == plot_id:
+					names.append(name) # Somewhat hacky
+			plot.title.text = ','.join(names)
 
 	def step(self, dt: float):
 		self.stepper.step(dt)

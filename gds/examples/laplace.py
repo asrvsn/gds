@@ -31,9 +31,9 @@ def sinus_boundary_timevarying() -> node_gds:
 
 def edge_diffusion():
 	# G = lattice45(10, 11)
-	# G = nx.triangular_lattice_graph(10, 11)
+	G = nx.triangular_lattice_graph(10, 11)
 	# G = nx.hexagonal_lattice_graph(10, 11)
-	G = grid_graph(10, 11, diagonals=True)
+	# G = grid_graph(10, 11, diagonals=True)
 	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
 	v = edge_gds(G, dydt=lambda t, self: self.laplacian())
 	def boundary(e):

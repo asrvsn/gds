@@ -47,9 +47,9 @@
 ## About
 
 <p float="left">
-  <img src="images/diff_geo.gif" width="32%" />
-  <img src="images/sh_hex.gif" width="32%" /> 
-  <img src="images/wave_simp.gif" width="32%" />
+  <img src="images/diff_geo.gif" width="32%" style="vertical-align: top;"/>
+  <img src="images/sh_hex.gif" width="32%" style="vertical-align: top;"/> 
+  <img src="images/wave_simp.gif" width="32%" style="vertical-align: top;"/>
 </p>
 
 
@@ -102,10 +102,10 @@ Definition:
 G = gds.grid_graph(10, 10)
 temperature = gds.node_gds(G)
 temperature.set_evolution(dydt=lambda t, y: temperature.laplacian())
-temperature.set_constraints(dirichlet=gds.combine_bcs([
-	lambda t, x: 0 if x[0] == 0 else None,
+temperature.set_constraints(dirichlet=gds.combine_bcs(
+	lambda x: 0 if x[0] == 0 else None,
 	lambda t, x: np.sin(t+x[1]/4)**2 if x[0] == 9 else None
-]))
+))
 gds.render(temperature)
 ```
 

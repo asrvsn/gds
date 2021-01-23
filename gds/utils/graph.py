@@ -24,7 +24,7 @@ def grid_graph_layout(G: nx.Graph):
 				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
 	return layout
 
-def grid_graph(m: int, n: int, diagonals=False, **kwargs) -> nx.Graph:
+def grid_graph(m: int, n: int, diagonals=False, with_boundaries=False, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
 	if diagonals:
 		for i in range(n-1):
@@ -32,7 +32,14 @@ def grid_graph(m: int, n: int, diagonals=False, **kwargs) -> nx.Graph:
 				G.add_edges_from([((i, j), (i+1, j+1)), ((i, j+1), (i+1, j))])
 	pos = grid_graph_layout(G)
 	nx.set_node_attributes(G, pos, 'pos')
-	return G
+	if with_boundaries:
+		l = G.subgraph([(0, i) for i in range(m)])
+		r = G.subgraph([(n-1, i) for i in range(m)])
+		t = G.subgraph([(j, m-1) for j in range(n)])
+		b = G.subgraph([(j, 0) for j in range(n)])
+		return G, (l, r, t, b)
+	else:
+		return G
 
 def lattice45(m: int, n: int) -> nx.Graph:
 	''' Creates 45-degree rotated square lattice; make n odd for symmetric boundaries '''
@@ -56,15 +63,26 @@ def lattice45(m: int, n: int) -> nx.Graph:
 	nx.set_node_attributes(G, layout, 'pos')
 	return G
 
-def triangular_lattice(*args, **kwargs) -> nx.Graph:
+def triangular_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 	''' Sanitize networkx properties for Bokeh consumption ''' 
 	if 'periodic' in kwargs:
 		kwargs['with_positions'] = False
-		G = nx.triangular_lattice_graph(*args, **kwargs)
+		G = nx.triangular_lattice_graph(m, n, **kwargs)
 		nx.set_node_attributes(G, None, 'contraction')
 		return G
 	else:
-		return nx.triangular_lattice_graph(*args, **kwargs)
+		G = nx.triangular_lattice_graph(m, n, **kwargs)
+		if with_boundaries:
+			l = G.subgraph([(0, i) for i in range(m)])
+			r_nodes = [(n-1, i) for i in range(m)]
+			if n % 2 == 1:
+				r_nodes.extend([(n-2, 1+2*i) for i in range(m)])
+			r = G.subgraph([x for x in r_nodes if x in G.nodes])
+			t = G.subgraph([(j, m) for j in range(n)])
+			b = G.subgraph([(j, 0) for j in range(n)])
+			return G, (l, r, t, b)
+		else:
+			return G
 
 def hexagonal_lattice(*args, **kwargs) -> nx.Graph:
 	''' Sanitize networkx properties for Bokeh consumption ''' 
