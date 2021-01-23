@@ -95,8 +95,9 @@ class fds(Observable, Steppable):
 			self.iter_mode = IterationMode.map
 			self.map_fun = map_fun
 			self.y0 = np.zeros(self.ndim)
+			self._dt = dt
 			self._t = self.t0
-			self._n = int(self._t)
+			self._n = self._t
 			self._y = self.t0.copy()
 
 		elif traj_t != None:
@@ -293,8 +294,8 @@ class fds(Observable, Steppable):
 
 	def step_map(self, dt: float):
 		self._t += dt
-		if (self._t - self._n) >= 1.0:
-			self._n += 1
+		if (self._t - self._n) >= self._dt:
+			self._n = self._t
 			self.update_constraints(self.t)
 			self._y = self.map_fun(self.y) 
 			self.apply_constraints()
@@ -354,11 +355,12 @@ class fds(Observable, Steppable):
 
 	@property 
 	def dt(self):
-		# assert self.iter_mode is IterationMode.dydt, 'Can only get step size of differential stepper'
 		if self.iter_mode is IterationMode.dydt:
-			return self.max_step if self.stepper.step_size is None else self.stepper.step_size
+			return self.max_step if self.integrator.step_size is None else self.integrator.step_size
+		elif self.iter_mode is IterationMode.map:
+			return self._dt
 		else:
-			return self.max_step
+			return 1e-3 # TODO
 
 	def system(self, name: str) -> System:
 		return System(self, {name: self})
