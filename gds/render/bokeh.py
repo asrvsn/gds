@@ -38,7 +38,7 @@ class Renderer(ABC):
 				node_palette=cc.fire, edge_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
 				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
-				title=None,
+				title=None, plot_titles=True,
 			):
 		self.canvas: Canvas = canvas
 		self.plots: Dict[PlotID, Plot] = dict()
@@ -55,6 +55,7 @@ class Renderer(ABC):
 		self.plot_height = plot_height
 		self.dynamic_ranges = dynamic_ranges
 		self.title = title
+		self.plot_titles = plot_titles
 		if layout_func is None:
 			def func(G):
 				pos_attr = nx.get_node_attributes(G, 'pos')
@@ -221,12 +222,13 @@ class LiveRenderer(Renderer):
 
 	def draw_plots(self, root):
 		super().draw_plots(root)
-		for plot_id, plot in self.plots.items():
-			names = []
-			for name, obs in self.system.observables.items():
-				if obs.plot_id == plot_id:
-					names.append(name) # Somewhat hacky
-			plot.title.text = ','.join(names)
+		if self.plot_titles:
+			for plot_id, plot in self.plots.items():
+				names = []
+				for name, obs in self.system.observables.items():
+					if obs.plot_id == plot_id:
+						names.append(name) # Somewhat hacky
+				plot.title.text = ','.join(names)
 
 	def step(self, dt: float):
 		self.stepper.step(dt)

@@ -131,6 +131,28 @@ temperature, velocity_x, velocity_y = gds.node_gds(G), gds.node_gds(G), gds.node
 
 Result:
 
+### Example: general incompressible Navier-Stokes
+
+Definition:
+```python
+pressure = node_gds(G)
+velocity = edge_gds(G)
+
+def pressure_f(t, y):
+  return velocity.div(velocity.y/velocity.dt - velocity.advect()) - pressure.laplacian(y)/density + pressure.laplacian(velocity.div()) * viscosity/density
+
+def velocity_f(t, y):
+  return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
+
+pressure.set_evolution(cost=pressure_f) # Enfore pressure kinematic constraint as a convex cost
+velocity.set_evolution(dydt=velocity_f) # Define velocity as a system of ODEs
+
+return pressure, velocity
+```
+Run `python -m gds.examples.fluid`. 
+
+Result:
+
 
 <!-- ROADMAP -->
 ## Roadmap
