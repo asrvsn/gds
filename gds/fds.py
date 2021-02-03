@@ -403,7 +403,7 @@ class coupled_fds(Steppable):
 		# Attach views to state
 		last_index = 0
 		for sys in self.systems[IterationMode.dydt]:
-			sys.view = slice(last_index, sys.y0.size)
+			sys.view = slice(last_index, last_index + sys.y0.size)
 			attach_dyn_props(sys, {'y': lambda sys: self.integrator.y[sys.view], 't': lambda _: self.t})
 			last_index += sys.y0.size
 

@@ -24,7 +24,7 @@ def grid_graph_layout(G: nx.Graph):
 				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
 	return layout
 
-def grid_graph(m: int, n: int, diagonals=False, with_boundaries=False, **kwargs) -> nx.Graph:
+def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
 	if diagonals:
 		for i in range(n-1):
@@ -133,7 +133,7 @@ def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph,
 
 if __name__ == '__main__':
 	# G = lattice45(4, 6)
-	G = grid_graph(10, 10)
+	G = square_lattice(10, 10)
 	G_ = nx.line_graph(G)
 	G__ = nx.line_graph(G_)
 

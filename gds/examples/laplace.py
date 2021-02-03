@@ -1,11 +1,11 @@
 ''' Laplace equation, or steady-state heat heat transfer ''' 
 
 import pdb
-from gds import *
-from gds.utils.graph import *
-from gds.render.bokeh import *
+import gds
+import networkx as nx
+import numpy as np
 
-def sinus_boundary() -> node_gds:
+def sinus_boundary():
 	n = 10
 	G = grid_graph(n, n)
 	eq = node_gds(G, lhs=lambda t, self: self.laplacian())
@@ -16,7 +16,7 @@ def sinus_boundary() -> node_gds:
 	eq.set_constraints(dirichlet=dirichlet)
 	return eq
 
-def sinus_boundary_timevarying() -> node_gds:
+def sinus_boundary_timevarying():
 	n = 10
 	G = grid_graph(n, n)
 	eq = node_gds(G, lhs=lambda t, self: self.laplacian(), gtol=1e-8)
@@ -29,17 +29,17 @@ def sinus_boundary_timevarying() -> node_gds:
 	eq.set_constraints(dirichlet=dirichlet)
 	return eq
 
-def edge_diffusion():
+def edge_diffusion(m, n, constr):
 	# G = lattice45(10, 11)
-	G = nx.triangular_lattice_graph(10, 11)
+	G, (l, r, t, b) = constr(m, n, with_boundaries=True)
 	# G = nx.hexagonal_lattice_graph(10, 11)
 	# G = grid_graph(10, 11, diagonals=True)
-	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
-	v = edge_gds(G, dydt=lambda t, self: self.laplacian())
+	v = gds.edge_gds(G)
+	v.set_evolution(dydt=lambda t, y: v.laplacian(y))
 	def boundary(e):
-		if e in dG_B.edges:
+		if e in b.edges:
 			return 1.0
-		elif e in dG_T.edges:
+		elif e in t.edges:
 			return 0.0
 		return None
 	v.set_constraints(dirichlet=boundary)
@@ -47,13 +47,12 @@ def edge_diffusion():
 
 if __name__ == '__main__':
 	# eq = sinus_boundary_timevarying()
-	eq = edge_diffusion()
-	dual = eq.dual()
+	eq1 = edge_diffusion(10, 21, gds.triangular_lattice)
+	eq2 = edge_diffusion(10, 12, gds.square_lattice)
 
-	sys = System(eq, {
-		'eq': eq,
-		'dual': dual,
+	sys = gds.couple({
+		'Edge diffusion on a triangular lattice': eq1,
+		'Edge diffusion on a square lattice': eq2,
 	})
 
-	renderer = LiveRenderer(sys, grid_canvas([eq, dual]), node_palette=cc.rainbow, node_rng=(-1, 1), node_size=0.03)
-	renderer.start()
+	gds.render(sys)

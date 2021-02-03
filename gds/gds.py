@@ -181,7 +181,7 @@ class edge_gds(gds):
 		TODO: neumann conditions
 		TODO: check curl term?
 		''' 
-		return self.dirichlet_laplacian@self.laplacian(y)
+		return self.laplacian(self.laplacian(y))
 
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None) -> np.ndarray:
 		'''

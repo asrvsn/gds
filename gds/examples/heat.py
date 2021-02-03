@@ -63,21 +63,38 @@ def grid_linear(steady_state=False) -> gds.node_gds:
 	temp.set_constraints(dirichlet=dirichlet)
 	return temp
 
+def heat_test():
+	G = gds.grid_graph(10, 10)
+	temp1 = gds.node_gds(G)
+	x = (5,5)
+	i = temp1.X[x]
+	B = temp1.incidence.copy().todense()
+	B[i][B[i] < 0] = 0
+	temp1.set_evolution(dydt=lambda t, y: -B@B.T@y)
+	temp1.set_initial(y0=lambda n: 1.0 if n == x else 0.0)
+	temp2 = gds.node_gds(G)
+	temp2.set_evolution(dydt=lambda t, y: temp2.laplacian(y))
+	temp2.set_constraints(dirichlet={x: 1.0})
+	return temp1, temp2
+
 if __name__ == '__main__':
 	# Use coupling to visualize multiple PDEs simultaneously
-	p1 = grid_linear(steady_state=True)
-	p3 = grid_sinus_boundary(steady_state=True)	
-	p4 = grid_sinus_boundary(steady_state=True, phi=np.pi/4)
+	# p1 = grid_linear(steady_state=True)
+	# p3 = grid_sinus_boundary(steady_state=True)	
+	# p4 = grid_sinus_boundary(steady_state=True, phi=np.pi/4)
+
+	t1, t2 = heat_test()
 
 	sys = gds.couple({
 		# 'heat0': p1,
-		'heat1': p3,
-		'heat2': p4
+		'heat1': t1,
+		# 'heat2': t2
 	})
 
-	G = nx.random_geometric_graph(200, 0.125)
-	p5 = gds.node_gds(G)
-	p5.set_evolution(dydt=lambda t, y: 10*p5.laplacian())
-	p5.set_constraints({random.randint(0, 200): 1.0 for _ in range(10)})
+	# G = nx.random_geometric_graph(200, 0.125)
+	# p5 = gds.node_gds(G)
+	# p5.set_evolution(dydt=lambda t, y: 10*p5.laplacian())
+	# p5.set_constraints({random.randint(0, 200): 1.0 for _ in range(10)})
 
-	gds.render(p5, title='Diffusion on a random geometric graph')
+	# gds.render(p5, title='Diffusion on a random geometric graph')
+	gds.render(sys, dynamic_ranges=True)
