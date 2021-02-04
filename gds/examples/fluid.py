@@ -36,10 +36,10 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0) -> (node_gds, 
 def compressible_flow(G: nx.Graph, viscosity=1.0) -> (node_gds, edge_gds):
 	raise Exception('Not implemented')
 
-def lagrangian_tracer(velocity: edge_gds, inlets: List[Node]) -> node_gds:
+def lagrangian_tracer(velocity: edge_gds, inlets: List[Node], alpha=1.0) -> node_gds:
 	''' Passive tracer ''' 
 	tracer = node_gds(velocity.G)
-	tracer.set_evolution(dydt=lambda t, y: -tracer.advect(velocity))
+	tracer.set_evolution(dydt=lambda t, y: -alpha*tracer.advect(velocity))
 	tracer.set_constraints(dirichlet={i: 1.0 for i in inlets})
 	return tracer
 
@@ -130,24 +130,27 @@ def lid_driven_cavity(m=14, n=21, v=1.0):
 	pressure.set_constraints(dirichlet={(0, 0): 0.})
 	return pressure, velocity
 
-def von_karman(m=12, n=30, gradP=10.0):
-	G = grid_graph(m, n)
-	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
-	j, k = 6, int(m/2)
+def von_karman():
+	m=20 
+	n=55 
+	gradP=20.0
+	j, k = 4, m//2
 	obstacle = [ # Introduce occlusion
-		(j, k), 
-		(j+1, k-1), (j+1, k), 
-		(j+2, k-1),
+		(j, k), (j+1, k),
+		(j, k+1), (j, k-1),
+		# (j-1, k), 
+		# (j+1, k+1), (j+1, k-1),
+		# (j+1, k-1), (j+1, k), 
+		# (j+2, k-1),
 	]
+	G, (l, r, t, b) = triangular_lattice(m, n, with_boundaries=True)
 	G.remove_nodes_from(obstacle)
-	pressure, velocity = incompressible_flow(G, nx.compose_all([dG_L, dG_R]))
-	def pressure_values(x):
-		if x[0] == 0: return gradP/2
-		if x[0] == n-1: return -gradP/2
-		return None
-	pressure.set_constraints(dirichlet=pressure_values)
-	velocity.set_constraints(dirichlet=no_slip(nx.compose_all([dG_L, dG_T, dG_B])))
-	tracer = lagrangian_tracer(velocity, [(0, 2*i+1) for i in range(int(m/2))])
+	pressure, velocity = incompressible_flow(G, viscosity=0.1)
+	pressure.set_constraints(dirichlet=combine_bcs(
+		{n: gradP/2 for n in l.nodes},
+		{n: -gradP/2 for n in r.nodes}
+	))
+	tracer = lagrangian_tracer(velocity, [n for n in l.nodes if n[1] % 2 == 1], alpha=100.0)
 	return pressure, velocity, tracer
 
 def random_graph():
@@ -182,12 +185,12 @@ def test2():
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	p, v = poiseuille()
+	# p, v = poiseuille()
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v = lid_driven_cavity(v=10.)
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
-	# p, v, t = von_karman(n=50, gradP=20)
+	p, v, t = von_karman()
 	# p, v = couette()
 
 	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
@@ -200,7 +203,7 @@ if __name__ == '__main__':
 		'velocity': v,
 		# 'divergence': d,
 		'mass flux': f,
-		# 'advection': a,
+		'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
@@ -214,11 +217,11 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		[[[p, v]], [[f]]],
-		# [[[d]]],
+		[[[p]], [[v]]],
+		[[[a]], [[f]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
 
-	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, colorbars=False)
+	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=500, y_rng=(-1.1,0.4), colorbars=False)
 	renderer.start()

@@ -36,8 +36,9 @@ class Renderer(ABC):
 	def __init__(self, 
 				canvas: Canvas,
 				node_palette=cc.fire, edge_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
-				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.25, colorbars=True, 
+				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.2, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
+				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
 				title=None, plot_titles=True,
 			):
 		self.canvas: Canvas = canvas
@@ -54,6 +55,7 @@ class Renderer(ABC):
 		self.plot_width = plot_width
 		self.plot_height = plot_height
 		self.dynamic_ranges = dynamic_ranges
+		self.x_rng, self.y_rng = x_rng, y_rng
 		self.title = title
 		self.plot_titles = plot_titles
 		if layout_func is None:
@@ -119,7 +121,7 @@ class Renderer(ABC):
 			layout[i] = v
 		def helper(obs: Observable, plot=None):
 			if plot is None:
-				plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[], width=self.plot_width, height=self.plot_height) 
+				plot = figure(x_range=self.x_rng, y_range=self.y_rng, tooltips=[], width=self.plot_width, height=self.plot_height) 
 				plot.axis.visible = None
 				plot.xgrid.grid_line_color = None
 				plot.ygrid.grid_line_color = None

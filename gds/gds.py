@@ -186,7 +186,7 @@ class edge_gds(gds):
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None) -> np.ndarray:
 		'''
 		Adjoint of scalar advection case.
-		# TODO: does this assume flow is irrotational?
+		# TODO: bias the curl term?
 		# TODO: check application of dirichlet conditions
 		'''
 		if y is None: y=self.y
@@ -195,7 +195,7 @@ class edge_gds(gds):
 			N = M.copy().T
 			M.data[M.data > 0] = 0.
 			M.data *= -1
-			ret = -M@N@y
+			ret = -M@N@y - self.curl3.T@self.curl3@y
 			ret[self.dirichlet_indices] = 0.
 			return ret
 		else:
@@ -207,7 +207,7 @@ class edge_gds(gds):
 			N = M.copy().T
 			M.data[M.data > 0] = 0.
 			M.data *= -1
-			ret = -M@N@y
+			ret = -M@N@y - self.curl3.T@self.curl3@y
 			ret[self.dirichlet_indices] = 0.
 			return ret
 
