@@ -194,7 +194,11 @@ class Renderer(ABC):
 		h = 0.1
 		w = 0.1
 		absy = np.abs(y)
-		magn = np.clip(np.log(1 + absy), a_min=None, a_max=self.edge_max)
+		if self.dynamic_ranges:
+			magn = (self.edge_max / max(absy.max(), 1e-6)) * absy
+		else:
+			# TODO: cleanup
+			magn = np.clip(np.log(1 + absy), a_min=None, a_max=self.edge_max)
 		dx = -np.sign(obs.y) * magn * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
 		dy = obs.layout['m'] * dx
 		p1x = obs.layout['x_mid'] - dx/2
@@ -211,7 +215,7 @@ class Renderer(ABC):
 
 class LiveRenderer(Renderer):
 	''' Simultaneously solves & renders the system ''' 
-	def __init__(self, sys: System, *args, **kwargs):
+	def __init__(self, sys: System, **kwargs):
 		self.system = sys
 		self.stepper = sys.stepper
 		self.stepper.step(0) # Uncover any immediate issues at construction
@@ -220,7 +224,12 @@ class LiveRenderer(Renderer):
 		self.rec_ctr = None
 
 		self.observables = list(sys.observables.values())
-		super().__init__(*args, **kwargs)
+		if 'canvas' in kwargs:
+			canvas = kwargs['canvas']
+			del kwargs['canvas']
+		else:
+			canvas = sys.arrange()
+		super().__init__(canvas, **kwargs)
 
 	def draw_plots(self, root):
 		super().draw_plots(root)

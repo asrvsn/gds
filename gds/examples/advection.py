@@ -1,23 +1,25 @@
 ''' Advection of scalar fields '''
 
 import networkx as nx
-import pdb
+import numpy as np
+import colorcet as cc
+import pdb 
 
-from gds import *
-from gds.render.bokeh import *
-from gds.utils.graph import *
+import gds
 
-def advection(G, v_field) -> (node_gds, edge_gds):
+def advection(G, v_field):
 	flow_diff = np.zeros(len(G.edges()))
-	flow = edge_gds(G, dydt=lambda t, self: flow_diff)
+	flow = gds.edge_gds(G)
+	flow.set_evolution(dydt=lambda t, y: flow_diff)
 	flow.set_initial(y0 = v_field)
-	conc = node_gds(G, dydt=lambda t, self: -self.advect(flow))
+	conc = gds.node_gds(G)
+	conc.set_evolution(dydt=lambda t, y: -conc.advect(flow))
 	return conc, flow
 
 def advection_on_grid():
 	n = 5
-	G = grid_graph(n, n)
-	def v_field(e: Edge):
+	G = gds.square_lattice(n, n)
+	def v_field(e):
 		if e[1][0] >= e[0][0] and e[1][1] >= e[0][1]:
 			return 1
 		else:
@@ -31,7 +33,7 @@ def advection_on_circle():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
-	def v_field(e: Edge):
+	def v_field(e):
 		if e == (n-1, 0) or e == (0, n-1):
 			return -1.0
 		return 1.0
@@ -72,7 +74,8 @@ def vector_advection_circle():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
-	flow = edge_gds(G, dydt=lambda t, self: -self.advect())
+	flow = gds.edge_gds(G)
+	flow.set_evolution(dydt=lambda t, y: -flow.advect())
 	# flow.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	flow.set_initial(y0=lambda e: 1.0 if e == (2, 3) else 0.1)
 	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
@@ -82,18 +85,13 @@ if __name__ == '__main__':
 	''' Scalar field advection ''' 
 
 	# conc, flow = advection_on_grid()
-	# sys = System(couple(conc, flow), {
+	# sys = gds.couple({
 	# 	'conc': conc,
 	# 	'flow': flow,
 	# })
-	# renderer = LiveRenderer(sys, [[[[conc, flow]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
-	# renderer.start()
+	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True)
 
 	''' Vector field advection ''' 
 
 	flow = vector_advection_circle()
-	sys = System(flow, {
-		'flow': flow,
-	})
-	renderer = LiveRenderer(sys, [[[[flow]]]], node_palette=cc.rainbow, node_rng=(-1,1), node_size=0.03)
-	renderer.start()
+	gds.render(flow, dynamic_ranges=True)

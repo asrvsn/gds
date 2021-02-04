@@ -1,5 +1,6 @@
 import numpy as np
 import networkx as nx
+import scipy.sparse as sp
 from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
 
 from .types import *
@@ -122,18 +123,16 @@ class node_gds(gds):
 		return self.dirichlet_laplacian@self.laplacian(y)
 
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
-		# TODO: check application of dirichlet conditions
 		if isinstance(v_field, edge_gds):
 			assert v_field.G is self.G, 'Incompatible domains'
 			v_field = v_field.y
 		if y is None: y=self.y
-		M = self.incidence.multiply(v_field)
-		N = M.copy().T
+		N = self.incidence@sp.diags(np.sign(v_field))
 		N.data[N.data > 0] = 0.
 		N.data *= -1
-		ret = -M@N@y
-		ret[self.dirichlet_indices] = 0.
-		return ret
+		# TODO: check application of dirichlet conditions
+		# ret[self.dirichlet_indices] = 0.
+		return -self.incidence@sp.diags(v_field)@N.T@y
 
 class edge_gds(gds):
 	''' Dynamical system defined on the edges of a graph ''' 
@@ -186,30 +185,26 @@ class edge_gds(gds):
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None) -> np.ndarray:
 		'''
 		Adjoint of scalar advection case.
-		# TODO: bias the curl term?
-		# TODO: check application of dirichlet conditions
 		'''
 		if y is None: y=self.y
-		if v_field is None:
-			M = self.incidence.multiply(y).T
-			N = M.copy().T
-			M.data[M.data > 0] = 0.
-			M.data *= -1
-			ret = -M@N@y - self.curl3.T@self.curl3@y
-			ret[self.dirichlet_indices] = 0.
-			return ret
-		else:
-			if isinstance(v_field, edge_gds):
-				assert v_field.G is self.G, 'Incompatible domains'
-				# Since graphs are identical, orientation is implicitly respected
-				v_field = v_field.y
-			M = self.incidence.multiply(v_field).T
-			N = M.copy().T
-			M.data[M.data > 0] = 0.
-			M.data *= -1
-			ret = -M@N@y - self.curl3.T@self.curl3@y
-			ret[self.dirichlet_indices] = 0.
-			return ret
+		if v_field is None: 
+			v_field = self.y
+		elif isinstance(v_field, edge_gds):
+			assert v_field.G is self.G, 'Incompatible domains'
+			# Since graphs are identical, orientation is implicitly respected
+			v_field = v_field.y
+
+		N = self.incidence@sp.diags(np.sign(v_field))
+		N.data[N.data > 0] = 0.
+		N.data *= -1
+		# TODO: check curl term
+		C = self.curl3@sp.diags(np.sign(v_field))
+		C.data[C.data > 0] = 0.
+		C.data *= -1
+		# TODO: check dirichlet conditions
+		ret = -sp.diags(v_field)@(N.T@self.incidence + C.T@self.curl3)@y 
+		ret[self.dirichlet_indices] = 0.
+		return ret
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-dedge dual graph ''' 

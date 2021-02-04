@@ -1,4 +1,4 @@
-from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
+from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict, List
 from enum import Enum
 from abc import ABC, abstractmethod
 import numpy as np

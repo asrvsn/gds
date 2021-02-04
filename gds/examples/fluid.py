@@ -6,24 +6,25 @@ import colorcet as cc
 import random
 import cvxpy as cp
 
-from gds import *
-from gds.utils import set_seed
-from gds.utils.graph import *
-from gds.utils.boundary import *
-from gds.render.bokeh import *
+from gds.types import *
+import gds
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0) -> (node_gds, edge_gds):
+def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[]) -> (gds.node_gds, gds.edge_gds):
 	''' 
 	G: graph
 	viscosity & density in SI units / 1000
 	''' 
-	pressure = node_gds(G)
-	velocity = edge_gds(G)
+	pressure = gds.node_gds(G)
+	velocity = gds.edge_gds(G)
+	non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
 
 	def pressure_f(t, y):
-		return velocity.div(velocity.y/velocity.dt - velocity.advect()) - pressure.laplacian(y)/density + pressure.laplacian(velocity.div()) * viscosity/density
+		lhs = velocity.div(velocity.y/velocity.dt - velocity.advect()) + pressure.laplacian(velocity.div()) * viscosity/density
+		lhs[non_div_free] = 0.
+		lhs -= pressure.laplacian(y)/density 
+		return lhs
 
 	def velocity_f(t, y):
 		return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
@@ -33,12 +34,12 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0) -> (node_gds, 
 
 	return pressure, velocity
 
-def compressible_flow(G: nx.Graph, viscosity=1.0) -> (node_gds, edge_gds):
+def compressible_flow(G: nx.Graph, viscosity=1.0) -> (gds.node_gds, gds.edge_gds):
 	raise Exception('Not implemented')
 
-def lagrangian_tracer(velocity: edge_gds, inlets: List[Node], alpha=1.0) -> node_gds:
+def lagrangian_tracer(velocity: gds.edge_gds, inlets: List[Node], alpha=1.0) -> gds.node_gds:
 	''' Passive tracer ''' 
-	tracer = node_gds(velocity.G)
+	tracer = gds.node_gds(velocity.G)
 	tracer.set_evolution(dydt=lambda t, y: -alpha*tracer.advect(velocity))
 	tracer.set_constraints(dirichlet={i: 1.0 for i in inlets})
 	return tracer
@@ -46,7 +47,7 @@ def lagrangian_tracer(velocity: edge_gds, inlets: List[Node], alpha=1.0) -> node
 ''' Systems ''' 
 
 def fluid_on_grid():
-	G = grid_graph(10, 10)
+	G = gds.square_lattice(10, 10)
 	i, o = (3,3), (6,6)
 	dG = nx.Graph()
 	dG.add_nodes_from([i, o])
@@ -81,13 +82,13 @@ def poiseuille():
 	gradP=100.0
 	# assert n % 2 == 1
 	# G = lattice45(m, n)
-	G, (l, r, t, b) = triangular_lattice(m, n, with_boundaries=True)
+	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
 	pressure, velocity = incompressible_flow(G, viscosity=100.)
-	pressure.set_constraints(dirichlet=combine_bcs(
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes},
 		{n: -gradP/2 for n in r.nodes}
 	))
-	velocity.set_constraints(dirichlet=combine_bcs(
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		zero_edge_bc(t),
 		zero_edge_bc(b),
 	))
@@ -95,7 +96,7 @@ def poiseuille():
 
 def poiseuille_asymmetric(m=12, n=24, gradP: float=10.0):
 	''' Poiseuille flow with a boundary asymmetry '''
-	G = grid_graph(m, n)
+	G = gds.square_lattice(m, n)
 	k = 6
 	blockage = [
 		(k, m-1), (k, m-2),
@@ -120,10 +121,10 @@ def poiseuille_asymmetric(m=12, n=24, gradP: float=10.0):
 
 def lid_driven_cavity(m=14, n=21, v=1.0):
 	''' Drag-induced flow ''' 
-	G, (l, r, t, b) = grid_graph(m, n, with_boundaries=True)
-	# G, (l, r, t, b) = triangular_lattice(m, n*2, with_boundaries=True)
+	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
+	# G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
 	pressure, velocity = incompressible_flow(G)
-	velocity.set_constraints(dirichlet=combine_bcs(
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		const_edge_bc(t, v),
 		zero_edge_bc(b),
 	))
@@ -133,23 +134,27 @@ def lid_driven_cavity(m=14, n=21, v=1.0):
 def von_karman():
 	m=20 
 	n=55 
-	gradP=20.0
+	gradP=40.0
+	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
 	j, k = 4, m//2
 	obstacle = [ # Introduce occlusion
 		(j, k), (j+1, k),
 		(j, k+1), (j, k-1),
 		# (j-1, k), 
 		# (j+1, k+1), (j+1, k-1),
-		# (j+1, k-1), (j+1, k), 
-		# (j+2, k-1),
 	]
-	G, (l, r, t, b) = triangular_lattice(m, n, with_boundaries=True)
 	G.remove_nodes_from(obstacle)
-	pressure, velocity = incompressible_flow(G, viscosity=0.1)
-	pressure.set_constraints(dirichlet=combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes}
+	G.remove_edges_from(list(nx.edge_boundary(G, l, l)))
+	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
+	pressure, velocity = incompressible_flow(G, viscosity=0.1, inlets=l.nodes, outlets=r.nodes)
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
+		# {n: gradP/2 for n in l.nodes},
+		# {n: -gradP/2 for n in r.nodes}
+		{n: 0. for n in r.nodes}
 	))
+	velocity.set_constraints(dirichlet={
+		((0, i), (1, i)): 10.0 for i in range(m+1)
+	})
 	tracer = lagrangian_tracer(velocity, [n for n in l.nodes if n[1] % 2 == 1], alpha=100.0)
 	return pressure, velocity, tracer
 
@@ -198,11 +203,11 @@ if __name__ == '__main__':
 	f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
 	m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
-	sys = couple({
+	sys = gds.couple({
 		'pressure': p,
 		'velocity': v,
-		# 'divergence': d,
-		'mass flux': f,
+		'divergence': d,
+		# 'mass flux': f,
 		'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
@@ -218,10 +223,8 @@ if __name__ == '__main__':
 
 	canvas = [
 		[[[p]], [[v]]],
-		[[[a]], [[f]]],
+		[[[a]], [[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
-
-	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=500, y_rng=(-1.1,0.4), colorbars=False)
-	renderer.start()
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=500, y_rng=(-1.1,0.4))
