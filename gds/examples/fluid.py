@@ -74,12 +74,15 @@ def differential_inlets():
 	pressure.set_constraints(dirichlet={1: 2.0, 4: 1.0, 6: -2.0})
 	return pressure, velocity
 
-def poiseuille(m=14, n=21, gradP: float=1.0):
+def poiseuille():
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
+	m=14 
+	n=31 
+	gradP=100.0
 	# assert n % 2 == 1
 	# G = lattice45(m, n)
 	G, (l, r, t, b) = triangular_lattice(m, n, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G)
+	pressure, velocity = incompressible_flow(G, viscosity=100.)
 	pressure.set_constraints(dirichlet=combine_bcs(
 		{n: gradP/2 for n in l.nodes},
 		{n: -gradP/2 for n in r.nodes}
@@ -90,7 +93,7 @@ def poiseuille(m=14, n=21, gradP: float=1.0):
 	))
 	return pressure, velocity
 
-def poiseuille_asymmetric(m=12, n=24, gradP: float=1.0):
+def poiseuille_asymmetric(m=12, n=24, gradP: float=10.0):
 	''' Poiseuille flow with a boundary asymmetry '''
 	G = grid_graph(m, n)
 	k = 6
@@ -179,11 +182,11 @@ def test2():
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	# p, v = poiseuille(gradP=10.0)
+	p, v = poiseuille()
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v = lid_driven_cavity(v=10.)
 	# p, v, t = fluid_on_grid()
-	p, v = differential_inlets()
+	# p, v = differential_inlets()
 	# p, v, t = von_karman(n=50, gradP=20)
 	# p, v = couette()
 
@@ -196,7 +199,7 @@ if __name__ == '__main__':
 		'pressure': p,
 		'velocity': v,
 		# 'divergence': d,
-		# 'mass flux': f,
+		'mass flux': f,
 		# 'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
@@ -211,10 +214,11 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		[[[p, v]]], # [[d]]], 
+		[[[p, v]], [[f]]],
+		# [[[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
 
-	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, colorbars=False, plot_titles=False)
+	renderer = LiveRenderer(sys, canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, colorbars=False)
 	renderer.start()
