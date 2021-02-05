@@ -78,7 +78,7 @@ def triangular_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 			if n % 2 == 1:
 				r_nodes += [(n//2+1, i) for i in range(m+1)]
 			else:
-				r_nodes += [(n//2, 2*i) for i in range(m//2)]
+				r_nodes += [(n//2, 2*i) for i in range(m//2+1)]
 			r = G.subgraph([x for x in r_nodes if x in G.nodes])
 			t = G.subgraph([(j, m) for j in range(n)])
 			b = G.subgraph([(j, 0) for j in range(n)])

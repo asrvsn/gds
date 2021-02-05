@@ -148,6 +148,7 @@ class Renderer(ABC):
 					self.prep_layout_data(obs, G, layout)
 					obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
 					self.draw_arrows(obs, obs.y)
+					plot.renderers[0].edge_renderer.data_source.data['value'] = obs.arr_source.data['value']
 					cmap = LinearColorMapper(palette=self.edge_palette, low=self.edge_rng[0], high=self.edge_rng[1])
 					self.edge_cmaps[obs.plot_id] = cmap
 					arrows = Patches(xs='xs', ys='ys', fill_color=field('value', cmap))
@@ -156,8 +157,9 @@ class Renderer(ABC):
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
 					if isinstance(obs, gds):
-						plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
-						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
+						# plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
+						# plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
+						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width=5, line_color=field('value', cmap))
 				else:
 					raise Exception('unknown graph domain.')
 			return plot
@@ -195,7 +197,7 @@ class Renderer(ABC):
 		w = 0.1
 		absy = np.abs(y)
 		if self.dynamic_ranges:
-			magn = (self.edge_max / max(absy.max(), 1e-6)) * absy
+			magn = (self.edge_max / max(np.log(1+absy).max(), 1e-6)) * np.log(1+absy)
 		else:
 			# TODO: cleanup
 			magn = np.clip(np.log(1 + absy), a_min=None, a_max=self.edge_max)
@@ -260,9 +262,10 @@ class LiveRenderer(Renderer):
 						self.node_cmaps[obs.plot_id].high = obs.y.max()
 				elif obs.Gd is GraphDomain.edges:
 					self.draw_arrows(obs, obs.y)
+					self.plots[obs.plot_id].renderers[0].edge_renderer.data_source.data['value'] = obs.arr_source.data['value']
 					if self.dynamic_ranges:
-						self.edge_cmaps[obs.plot_id].low = obs.y.min()
-						self.edge_cmaps[obs.plot_id].high = obs.y.max()
+						self.edge_cmaps[obs.plot_id].low = obs.arr_source.data['value'].min()
+						self.edge_cmaps[obs.plot_id].high = obs.arr_source.data['value'].max()
 		if self.rec_name != None:
 			self.dump_frame()
 
