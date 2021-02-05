@@ -39,6 +39,7 @@ class Renderer(ABC):
 				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.2, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
+				edge_colors=False,
 				title=None, plot_titles=True,
 			):
 		self.canvas: Canvas = canvas
@@ -56,6 +57,7 @@ class Renderer(ABC):
 		self.plot_height = plot_height
 		self.dynamic_ranges = dynamic_ranges
 		self.x_rng, self.y_rng = x_rng, y_rng
+		self.edge_colors = edge_colors
 		self.title = title
 		self.plot_titles = plot_titles
 		if layout_func is None:
@@ -157,9 +159,11 @@ class Renderer(ABC):
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='edge')
 						plot.add_layout(cbar, 'right')
 					if isinstance(obs, gds):
-						# plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
-						# plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
-						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width=5, line_color=field('value', cmap))
+						if self.edge_colors:
+							plot.renderers[0].edge_renderer.glyph = MultiLine(line_width=5, line_color=field('value', cmap))
+						else:
+							plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
+							plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
 				else:
 					raise Exception('unknown graph domain.')
 			return plot

@@ -28,6 +28,26 @@ def advection_on_grid():
 	conc.set_initial(y0 = lambda x: 1.0 if x == (0, 0) else 0.) # delta initial condition
 	return conc, flow
 
+def advection_on_triangles():
+	m, n = 20, 20
+	G = gds.triangular_lattice(m, n*2)
+	def v_field(e):
+		if e[1][0] > e[0][0] and e[0][1] == e[1][1]:
+			return 1.
+		return 0.
+	conc, flow = advection(G, v_field)
+	conc.set_initial(y0 = lambda x: np.exp(-((x[0]-2)**2 + (x[1]-n/2)**2)/15)) 
+	return conc, flow
+
+def advection_on_random_graph():
+	m, n = 20, 20
+	G = nx.random_geometric_graph(100, 0.225)
+	def v_field(e):
+		return np.random.choice([-1., 1.])
+	conc, flow = advection(G, v_field)
+	conc.set_initial(y0 = lambda x: 1.) 
+	return conc, flow
+
 def advection_on_circle():
 	n = 10
 	G = nx.Graph()
@@ -84,14 +104,22 @@ def vector_advection_circle():
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
 
-	# conc, flow = advection_on_grid()
+	# conc, flow = advection_on_triangles()
 	# sys = gds.couple({
 	# 	'conc': conc,
 	# 	'flow': flow,
 	# })
-	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True)
+	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, colorbars=False, plot_height=600, node_size=.05, y_rng=(-1.1,0.8), title='Advection of a Gaussian concentration')
+
+	conc, flow = advection_on_random_graph()
+	sys = gds.couple({
+		'conc': conc,
+		'flow': flow,
+	})
+	gds.render(sys, canvas=[[[[conc, flow]]]], node_rng=(0.5, 1.5), colorbars=False, plot_height=600, node_size=.05, y_rng=(-1.1,1.1), title='Absorbing points of an initially uniform mass')
+
 
 	''' Vector field advection ''' 
 
-	flow = vector_advection_circle()
-	gds.render(flow, dynamic_ranges=True)
+	# flow = vector_advection_circle()
+	# gds.render(flow, dynamic_ranges=True)

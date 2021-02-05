@@ -126,7 +126,7 @@ def lid_driven_cavity():
 	v=200.0
 	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G, inlets=t.nodes, viscosity=5)
+	pressure, velocity = incompressible_flow(G, inlets=t.nodes, viscosity=3)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -233,4 +233,6 @@ if __name__ == '__main__':
 		# [[[m]]],
 	]
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=500, y_rng=(-1.1,0.4))
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04)
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, edge_colors=True)
+
+
