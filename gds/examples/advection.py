@@ -101,6 +101,25 @@ def vector_advection_circle():
 	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
 	return flow
 
+def vector_advection_test(flows=[1,1,1,1,1]):
+	G = nx.Graph()
+	G.add_nodes_from([0, 1, 2, 3, 4, 5])
+	G.add_edges_from([(2, 0), (3, 0), (0, 1), (1, 5), (1, 4)])
+	flow = gds.edge_gds(G)
+	def field(e):
+		ret = 1
+		if e == (0, 2):
+			ret = -1
+		if e == (0, 3):
+			ret = -1
+		return flows[flow.edges[e]] * ret
+	flow.set_evolution(dydt=lambda t, y: np.zeros_like(y))
+	flow.set_initial(y0=field)
+	vel = gds.edge_gds(G)
+	vel.set_evolution(dydt=lambda t, y: -vel.advect(v_field=flow))
+	vel.set_initial(y0=field)
+	return flow, vel
+
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
 
@@ -111,15 +130,29 @@ if __name__ == '__main__':
 	# })
 	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, colorbars=False, plot_height=600, node_size=.05, y_rng=(-1.1,0.8), title='Advection of a Gaussian concentration')
 
-	conc, flow = advection_on_random_graph()
-	sys = gds.couple({
-		'conc': conc,
-		'flow': flow,
-	})
-	gds.render(sys, canvas=[[[[conc, flow]]]], node_rng=(0.5, 1.5), colorbars=False, plot_height=600, node_size=.05, y_rng=(-1.1,1.1), title='Absorbing points of an initially uniform mass')
-
+	# conc, flow = advection_on_random_graph()
+	# sys = gds.couple({
+	# 	'conc': conc,
+	# 	'flow': flow,
+	# })
+	# gds.render(sys, canvas=[[[[conc, flow]]]], node_rng=(0.5, 1.5), colorbars=False, plot_height=600, node_size=.05, y_rng=(-1.1,1.1), title='Absorbing points of an initially uniform mass')
 
 	''' Vector field advection ''' 
 
-	# flow = vector_advection_circle()
-	# gds.render(flow, dynamic_ranges=True)
+	v_1, u_1 = vector_advection_test([1,1,1,1,1])
+	v_2, u_2 = vector_advection_test([1,1,1,1,-1])
+	v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
+	sys = gds.couple({
+		'u_1': u_1,
+		'v_1': v_1,
+		'u_2': u_2,
+		'v_2': v_2,
+		'u_3': u_3,
+		'v_3': v_3,
+	})
+	canvas = [
+		[[[u_1]], [[u_2]], [[u_3]]],
+		[[[v_1]], [[v_2]], [[v_3]]],
+	]
+	# sys.stepper.step(0.01)
+	gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')

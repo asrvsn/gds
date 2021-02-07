@@ -58,6 +58,17 @@ class gds(fds, GraphObservable):
 		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
 		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights)) # |V| x |E| incidence
 
+		# Edge-edge adjacency matrix
+		def edge_incidence_func(e_i, e_j):
+			if e_i == e_j:
+				return 0.
+			elif e_i[1] in e_j:
+				return 1.
+			elif e_i[0] in e_j:
+				return -1.
+			return 0.
+		self.edge_incidence = sparse_product(self.edges.keys(), self.edges.keys(), edge_incidence_func)		
+
 		# Operators
 		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
 		self.edge_laplacian = -self.incidence.T@self.incidence # |E| x |E| laplacian operator
@@ -123,6 +134,9 @@ class node_gds(gds):
 		return self.dirichlet_laplacian@self.laplacian(y)
 
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
+		'''
+		Transportation of a scalar field.
+		'''
 		if isinstance(v_field, edge_gds):
 			assert v_field.G is self.G, 'Incompatible domains'
 			v_field = v_field.y
@@ -184,7 +198,7 @@ class edge_gds(gds):
 
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None) -> np.ndarray:
 		'''
-		Adjoint of scalar advection case.
+		Transportation of a vector field.
 		'''
 		if y is None: y=self.y
 		if v_field is None: 
@@ -194,17 +208,43 @@ class edge_gds(gds):
 			# Since graphs are identical, orientation is implicitly respected
 			v_field = v_field.y
 
-		N = self.incidence@sp.diags(np.sign(v_field))
-		N.data[N.data > 0] = 0.
-		N.data *= -1
-		# TODO: check curl term
-		C = self.curl3@sp.diags(np.sign(v_field))
-		C.data[C.data > 0] = 0.
-		C.data *= -1
-		# TODO: check dirichlet conditions
-		ret = -sp.diags(v_field)@(N.T@self.incidence + C.T@self.curl3)@y 
-		ret[self.dirichlet_indices] = 0.
-		return ret
+		# N = self.incidence@sp.diags(np.sign(v_field))
+		# N.data[N.data > 0] = 0.
+		# N.data *= -1
+		# # TODO: check dirichlet conditions
+		# ret = -self.incidence.T@N@y 
+		# ret[self.dirichlet_indices] = 0.
+		# return ret
+
+		# A = sp.diags(np.sign(v_field))@self.edge_incidence
+		# A.data[A.data > 0] = 0.
+		# A.data *= -1
+		# pdb.set_trace()
+		# return sp.diags(np.abs(v_field))@A@y
+
+		ret = np.zeros_like(y)
+		for i in range(ret.size):
+			for j in range(ret.size):
+				if i != j:
+					e_i, e_j = self.edges_i[i], self.edges_i[j]
+					v_i, v_j = v_field[i], v_field[j]
+					y_i, y_j = y[i], y[j]
+					if v_i < 0:
+						e_i = (e_i[1], e_i[0])
+						v_i *= -1
+						y_i *= -1
+					if v_j < 0:
+						e_j = (e_j[1], e_j[0])
+						v_j *= -1
+						y_j *= -1
+
+					if e_j[1] == e_i[0]:
+						ret[i] += v_j * y_j * np.sign(v_field[i])
+					if e_i[1] == e_j[0]:
+						ret[i] -= v_j * y_i * np.sign(v_field[i])
+
+		# pdb.set_trace()
+		return -ret
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-dedge dual graph ''' 
