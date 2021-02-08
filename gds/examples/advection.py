@@ -4,6 +4,8 @@ import networkx as nx
 import numpy as np
 import colorcet as cc
 import pdb 
+import cProfile
+import pstats
 
 import gds
 
@@ -116,7 +118,7 @@ def vector_advection_test(flows=[1,1,1,1,1], **kwargs):
 	flow.set_evolution(dydt=lambda t, y: np.zeros_like(y))
 	flow.set_initial(y0=field)
 	obs = gds.edge_gds(G)
-	obs.set_evolution(dydt=lambda t, y: -obs.advect(v_field=flow, **kwargs))
+	obs.set_evolution(dydt=lambda t, y: -obs.advect(**kwargs))
 	obs.set_initial(y0=field)
 	return flow, obs
 
@@ -157,7 +159,11 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	vector_advection_test_suite()
+	# vector_advection_test_suite()
+
+	cProfile.run('vector_advection_test_suite()', 'out.prof')
+	prof = pstats.Stats('out.prof')
+	prof.sort_stats('time').print_stats(40)
 
 	# v_1, u_1 = vector_advection_test([1,1,1,1,1])
 	# v_2, u_2 = vector_advection_test([1,1,1,1,-1])

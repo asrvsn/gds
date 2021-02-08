@@ -223,6 +223,7 @@ class edge_gds(gds):
 			c = Bi.multiply(Bi.multiply(Bj)).sum(0)
 			c[c<0] = 0
 			A[ix, jx] = c
+			A.eliminate_zeros()
 
 			V = sp.diags(v_field*s)
 			Y = sp.diags(y*s)
