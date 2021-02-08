@@ -60,7 +60,7 @@ class gds(fds, GraphObservable):
 		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights)) # |V| x |E| incidence
 
 		# Edge-edge adjacency matrix
-		def edge_incidence_func(e_i, e_j):
+		def edge_adj_func(e_i, e_j):
 			if e_i == e_j:
 				return 0.
 			elif e_i[0] == e_j[0] or e_i[1] == e_j[1]:
@@ -68,7 +68,7 @@ class gds(fds, GraphObservable):
 			elif e_i[1] == e_j[0] or e_i[0] == e_j[1]:
 				return 1.
 			return 0.
-		self.edge_incidence = sparse_product(self.edges.keys(), self.edges.keys(), edge_incidence_func)		
+		self.edge_adj = sparse_product(self.edges.keys(), self.edges.keys(), edge_adj_func)	
 
 		# Operators
 		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
@@ -233,23 +233,34 @@ class edge_gds(gds):
 		ret = (ret_in - ret_out) * np.sign(v_field)
 
 		s = np.sign(v_field)
-		V = np.diag(v_field)
-		S = np.diag(s)
-		Y = np.diag(y)
-		A = S@self.edge_incidence.todense()@V
-		A[A < 0] = 0
-		A = np.tril(A)
-		ret_ = (Y@A).sum(1) - (A.T@Y).sum(1)
+		S = sp.diags(s)
+
+		A = S@self.edge_adj@S
+		A.data[A.data < 0] = 0
+		# A_ = sp.tril(A).tocsr()
+		ix, jx = A.nonzero()
+		B = self.incidence@S
+		Bi, Bj = B[:, ix], B[:, jx]
+		c = Bi.multiply(Bi.multiply(Bj)).sum(0)
+		c[c<0] = 0
+		A[ix, jx] = c
+
+		V = sp.diags(v_field*s)
+		Y = sp.diags(y*s)
+
+		A = A@V
+		ret_ = np.asarray((A@Y).sum(1) - ((Y@A).T).sum(1)).ravel()
 		ret_ *= s
+
+		# pdb.set_trace()
 		# return -ret_
 
-		# try:
-		# 	assert (ret == ret_).all()
-		# except:
-		# 	print('failed')
-		# 	pdb.set_trace()
+		try:
+			assert (ret == ret_).all()
+		except:
+			print('failed')
+			pdb.set_trace()
 
-		pdb.set_trace()
 
 		return -ret
 

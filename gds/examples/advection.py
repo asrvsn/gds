@@ -139,14 +139,14 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	# for _ in range(1000):
-	# 	v_field = [np.random.choice([-1, 1]) for _ in range(5)]
-	# 	v, u = vector_advection_test(v_field)
-	# 	u.advect(v_field=v)
+	for _ in range(1000):
+		v_field = [np.random.choice([-1, 1]) for _ in range(5)]
+		v, u = vector_advection_test(v_field)
+		u.advect(v_field=v)
 
-	v_field = [1,1,1,1,-1]
-	v, u = vector_advection_test(v_field)
-	u.advect(v_field=v)
+	# v_field = [-1,1,1,1,-1]
+	# v, u = vector_advection_test(v_field)
+	# u.advect(v_field=v)
 
 	# v_field = [np.random.uniform(-1, 1) for _ in range(5)]
 	# v_1, u_1 = vector_advection_test(v_field)
