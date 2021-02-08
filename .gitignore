@@ -4,3 +4,4 @@ dist
 *.egg-info
 __pyache__/
 recordings/
+.DS_Store

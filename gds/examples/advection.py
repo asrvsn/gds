@@ -115,10 +115,10 @@ def vector_advection_test(flows=[1,1,1,1,1]):
 		return flows[flow.edges[e]] * ret
 	flow.set_evolution(dydt=lambda t, y: np.zeros_like(y))
 	flow.set_initial(y0=field)
-	vel = gds.edge_gds(G)
-	vel.set_evolution(dydt=lambda t, y: -vel.advect(v_field=flow))
-	vel.set_initial(y0=field)
-	return flow, vel
+	obs = gds.edge_gds(G)
+	obs.set_evolution(dydt=lambda t, y: -obs.advect(v_field=flow))
+	obs.set_initial(y0=field)
+	return flow, obs
 
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
@@ -139,20 +139,31 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	v_1, u_1 = vector_advection_test([1,1,1,1,1])
-	v_2, u_2 = vector_advection_test([1,1,1,1,-1])
-	v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
-	sys = gds.couple({
-		'u_1': u_1,
-		'v_1': v_1,
-		'u_2': u_2,
-		'v_2': v_2,
-		'u_3': u_3,
-		'v_3': v_3,
-	})
-	canvas = [
-		[[[u_1]], [[u_2]], [[u_3]]],
-		[[[v_1]], [[v_2]], [[v_3]]],
-	]
-	# sys.stepper.step(0.01)
-	gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
+	# for _ in range(1000):
+	# 	v_field = [np.random.choice([-1, 1]) for _ in range(5)]
+	# 	v, u = vector_advection_test(v_field)
+	# 	u.advect(v_field=v)
+
+	v_field = [1,1,1,1,-1]
+	v, u = vector_advection_test(v_field)
+	u.advect(v_field=v)
+
+	# v_field = [np.random.uniform(-1, 1) for _ in range(5)]
+	# v_1, u_1 = vector_advection_test(v_field)
+	# v_1, u_1 = vector_advection_test([1,1,1,1,1])
+	# v_2, u_2 = vector_advection_test([1,1,1,1,-1])
+	# v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
+	# sys = gds.couple({
+	# 	'u_1': u_1,
+	# 	'v_1': v_1,
+	# 	'u_2': u_2,
+	# 	'v_2': v_2,
+	# 	'u_3': u_3,
+	# 	'v_3': v_3,
+	# })
+	# canvas = [
+	# 	[[[u_1]], [[u_2]], [[u_3]]],
+	# 	[[[v_1]], [[v_2]], [[v_3]]],
+	# ]
+	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
+	# gds.render(sys, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')

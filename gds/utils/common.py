@@ -52,6 +52,7 @@ def dict_fun(m: Dict, def_val: Any=None) -> Callable:
 	return lambda x: m[x] if x in m else def_val
 
 def sparse_product(X: Iterable[Any], Y: Iterable[Any], fun: Callable[[Any, Any], float]) -> coo_matrix:
+	X, Y = list(X), list(Y)
 	data = dok_matrix((len(X), len(Y)))
 	for r, x in enumerate(X):
 		for c, y in enumerate(Y):

@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 import scipy.sparse as sp
 from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
+import itertools
 
 from .types import *
 from .fds import *
@@ -62,10 +63,10 @@ class gds(fds, GraphObservable):
 		def edge_incidence_func(e_i, e_j):
 			if e_i == e_j:
 				return 0.
-			elif e_i[1] in e_j:
-				return 1.
-			elif e_i[0] in e_j:
+			elif e_i[0] == e_j[0] or e_i[1] == e_j[1]:
 				return -1.
+			elif e_i[1] == e_j[0] or e_i[0] == e_j[1]:
+				return 1.
 			return 0.
 		self.edge_incidence = sparse_product(self.edges.keys(), self.edges.keys(), edge_incidence_func)		
 
@@ -208,21 +209,8 @@ class edge_gds(gds):
 			# Since graphs are identical, orientation is implicitly respected
 			v_field = v_field.y
 
-		# N = self.incidence@sp.diags(np.sign(v_field))
-		# N.data[N.data > 0] = 0.
-		# N.data *= -1
-		# # TODO: check dirichlet conditions
-		# ret = -self.incidence.T@N@y 
-		# ret[self.dirichlet_indices] = 0.
-		# return ret
-
-		# A = sp.diags(np.sign(v_field))@self.edge_incidence
-		# A.data[A.data > 0] = 0.
-		# A.data *= -1
-		# pdb.set_trace()
-		# return sp.diags(np.abs(v_field))@A@y
-
 		ret = np.zeros_like(y)
+		ret_in, ret_out = np.zeros_like(y), np.zeros_like(y)
 		for i in range(ret.size):
 			for j in range(ret.size):
 				if i != j:
@@ -239,11 +227,30 @@ class edge_gds(gds):
 						y_j *= -1
 
 					if e_j[1] == e_i[0]:
-						ret[i] += v_j * y_j * np.sign(v_field[i])
+						ret_in[i] += v_j * y_j 
 					if e_i[1] == e_j[0]:
-						ret[i] -= v_j * y_i * np.sign(v_field[i])
+						ret_out[i] += v_j * y_i 
+		ret = (ret_in - ret_out) * np.sign(v_field)
 
-		# pdb.set_trace()
+		s = np.sign(v_field)
+		V = np.diag(v_field)
+		S = np.diag(s)
+		Y = np.diag(y)
+		A = S@self.edge_incidence.todense()@V
+		A[A < 0] = 0
+		A = np.tril(A)
+		ret_ = (Y@A).sum(1) - (A.T@Y).sum(1)
+		ret_ *= s
+		# return -ret_
+
+		# try:
+		# 	assert (ret == ret_).all()
+		# except:
+		# 	print('failed')
+		# 	pdb.set_trace()
+
+		pdb.set_trace()
+
 		return -ret
 
 	def vertex_dual(self) -> GraphObservable:
