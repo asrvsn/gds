@@ -197,7 +197,7 @@ class edge_gds(gds):
 		''' 
 		return self.laplacian(self.laplacian(y))
 
-	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None) -> np.ndarray:
+	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, check=False) -> np.ndarray:
 		'''
 		Transportation of a vector field.
 		'''
@@ -209,60 +209,61 @@ class edge_gds(gds):
 			# Since graphs are identical, orientation is implicitly respected
 			v_field = v_field.y
 
-		ret = np.zeros_like(y)
-		ret_in, ret_out = np.zeros_like(y), np.zeros_like(y)
-		for i in range(ret.size):
-			for j in range(ret.size):
-				if i != j:
-					e_i, e_j = self.edges_i[i], self.edges_i[j]
-					v_i, v_j = v_field[i], v_field[j]
-					y_i, y_j = y[i], y[j]
-					if v_i < 0:
-						e_i = (e_i[1], e_i[0])
-						v_i *= -1
-						y_i *= -1
-					if v_j < 0:
-						e_j = (e_j[1], e_j[0])
-						v_j *= -1
-						y_j *= -1
+		if vectorized:
+			s = np.sign(v_field)
+			S = sp.diags(s)
 
-					if e_j[1] == e_i[0]:
-						ret_in[i] += v_j * y_j 
-					if e_i[1] == e_j[0]:
-						ret_out[i] += v_j * y_i 
-		ret = (ret_in - ret_out) * np.sign(v_field)
+			A = S@self.edge_adj@S
+			A.data[A.data < 0] = 0
+			A.eliminate_zeros()
+			# A_ = sp.tril(A).tocsr()
+			ix, jx = A.nonzero()
+			B = self.incidence@S
+			Bi, Bj = B[:, ix], B[:, jx]
+			c = Bi.multiply(Bi.multiply(Bj)).sum(0)
+			c[c<0] = 0
+			A[ix, jx] = c
 
-		s = np.sign(v_field)
-		S = sp.diags(s)
+			V = sp.diags(v_field*s)
+			Y = sp.diags(y*s)
 
-		A = S@self.edge_adj@S
-		A.data[A.data < 0] = 0
-		# A_ = sp.tril(A).tocsr()
-		ix, jx = A.nonzero()
-		B = self.incidence@S
-		Bi, Bj = B[:, ix], B[:, jx]
-		c = Bi.multiply(Bi.multiply(Bj)).sum(0)
-		c[c<0] = 0
-		A[ix, jx] = c
+			A = A@V
+			ret = np.asarray((A@Y).sum(1) - ((Y@A).T).sum(1)).ravel()
+			ret *= -s
 
-		V = sp.diags(v_field*s)
-		Y = sp.diags(y*s)
+			if check:
+				ret_ = self.advect(v_field=v_field, y=y, vectorized=False)
+				try:
+					assert (ret_ == ret).all()
+				except:
+					print('Advection check failed')
+					pdb.set_trace()
+			return ret
+		else:
+			''' Non-vectorized version, for debugging purposes ''' 
+			ret = np.zeros_like(y)
+			ret_in, ret_out = np.zeros_like(y), np.zeros_like(y)
+			for i in range(ret.size):
+				for j in range(ret.size):
+					if i != j:
+						e_i, e_j = self.edges_i[i], self.edges_i[j]
+						v_i, v_j = v_field[i], v_field[j]
+						y_i, y_j = y[i], y[j]
+						if v_i < 0:
+							e_i = (e_i[1], e_i[0])
+							v_i *= -1
+							y_i *= -1
+						if v_j < 0:
+							e_j = (e_j[1], e_j[0])
+							v_j *= -1
+							y_j *= -1
 
-		A = A@V
-		ret_ = np.asarray((A@Y).sum(1) - ((Y@A).T).sum(1)).ravel()
-		ret_ *= s
-
-		# pdb.set_trace()
-		# return -ret_
-
-		try:
-			assert (ret == ret_).all()
-		except:
-			print('failed')
-			pdb.set_trace()
-
-
-		return -ret
+						if e_j[1] == e_i[0]:
+							ret_in[i] += v_j * y_j 
+						if e_i[1] == e_j[0]:
+							ret_out[i] += v_j * y_i 
+			ret = (ret_in - ret_out) * np.sign(v_field)
+			return -ret
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-dedge dual graph ''' 

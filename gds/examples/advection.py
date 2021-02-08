@@ -116,7 +116,7 @@ def vector_advection_test(flows=[1,1,1,1,1]):
 	flow.set_evolution(dydt=lambda t, y: np.zeros_like(y))
 	flow.set_initial(y0=field)
 	obs = gds.edge_gds(G)
-	obs.set_evolution(dydt=lambda t, y: -obs.advect(v_field=flow))
+	obs.set_evolution(dydt=lambda t, y: -obs.advect(v_field=flow, check=True))
 	obs.set_initial(y0=field)
 	return flow, obs
 
@@ -139,14 +139,16 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
+	# Test 1
 	for _ in range(1000):
-		v_field = [np.random.choice([-1, 1]) for _ in range(5)]
+		v_field = [np.random.uniform(-1, 1) for _ in range(5)]
 		v, u = vector_advection_test(v_field)
-		u.advect(v_field=v)
+		u.advect(v_field=v, check=True)
 
-	# v_field = [-1,1,1,1,-1]
-	# v, u = vector_advection_test(v_field)
-	# u.advect(v_field=v)
+	# Test 2
+	v_field = [-1,1,1,1,-1]
+	v, u = vector_advection_test(v_field)
+	u.step(1.0)
 
 	# v_field = [np.random.uniform(-1, 1) for _ in range(5)]
 	# v_1, u_1 = vector_advection_test(v_field)
