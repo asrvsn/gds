@@ -101,7 +101,7 @@ def vector_advection_circle():
 	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
 	return flow
 
-def vector_advection_test(flows=[1,1,1,1,1]):
+def vector_advection_test(flows=[1,1,1,1,1], **kwargs):
 	G = nx.Graph()
 	G.add_nodes_from([0, 1, 2, 3, 4, 5])
 	G.add_edges_from([(2, 0), (3, 0), (0, 1), (1, 5), (1, 4)])
@@ -116,9 +116,27 @@ def vector_advection_test(flows=[1,1,1,1,1]):
 	flow.set_evolution(dydt=lambda t, y: np.zeros_like(y))
 	flow.set_initial(y0=field)
 	obs = gds.edge_gds(G)
-	obs.set_evolution(dydt=lambda t, y: -obs.advect(v_field=flow, check=True))
+	obs.set_evolution(dydt=lambda t, y: -obs.advect(v_field=flow, **kwargs))
 	obs.set_initial(y0=field)
 	return flow, obs
+
+def vector_advection_test_suite():
+	# Test 1a
+	for _ in range(1000):
+		v_field = [np.random.choice([-1, 1]) for _ in range(5)]
+		v, u = vector_advection_test(v_field)
+		u.advect(v_field=v, check=True)
+
+	# Test 1b
+	for _ in range(1000):
+		v_field = [np.random.uniform(-1, 1) for _ in range(5)]
+		v, u = vector_advection_test(v_field)
+		u.advect(v_field=v, check=True)
+
+	# Test 2
+	v_field = [1,1,1,1,1]
+	v, u = vector_advection_test(v_field, check=True)
+	u.step(1.0)
 
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
@@ -139,19 +157,8 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	# Test 1
-	for _ in range(1000):
-		v_field = [np.random.uniform(-1, 1) for _ in range(5)]
-		v, u = vector_advection_test(v_field)
-		u.advect(v_field=v, check=True)
+	vector_advection_test_suite()
 
-	# Test 2
-	v_field = [-1,1,1,1,-1]
-	v, u = vector_advection_test(v_field)
-	u.step(1.0)
-
-	# v_field = [np.random.uniform(-1, 1) for _ in range(5)]
-	# v_1, u_1 = vector_advection_test(v_field)
 	# v_1, u_1 = vector_advection_test([1,1,1,1,1])
 	# v_2, u_2 = vector_advection_test([1,1,1,1,-1])
 	# v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
@@ -165,7 +172,6 @@ if __name__ == '__main__':
 	# })
 	# canvas = [
 	# 	[[[u_1]], [[u_2]], [[u_3]]],
-	# 	[[[v_1]], [[v_2]], [[v_3]]],
+	# 	[[[v_1]], [[v_2]], [[u_3]]],
 	# ]
 	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
-	# gds.render(sys, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')

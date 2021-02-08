@@ -227,8 +227,7 @@ class edge_gds(gds):
 			V = sp.diags(v_field*s)
 			Y = sp.diags(y*s)
 
-			A = A@V
-			ret = np.asarray((A@Y).sum(1) - ((Y@A).T).sum(1)).ravel()
+			ret = np.asarray((A@V@Y).sum(1) - (Y@A.T@V).sum(1)).ravel()
 			ret *= -s
 
 			if check:
