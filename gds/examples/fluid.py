@@ -137,13 +137,13 @@ def lid_driven_cavity():
 	return pressure, velocity
 
 def von_karman():
-	m=24 
-	n=77 
+	m=46 
+	n=97 
 	# gradP=1000.0
 	inlet_v = 10.0
 	outlet_p = 0.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	j, k = 8, m//2
+	j, k = 10, m//2
 	# Introduce occlusion
 	obstacle = [ 
 		(j, k), 

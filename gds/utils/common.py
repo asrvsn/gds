@@ -7,6 +7,7 @@ from functools import reduce
 from inspect import signature
 from itertools import chain
 import datetime
+import pdb
 
 def set_seed(seed=None):
 	random.seed(seed)
@@ -55,14 +56,20 @@ def dict_fun(m: Dict, def_val: Any=None) -> Callable:
 	return lambda x: m[x] if x in m else def_val
 
 def sparse_product(X: Iterable[Any], Y: Iterable[Any], fun: Callable[[Any, Any], float]) -> coo_matrix:
-	X, Y = list(X), list(Y)
-	data = dok_matrix((len(X), len(Y)))
+	xi, yi, vals = [], [], []
+	m, n = 0, 0
 	for r, x in enumerate(X):
+		m += 1
 		for c, y in enumerate(Y):
+			if r == 0:
+				n += 1
 			v = fun(x, y)
-			if v is not None:
-				data[r, c] = v
-	return data.tocoo()
+			if v != None and v != 0:
+				xi.append(r)
+				yi.append(c)
+				vals.append(v)
+	data = coo_matrix((vals, (xi, yi)), shape=(m, n))
+	return data
 
 def oneof(xs: List[bool]):
 	return reduce(lambda x, y: x ^ y, xs)

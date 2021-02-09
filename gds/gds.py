@@ -57,18 +57,7 @@ class gds(fds, GraphObservable):
 
 		# Orientation / incidence
 		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
-		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights)) # |V| x |E| incidence
-
-		# Edge-edge adjacency matrix
-		def edge_adj_func(e_i, e_j):
-			if e_i == e_j:
-				return 0.
-			elif e_i[0] == e_j[0] or e_i[1] == e_j[1]:
-				return -1.
-			elif e_i[1] == e_j[0] or e_i[0] == e_j[1]:
-				return 1.
-			return 0.
-		self.edge_adj = sparse_product(self.edges.keys(), self.edges.keys(), edge_adj_func)	
+		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights)).tocsr() # |V| x |E| incidence
 
 		# Operators
 		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
@@ -78,14 +67,6 @@ class gds(fds, GraphObservable):
 		elif Gd is GraphDomain.edges:
 			self.dirichlet_laplacian = self.edge_laplacian
 		self.neumann_correction = np.zeros(self.ndim)	
-		def curl_element(tri, edge):
-			if edge[0] in tri and edge[1] in tri:
-				c = np.sqrt(self.weights[self.edges[edge]])
-				if edge == (tri[0], tri[1]) or edge == (tri[1], tri[2]) or edge == (tri[2], tri[0]): # Orientation of triangle
-					return c
-				return -c
-			return 0
-		self.curl3 = sparse_product(self.triangles.keys(), self.edges.keys(), curl_element) # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
 
 		fds.__init__(self, self.X)
 
@@ -152,6 +133,28 @@ class edge_gds(gds):
 	''' Dynamical system defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
 		gds.__init__(self, G, GraphDomain.edges, *args, **kwargs)
+
+		''' Additional operators '''
+
+		# Edge-edge adjacency matrix
+		def edge_adj_func(e_i, e_j):
+			if e_i == e_j:
+				return 0
+			elif e_i[0] == e_j[0] or e_i[1] == e_j[1]:
+				return -1
+			elif e_i[1] == e_j[0] or e_i[0] == e_j[1]:
+				return 1
+			return 0
+		self.edge_adj = sparse_product(self.edges.keys(), self.edges.keys(), edge_adj_func).tocsr() # |E| x |E| edge adjacency matrix
+
+		def curl_element(tri, edge):
+			if edge[0] in tri and edge[1] in tri:
+				c = np.sqrt(self.weights[self.edges[edge]])
+				if edge == (tri[0], tri[1]) or edge == (tri[1], tri[2]) or edge == (tri[2], tri[0]): # Orientation of triangle
+					return c
+				return -c
+			return 0
+		self.curl3 = sparse_product(self.triangles.keys(), self.edges.keys(), curl_element).tocsr() # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
 
 	def __call__(self, x: Edge):
 		return self.orientation[x] * self.y[self.X[x]]
