@@ -90,6 +90,7 @@ class gds(fds, GraphObservable):
 		fds.__init__(self, self.X)
 
 	def set_constraints(self, *args, **kwargs):
+		# TODO: better way to handle constraints on >=1-dimensional objects (need to detect alternating signs)
 		fds.set_constraints(self, *args, **kwargs)
 
 		if self.Gd is GraphDomain.nodes:
@@ -145,8 +146,6 @@ class node_gds(gds):
 		N = self.incidence@sp.diags(np.sign(v_field))
 		N.data[N.data > 0] = 0.
 		N.data *= -1
-		# TODO: check application of dirichlet conditions
-		# ret[self.dirichlet_indices] = 0.
 		return -self.incidence@sp.diags(v_field)@N.T@y
 
 class edge_gds(gds):
@@ -185,7 +184,6 @@ class edge_gds(gds):
 		''' Vector laplacian or discrete Helmholtz operator or Hodge-1 laplacian
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
-		TODO: check curl term?
 		''' 
 		if y is None: y=self.y
 		return self.dirichlet_laplacian@y - self.curl3.T@self.curl3@y
@@ -267,7 +265,7 @@ class edge_gds(gds):
 			return -ret
 
 	def vertex_dual(self) -> GraphObservable:
-		''' View the vertex-dedge dual graph ''' 
+		''' View the vertex-edge dual graph ''' 
 		G_ = nx.line_graph(self.G)
 		edge_map = np.array([self.X[e] for e in G_.nodes], dtype=np.intp)
 		class DualGraphObservable(GraphObservable):
@@ -279,6 +277,10 @@ class edge_gds(gds):
 				return self.t
 		return DualGraphObservable(G_, GraphDomain.nodes)
 
-class face_gds(gds):
-	''' Dynamical system defined on the faces of a graph ''' 
+class triangle_gds(gds):
+	''' Dynamical system defined on 3-cliques of a graph ''' 
+	pass
+
+class tet_gds(gds):
+	''' Dynamical system defined on k-cliques of a graph ''' 
 	pass		
