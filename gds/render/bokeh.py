@@ -11,6 +11,7 @@ from multiprocessing import Process
 import networkx as nx
 import os.path
 import cloudpickle
+import random
 
 from bokeh.core.properties import field
 from bokeh.plotting import figure, from_networkx
@@ -324,7 +325,7 @@ class StaticRenderer(Renderer):
 ''' Server ''' 
 
 host = 'localhost'
-port = 8080
+port = random.randint(1000,10000)
 
 def render_bokeh(renderer: Renderer):
 	''' Render as a Bokeh web app ''' 

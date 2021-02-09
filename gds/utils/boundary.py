@@ -19,7 +19,7 @@ def zero_edge_bc(dG: nx.Graph) -> BoundaryCondition:
 	return const_edge_bc(dG, 0.)
 
 def combine_bcs(*bcs: Tuple[BoundaryCondition]) -> BoundaryCondition:
-	bcs = [dict_fun(bc) if type(bc) is dict else bc for bc in bcs]
+	bcs = [dict_fun(bc) if isinstance(bc, dict) else bc for bc in bcs]
 	x_bcs = [bc for bc in bcs if fun_ary(bc) == 1]
 	tx_bcs = [bc for bc in bcs if fun_ary(bc) == 2]
 	if len(tx_bcs) > 0:

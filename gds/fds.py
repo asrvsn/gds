@@ -180,9 +180,9 @@ class fds(Observable, Steppable):
 			neumann: BoundaryCondition={},
 			project: Callable[[np.ndarray], np.ndarray]=lambda x: x,
 		):
-		if type(dirichlet) is dict:
+		if isinstance(dirichlet, dict):
 			dirichlet = dict_fun(dirichlet)
-		if type(neumann) is dict:
+		if isinstance(neumann, dict):
 			neumann = dict_fun(neumann)
 		self.dirichlet_fun = dirichlet
 		self.neumann_fun = neumann
@@ -275,7 +275,7 @@ class fds(Observable, Steppable):
 	def rebuild_cvx(self):
 		_cost = self.cost_fun(self._t_prb, self._y_prb)
 		if _cost.shape != (): # Cost is not scalar
-			_cost = cp.sum(cp.abs(_cost))
+			_cost = cp.sum_squares(_cost)
 		# assert _cost.is_dcp(), 'Problem is not disciplined-convex'
 		self._prb = cp.Problem(cp.Minimize(_cost), self._prb.constraints)
 

@@ -89,8 +89,8 @@ def poiseuille():
 		{n: -gradP/2 for n in r.nodes}
 	))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		zero_edge_bc(t),
-		zero_edge_bc(b),
+		gds.zero_edge_bc(t),
+		gds.zero_edge_bc(b),
 	))
 	return pressure, velocity
 
@@ -121,12 +121,12 @@ def poiseuille_asymmetric(m=12, n=24, gradP: float=10.0):
 
 def lid_driven_cavity():
 	''' Drag-induced flow ''' 
-	m=20
-	n=21
-	v=200.0
+	m=19
+	n=19
+	v=50.0
 	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G, inlets=t.nodes, viscosity=3)
+	pressure, velocity = incompressible_flow(G, viscosity=1.0)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -137,29 +137,39 @@ def lid_driven_cavity():
 	return pressure, velocity
 
 def von_karman():
-	m=20 
-	n=55 
-	gradP=40.0
+	m=24 
+	n=77 
+	# gradP=1000.0
+	inlet_v = 10.0
+	outlet_p = 0.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	j, k = 4, m//2
-	obstacle = [ # Introduce occlusion
-		(j, k), (j+1, k),
-		(j, k+1), (j, k-1),
+	j, k = 8, m//2
+	# Introduce occlusion
+	obstacle = [ 
+		(j, k), 
+		(j+1, k),
+		(j, k+1), 
+		(j, k-1),
 		# (j-1, k), 
 		# (j+1, k+1), (j+1, k-1),
 	]
+	obstacle_boundary = gds.utils.flatten([G.neighbors(n) for n in obstacle])
+	obstacle_boundary = list(nx.edge_boundary(G, obstacle_boundary, obstacle_boundary))
+	# pdb.set_trace()
 	G.remove_nodes_from(obstacle)
-	# G.remove_edges_from(list(nx.edge_boundary(G, l, l)))
-	# G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
-	pressure, velocity = incompressible_flow(G, viscosity=1.0, inlets=l.nodes, outlets=r.nodes)
+	G.remove_edges_from(list(nx.edge_boundary(G, l, l)))
+	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
+	pressure, velocity = incompressible_flow(G, viscosity=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes}
-		# {n: 0. for n in r.nodes}
+		# {n: gradP/2 for n in l.nodes},
+		# {n: -gradP/2 for n in r.nodes}
+		{(n//2+1, j): 0. for j in range(n)}
 	))
-	# velocity.set_constraints(dirichlet={
-	# 	((0, i), (1, i)): 10.0 for i in range(m+1)
-	# })
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		{((0, i), (1, i)): inlet_v for i in range(m+1)},
+		gds.utils.bidict({e: 0 for e in obstacle_boundary})
+
+	))
 	tracer = lagrangian_tracer(velocity, [n for n in l.nodes if n[1] % 2 == 1], alpha=100.0)
 	return pressure, velocity, tracer
 
@@ -197,14 +207,14 @@ if __name__ == '__main__':
 
 	# p, v = poiseuille()
 	# p, v = poiseuille_asymmetric(gradP=10.0)
-	p, v = lid_driven_cavity()
+	# p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
-	# p, v, t = von_karman()
+	p, v, t = von_karman()
 	# p, v = couette()
 
 	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
-	a = v.project(GraphDomain.edges, lambda v: v.advect()) # advective strength
+	a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
 	f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
 	m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
@@ -233,6 +243,6 @@ if __name__ == '__main__':
 		# [[[m]]],
 	]
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=500, y_rng=(-1.1,0.4))
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, edge_colors=True)
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, edge_max=0.3, edge_colors=True)
 
 

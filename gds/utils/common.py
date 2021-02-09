@@ -26,10 +26,13 @@ def destructure(xs: Iterable[Any]) -> List[Any]:
 class bidict(dict):
 	''' dictionary for bi-directional keys ''' 
 	def __getitem__(self, key: Tuple[Any, Any]):
-		if key in self:
+		if dict.__contains__(self, key):
 			return dict.__getitem__(self, key)
 		else:
 			return dict.__getitem__(self, (key[1], key[0]))
+
+	def __contains__(self, key: Tuple[Any, Any]):
+		return dict.__contains__(self, key) or dict.__contains__(self, (key[1], key[0]))
 
 def replace(arr: np.ndarray, replace_at: list, replace_with: np.ndarray):
 	arr[replace_at] = replace_with

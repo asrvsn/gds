@@ -230,6 +230,7 @@ class edge_gds(gds):
 
 			ret = np.asarray((A@V@Y).sum(1) - (Y@A.T@V).sum(1)).ravel()
 			ret *= -s
+			ret[self.dirichlet_indices] = 0
 
 			if check:
 				ret_ = self.advect(v_field=v_field, y=y, vectorized=False)
