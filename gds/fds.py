@@ -28,7 +28,7 @@ class fds(Observable, Steppable):
 
 	def set_evolution(self,
 			dydt: Callable[[Time, np.ndarray], np.ndarray]=None, order: int=1, max_step: float=1e-3, solver_args: Dict={},
-			cost: Callable[[Time, np.ndarray], np.ndarray]=None, 
+			lhs: Callable[[Time, np.ndarray], np.ndarray]=None, cost: Callable[[Time, np.ndarray], float]=None, 
 			map_fun: Callable[[Time, np.ndarray], np.ndarray]=None, dt: float=1.0,
 			traj_t: Iterable[Time]=None, traj_y: Iterable[np.ndarray]=None,
 		): 
@@ -45,6 +45,8 @@ class fds(Observable, Steppable):
 				[optional] Additional arguments to be passed to the solver
 
 		Option 2: As a convex program
+			lhs: Callable[Time]
+				RHS of an equation set to 0
 			cost: Callable[time]
 				RHS of a disciplined-convex cost function (either array-like or scalar)
 			solver_args: Dict
@@ -77,7 +79,9 @@ class fds(Observable, Steppable):
 				self.integrator = DOP853(lambda t, y: self.y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 				self.integrator.fun = self.dydt
 
-		elif cost != None:
+		elif lhs != None or cost != None:
+			if lhs != None:
+				cost = lambda t, y: cp.sum_squares(lhs(t, y))
 			self.iter_mode = IterationMode.cvx
 			self.cost_fun = cost
 			self.solver_args = solver_args
@@ -87,8 +91,7 @@ class fds(Observable, Steppable):
 			self._t_prb = cp.Parameter(nonneg=True)
 			self._y_prb = cp.Variable(self._y.size)
 			_cost = cost(self._t_prb, self._y_prb)
-			if _cost.shape != (): # Cost is not scalar
-				_cost = cp.sum(cp.abs(_cost))
+			assert _cost.shape != (), 'Cost is not scalar'
 			assert _cost.is_dcp(), 'Problem is not disciplined-convex'
 			self._prb = cp.Problem(cp.Minimize(_cost), [])
 

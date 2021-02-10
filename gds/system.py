@@ -25,6 +25,9 @@ class System:
 	def observables(self) -> Dict[str, Observable]:
 		return self._observables
 
+	def step(dt: float):
+		self._stepper.step(dt)
+
 	def arrange(self, ncols: int=np.inf) -> Canvas:
 		return grid_canvas(list(self._observables.values()), ncols=ncols)
 
