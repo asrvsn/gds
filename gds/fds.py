@@ -66,6 +66,7 @@ class fds(Observable, Steppable):
 			self.iter_mode = IterationMode.dydt
 			self.dydt_fun = dydt
 			self.max_step = max_step
+			self._dt = self.max_step
 			self.order = order
 			self.solver_args = solver_args
 			self.y0 = np.zeros(self.ndim*order)
@@ -73,7 +74,7 @@ class fds(Observable, Steppable):
 				self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 			except:
 				print('Failed to use LSODA, falling back to DOP853')
-				self.integrator = DOP853(lambda t, y: y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
+				self.integrator = DOP853(lambda t, y: self.y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 				self.integrator.fun = self.dydt
 
 		elif cost != None:
@@ -257,6 +258,7 @@ class fds(Observable, Steppable):
 			self.apply_constraints()
 
 	def dydt(self, t: Time, y: np.ndarray):
+		self._dt = self.integrator.t - t
 		self.update_constraints(t)
 		n, order = self.ndim, self.order
 		ret = np.zeros_like(y)
@@ -356,7 +358,7 @@ class fds(Observable, Steppable):
 	@property 
 	def dt(self):
 		if self.iter_mode is IterationMode.dydt:
-			return self.max_step if self.integrator.step_size is None else self.integrator.step_size
+			return self._dt
 		elif self.iter_mode is IterationMode.map:
 			return self._dt
 		else:
@@ -398,7 +400,12 @@ class coupled_fds(Steppable):
 			self.dydt_max_step = min([sys.max_step for sys in dydt_systems])
 			self.dydt_solver_args = merge_dicts([sys.solver_args for sys in dydt_systems])
 			self.dydt_y0 = np.concatenate([sys.y0 for sys in self.systems[IterationMode.dydt]])
-			self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+			try:
+				self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+			except:
+				print('Failed to use LSODA, falling back to DOP853')
+				self.integrator = DOP853(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+				self.integrator.fun = self.dydt
 
 		# Attach views to state
 		last_index = 0

@@ -57,7 +57,7 @@ class gds(fds, GraphObservable):
 
 		# Orientation / incidence
 		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
-		self.incidence = nx.incidence_matrix(G, oriented=True).multiply(np.sqrt(self.weights)).tocsr() # |V| x |E| incidence
+		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.weights)).tocsr() # |V| x |E| incidence
 
 		# Operators
 		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
