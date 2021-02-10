@@ -31,7 +31,7 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], out
 	def velocity_f(t, y):
 		return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
 
-	pressure.set_evolution(cost=pressure_f)
+	pressure.set_evolution(lhs=pressure_f)
 	velocity.set_evolution(dydt=velocity_f)
 
 	return pressure, velocity
@@ -210,24 +210,24 @@ def test2():
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	# p, v = poiseuille()
+	p, v = poiseuille()
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
-	p, v = von_karman()
+	# p, v = von_karman()
 
-	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
-	a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
-	f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
+	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
+	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
+	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
 		'pressure': p,
 		'velocity': v,
-		'divergence': d,
+		# 'divergence': d,
 		# 'mass flux': f,
-		'advection': a,
+		# 'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
@@ -246,7 +246,7 @@ if __name__ == '__main__':
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
-	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=500, y_rng=(-1.1,0.4))
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, edge_max=0.3, edge_colors=True)
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=550, y_rng=(-1.1,0.7))
+	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, edge_max=0.3, edge_colors=True)
 
 

@@ -62,7 +62,7 @@ class fds(Observable, Steppable):
 			traj_t: Iterable[Time]
 			traj_y: Iterable[np.ndarray]
 		'''
-		assert oneof([dydt != None, cost != None, map_fun != None, traj_t != None]), 'Exactly one evolution law must be specified'
+		assert oneof([dydt != None, lhs != None, cost != None, map_fun != None, traj_t != None]), 'Exactly one evolution law must be specified'
 
 		if dydt != None:
 			self.iter_mode = IterationMode.dydt
@@ -91,7 +91,7 @@ class fds(Observable, Steppable):
 			self._t_prb = cp.Parameter(nonneg=True)
 			self._y_prb = cp.Variable(self._y.size)
 			_cost = cost(self._t_prb, self._y_prb)
-			assert _cost.shape != (), 'Cost is not scalar'
+			assert _cost.shape == (), 'Cost is not scalar'
 			assert _cost.is_dcp(), 'Problem is not disciplined-convex'
 			self._prb = cp.Problem(cp.Minimize(_cost), [])
 
