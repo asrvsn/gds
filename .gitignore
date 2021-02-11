@@ -5,3 +5,4 @@ dist
 __pyache__/
 recordings/
 .DS_Store
+*.pyc
