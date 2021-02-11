@@ -161,23 +161,26 @@ if __name__ == '__main__':
 
 	# vector_advection_test_suite()
 
-	cProfile.run('vector_advection_test_suite()', 'out.prof')
-	prof = pstats.Stats('out.prof')
-	prof.sort_stats('time').print_stats(40)
+	# cProfile.run('vector_advection_test_suite()', 'out.prof')
+	# prof = pstats.Stats('out.prof')
+	# prof.sort_stats('time').print_stats(40)
 
-	# v_1, u_1 = vector_advection_test([1,1,1,1,1])
-	# v_2, u_2 = vector_advection_test([1,1,1,1,-1])
-	# v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
-	# sys = gds.couple({
-	# 	'u_1': u_1,
-	# 	'v_1': v_1,
-	# 	'u_2': u_2,
-	# 	'v_2': v_2,
-	# 	'u_3': u_3,
-	# 	'v_3': v_3,
-	# })
-	# canvas = [
-	# 	[[[u_1]], [[u_2]], [[u_3]]],
+	v_1, u_1 = vector_advection_test([1,1,1,1,1])
+	v_2, u_2 = vector_advection_test([1,1,1,1,-1])
+	v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
+	sys = gds.couple({
+		'u_1': u_1,
+		# 'v_1': v_1,
+		'u_2': u_2,
+		# 'v_2': v_2,
+		'u_3': u_3,
+		# 'v_3': v_3,
+	})
+	canvas = [
+		[[[u_1]], [[u_2]], [[u_3]]],
 	# 	[[[v_1]], [[v_2]], [[u_3]]],
-	# ]
-	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
+	]
+	gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
+
+	# flow = vector_advection_circle()
+	# gds.render(flow)

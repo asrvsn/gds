@@ -11,13 +11,13 @@ import gds
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[]) -> (gds.node_gds, gds.edge_gds):
+def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
 	''' 
 	G: graph
 	viscosity & density in SI units / 1000
 	''' 
-	pressure = gds.node_gds(G)
-	velocity = gds.edge_gds(G)
+	pressure = gds.node_gds(G, **kwargs)
+	velocity = gds.edge_gds(G, **kwargs)
 	non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
 	min_step = 1e-4
 
@@ -83,11 +83,11 @@ def poiseuille():
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	m=14 
 	n=31 
-	gradP=10.0
+	gradP=1.0
 	# assert n % 2 == 1
 	# G = lattice45(m, n)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G, viscosity=400.)
+	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-3, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes},
 		{n: -gradP/2 for n in r.nodes}
@@ -98,29 +98,40 @@ def poiseuille():
 	))
 	return pressure, velocity
 
-def poiseuille_asymmetric(m=12, n=24, gradP: float=10.0):
+def backward_step():
 	''' Poiseuille flow with a boundary asymmetry '''
-	G = gds.square_lattice(m, n)
-	k = 6
-	blockage = [
-		(k, m-1), (k, m-2),
-		(k, m-2), (k, m-3),
-		(k, m-3), (k+1, m-3),
-		(k+1, m-3), (k+1, m-2),
-		(k+1, m-2), (k+1, m-1),
-	]
-	nbs = nx.node_boundary(G, blockage) | {(k-1, m-4), (k+2, m-4)}
-	G.remove_nodes_from(blockage)
-	dG, dG_L, dG_R, dG_T, dG_B = get_planar_boundary(G)
-	dG_T.add_nodes_from(nbs)
-	dG_T.add_edges_from(nx.edge_boundary(G, nbs, nbs))
-	pressure, velocity = incompressible_flow(G, nx.compose_all([dG_L, dG_R]))
-	def pressure_values(x):
-		if x[0] == 0: return gradP/2
-		if x[0] == n-1: return -gradP/2
-		return None
-	pressure.set_constraints(dirichlet=pressure_values)
-	velocity.set_constraints(dirichlet=zero_edge_bc(nx.compose_all([dG_T, dG_B])))
+	m=22 
+	n=57 
+	step_height=8
+	step_width=10
+	obstacle=gds.utils.flatten([[(j,i) for i in range(step_height)] for j in range(step_width)])
+	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
+	for g in [G, l, r, t, b]:
+		g.remove_nodes_from(obstacle)
+	for i in range(step_width+1):
+		b.add_node((i, step_height))
+		if i > 0:
+			b.add_edge((i-1, step_height), (i, step_height))
+	for j in range(step_height+1):
+		b.add_node((step_width, j))
+		if i > 0:
+			b.add_edge((step_width, j-1), (step_width, j))
+	G.remove_edges_from(list(nx.edge_boundary(G, l, l)))
+	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
+
+	inlet_v=5.0
+	outlet_p=0.0
+	pressure, velocity = incompressible_flow(G, viscosity=1, density=1e-4, inlets=l.nodes, outlets=r.nodes)
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
+		# {n: gradP/2 for n in l.nodes},
+		# {n: -gradP/2 for n in r.nodes}
+		{(n//2+1, j): outlet_p for j in range(n)}
+	))
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		{((0, i), (1, i)): inlet_v for i in range(step_height+1, m)},
+		gds.zero_edge_bc(t),
+		gds.zero_edge_bc(b),
+	))
 	return pressure, velocity
 
 def lid_driven_cavity():
@@ -142,38 +153,48 @@ def lid_driven_cavity():
 	return pressure, velocity
 
 def von_karman():
-	m=22 
-	n=77 
-	gradP=200.0
-	inlet_v = 50.0
+	m=24 
+	n=113 
+	gradP=10.0
+	inlet_v = 5.0
 	outlet_p = 0.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
+	weight = 1.0
+	nx.set_edge_attributes(G, weight, name='w')
 	j, k = 8, m//2
 	# Introduce occlusion
 	obstacle = [ 
 		(j, k), 
-		# (j+1, k),
+		(j+1, k),
 		(j, k+1), 
 		(j, k-1),
-		(j-1, k), 
-		(j+1, k+1), 
+		# (j-1, k), 
+		# (j+1, k+1), 
 		# (j+1, k-1),
-		(j, k+2), 
+		# (j, k+2), 
+		# (j, k-2), 
 	]
 	obstacle_boundary = gds.utils.flatten([G.neighbors(n) for n in obstacle])
 	obstacle_boundary = list(nx.edge_boundary(G, obstacle_boundary, obstacle_boundary))
 	G.remove_nodes_from(obstacle)
 	G.remove_edges_from(list(nx.edge_boundary(G, l, l)))
 	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
-	pressure, velocity = incompressible_flow(G, viscosity=1, inlets=l.nodes, outlets=r.nodes)
-	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes}
-		# {(n//2+1, j): 0. for j in range(n)}
-	))
+	G.remove_edges_from(list(nx.edge_boundary(G, r, r)))
+	G.remove_edges_from(list(nx.edge_boundary(G, [(n//2, 2*i+1) for i in range(m//2)], [(n//2, 2*i) for i in range(m//2+1)])))
+	pressure, velocity = incompressible_flow(G, viscosity=1e-4, density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
+	# pressure.set_constraints(dirichlet=gds.combine_bcs(
+		# {n: gradP/2 for n in l.nodes},
+		# {n: -gradP/2 for n in r.nodes}
+		# {(n//2+1, j): outlet_p for j in range(n)}
+	# ))
+	gradation = np.linspace(-0.5, 0.5, m+1)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		# {((0, i), (1, i)): inlet_v for i in range(m+1)},
-		gds.utils.bidict({e: 0 for e in obstacle_boundary})
+		{((0, i), (1, i)): inlet_v + gradation[i] for i in range(1, m)},
+		{((n//2, i), (n//2+1, i)): inlet_v - gradation[i] for i in range(1, m)},
+		{((n//2-1, 2*i+1), (n//2, 2*i+1)): inlet_v - gradation[2*i+1] for i in range(0, m//2)},
+		gds.utils.bidict({e: 0 for e in obstacle_boundary}),
+		gds.utils.bidict({e: 0 for e in t.edges}),
+		gds.utils.bidict({e: 0 for e in b.edges})
 
 	))
 	return pressure, velocity
@@ -210,24 +231,25 @@ def test2():
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	p, v = poiseuille()
+	# p, v = poiseuille()
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
 	# p, v = von_karman()
+	p, v = backward_step()
 
-	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
-	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
+	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
+	a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
 	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
 		'pressure': p,
 		'velocity': v,
-		# 'divergence': d,
+		'divergence': d,
 		# 'mass flux': f,
-		# 'advection': a,
+		'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
@@ -242,11 +264,11 @@ if __name__ == '__main__':
 
 	canvas = [
 		[[[p]], [[v]]],
-		# [[[a]], [[d]]],
+		[[[a]], [[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=550, y_rng=(-1.1,0.7))
-	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, edge_max=0.3, edge_colors=True)
+	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=550, y_rng=(-1.1,0.7))
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
 
 
