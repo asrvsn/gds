@@ -101,8 +101,8 @@ def poiseuille():
 def backward_step():
 	''' Poiseuille flow with a boundary asymmetry '''
 	m=22 
-	n=57 
-	step_height=8
+	n=67 
+	step_height=12
 	step_width=10
 	obstacle=gds.utils.flatten([[(j,i) for i in range(step_height)] for j in range(step_width)])
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
@@ -118,17 +118,27 @@ def backward_step():
 			b.add_edge((step_width, j-1), (step_width, j))
 	G.remove_edges_from(list(nx.edge_boundary(G, l, l)))
 	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
+	G.remove_edges_from(list(nx.edge_boundary(G, r, r)))
+	G.remove_edges_from(list(nx.edge_boundary(G, [(n//2, 2*i+1) for i in range(m//2)], [(n//2, 2*i) for i in range(m//2+1)])))
+	weight = 1.
+	nx.set_edge_attributes(G, weight, name='w')
 
-	inlet_v=5.0
+	inlet_v=1.0
+	# outlet_v=2*(m - step_height - 2)*inlet_v / (m - 2)
 	outlet_p=0.0
-	pressure, velocity = incompressible_flow(G, viscosity=1, density=1e-4, inlets=l.nodes, outlets=r.nodes)
+	# ref_p=0.0
+	# grad_p=100.0
+	pressure, velocity = incompressible_flow(G, viscosity=100., density=1.0, inlets=l.nodes, outlets=r.nodes, w_key='w')
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		# {n: gradP/2 for n in l.nodes},
-		# {n: -gradP/2 for n in r.nodes}
+		# {n: grad_p/2 for n in l.nodes},
+		# {n: -grad_p/2 for n in r.nodes if n[1] > step_height//2}
 		{(n//2+1, j): outlet_p for j in range(n)}
+		# {(n//2+1,m): ref_p}
 	))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		{((0, i), (1, i)): inlet_v for i in range(step_height+1, m)},
+		# {((n//2, i), (n//2+1, i)): outlet_v for i in range(1, m)},
+		# {((n//2-1, 2*i+1), (n//2, 2*i+1)): outlet_v for i in range(0, m//2)},
 		gds.zero_edge_bc(t),
 		gds.zero_edge_bc(b),
 	))
