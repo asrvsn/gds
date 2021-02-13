@@ -97,11 +97,36 @@ def vector_advection_circle():
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
 	flow = gds.edge_gds(G)
-	flow.set_evolution(dydt=lambda t, y: -flow.advect())
+	flow.set_evolution(dydt=lambda t, y: -flow.advect(vectorized=False))
 	# flow.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
-	flow.set_initial(y0=lambda e: 1.0 if e == (2, 3) else 0.1)
+	def init_flow(e):
+		if e == (2,3): return 0.5
+		elif e == (0,n-1): return -0.5
+		return 0.5
+	flow.set_initial(y0=init_flow)
 	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
 	return flow
+
+def vector_advection_circle_2():
+	n = 10
+	G = nx.Graph()
+	G.add_nodes_from(list(range(n)))
+	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
+	flow = gds.edge_gds(G)
+	obs = gds.edge_gds(G)
+	flow.set_evolution(dydt=lambda t, y: np.zeros_like(y))
+	obs.set_evolution(dydt=lambda t, y: -obs.advect(flow, vectorized=False))
+	def init_obs(e):
+		if e == (2,3): return 2.0
+		elif e == (0,n-1): return -0.1
+		return 0.1
+	obs.set_initial(y0=init_obs)
+	def init_flow(e):
+		if e == (0,n-1): return -1.0
+		return 1.0
+	flow.set_initial(y0=init_flow)
+	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
+	return flow, obs
 
 def vector_advection_test(flows=[1,1,1,1,1], **kwargs):
 	G = nx.Graph()
@@ -165,22 +190,26 @@ if __name__ == '__main__':
 	# prof = pstats.Stats('out.prof')
 	# prof.sort_stats('time').print_stats(40)
 
-	v_1, u_1 = vector_advection_test([1,1,1,1,1])
-	v_2, u_2 = vector_advection_test([1,1,1,1,-1])
-	v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
-	sys = gds.couple({
-		'u_1': u_1,
+	# v_1, u_1 = vector_advection_test([1,1,1,1,1])
+	# v_2, u_2 = vector_advection_test([1,1,1,1,-1])
+	# v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
+	# sys = gds.couple({
+	# 	'u_1': u_1,
 		# 'v_1': v_1,
-		'u_2': u_2,
+		# 'u_2': u_2,
 		# 'v_2': v_2,
-		'u_3': u_3,
+		# 'u_3': u_3,
 		# 'v_3': v_3,
-	})
-	canvas = [
-		[[[u_1]], [[u_2]], [[u_3]]],
+	# })
+	# canvas = [
+	# 	[[[u_1]], [[u_2]], [[u_3]]],
 	# 	[[[v_1]], [[v_2]], [[u_3]]],
-	]
-	gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
+	# ]
+	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
 
-	# flow = vector_advection_circle()
-	# gds.render(flow)
+	# flow, obs = vector_advection_circle_2()
+	# sys = gds.couple({'flow': flow, 'obs': obs})
+	# gds.render(sys)
+
+	flow = vector_advection_circle()
+	gds.render(flow)

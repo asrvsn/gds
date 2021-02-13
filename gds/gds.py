@@ -189,7 +189,10 @@ class edge_gds(gds):
 		TODO: neumann conditions
 		''' 
 		if y is None: y=self.y
-		return self.dirichlet_laplacian@y - self.curl3.T@self.curl3@y
+		ret = self.dirichlet_laplacian@y 
+		if self.curl3.shape[0] > 0:
+			ret -= self.curl3.T@self.curl3@y
+		return ret
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' 

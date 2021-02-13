@@ -19,7 +19,7 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], out
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
 	non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
-	min_step = 1e-4
+	min_step = 1e-3
 
 	def pressure_f(t, y):
 		dt = max(min_step, velocity.dt)
@@ -71,12 +71,45 @@ def differential_inlets():
 	G = nx.Graph()
 	G.add_nodes_from([1,2,3,4,5,6])
 	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
-	pressure, velocity = incompressible_flow(G, inlets=[1,4], outlets=[6], viscosity=1.)
-	velocity.set_constraints(dirichlet={
-		(1, 2): 100.0,
-		(3, 4): -1
-	})
-	pressure.set_constraints(dirichlet={6: 0.0})
+	pressure, velocity = incompressible_flow(G, inlets=[1,4], outlets=[6], viscosity=1.,)
+	def vel_f(t, e):
+		omega = 2*np.pi
+		if e == (1, 2):
+			return 1.
+			# return np.sin(omega*t)
+		elif e == (2, 3):
+			return 1.
+		elif e == (3, 4):
+			return 1.
+			# return -np.cos(omega*t)
+	velocity.set_constraints(dirichlet=vel_f)
+	# pressure.set_constraints(dirichlet={6: 0.0})
+	return pressure, velocity
+
+def box_inlets():
+	G = nx.Graph()
+	G.add_nodes_from([0,1,2,3,4,5,6,7])
+	G.add_edges_from([(1,2),(2,3),(2,4),(3,5),(4,5),(5,6),(0,3),(4,7)])
+	pressure, velocity = incompressible_flow(G, inlets=[1,0], outlets=[6,7], viscosity=1.)
+	def is_vortex():
+		v_23, v_35, v_45, v_24 = velocity((2,3)), velocity((3,5)), velocity((4,5)), velocity((2,4))
+		ret = np.sign(v_23) == np.sign(v_35)
+		ret &= np.sign(v_24) == np.sign(v_45)
+		ret &= np.sign(v_23) == -np.sign(v_24)
+		ret &= all([np.abs(v) > 0.1 for v in [v_23, v_35, v_45, v_24]])
+		return ret
+	def vel_f(t, e):
+		if e == (1, 2):
+			return 0 if is_vortex() else np.sin(t) 
+		if e == (5,6):
+			return 0 if is_vortex() else np.sin(t + np.pi/2)
+		if e == (0, 3):
+			return 0 if is_vortex() else np.sin(t + np.pi)
+		if e == (4, 7):
+			return 0 if is_vortex() else np.sin(t + 3*np.pi/2)
+	velocity.set_constraints(dirichlet=vel_f)
+	# velocity.set_initial(y0=gds.utils.dict_fun({(2,4): 1.0, (4,5): 1.0, (2,3): -1.0, (3,5): -1.0}))
+	# pressure.set_constraints(dirichlet={3: 1.0, 4: -1.0})
 	return pressure, velocity
 
 def poiseuille():
@@ -87,7 +120,7 @@ def poiseuille():
 	# assert n % 2 == 1
 	# G = lattice45(m, n)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-3, inlets=l.nodes, outlets=r.nodes)
+	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes},
 		{n: -gradP/2 for n in r.nodes}
@@ -246,20 +279,21 @@ if __name__ == '__main__':
 	# p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
+	p, v = box_inlets()
 	# p, v = von_karman()
-	p, v = backward_step()
+	# p, v = backward_step()
 
 	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
 	a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
 	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
-	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
+	m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
 		'pressure': p,
 		'velocity': v,
-		'divergence': d,
+		# 'divergence': d,
 		# 'mass flux': f,
-		'advection': a,
+		# 'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
@@ -273,12 +307,12 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		[[[p]], [[v]]],
-		[[[a]], [[d]]],
+		[[[v]], [[p]]],
+		# [[[a]], [[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
-	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, dynamic_ranges=True, node_size=0.04, plot_width=800, plot_height=550, y_rng=(-1.1,0.7))
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
+	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
 
 
