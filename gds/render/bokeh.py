@@ -244,7 +244,7 @@ class LiveRenderer(Renderer):
 			for plot_id, plot in self.plots.items():
 				names = []
 				for name, obs in self.system.observables.items():
-					if obs.plot_id == plot_id:
+					if hasattr(obs, 'plot_id') and obs.plot_id == plot_id:
 						names.append(name) # Somewhat hacky
 				plot.title.text = ','.join(names)
 

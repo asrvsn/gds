@@ -112,6 +112,30 @@ def box_inlets():
 	# pressure.set_constraints(dirichlet={3: 1.0, 4: -1.0})
 	return pressure, velocity
 
+def vortex_transfer(viscosity=1e-3):
+	G = nx.Graph()
+	G.add_nodes_from(list(range(8)))
+	outer = set({
+		(0,5),(1,5),(1,6),(2,6),(2,7),(3,7),(3,4),(0,4),
+	})
+	diagonals = set({
+		(4,7),(4,5),(5,6),(6,7)
+	})
+	G.add_edges_from(outer)
+	G.add_edges_from(diagonals)
+	negated = set({
+		(0,4),(1,5),(2,6),(3,7),
+	})
+	def v_field(e):
+		ret = 0
+		ret = 1.0 if e in outer else 0
+		ret *= -1.0 if e in negated else 1.0
+		return ret
+	pressure, velocity = incompressible_flow(G, viscosity=viscosity)
+	velocity.set_initial(y0=v_field)
+	pressure.set_constraints(dirichlet={0: 0.}) # Pressure reference
+	return pressure, velocity
+
 def poiseuille():
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	m=14 
@@ -279,24 +303,30 @@ if __name__ == '__main__':
 	# p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
-	p, v = box_inlets()
+	# p, v = box_inlets()
+	p1, v1 = vortex_transfer(viscosity=1e-4)
+	p2, v2 = vortex_transfer(viscosity=10)
 	# p, v = von_karman()
 	# p, v = backward_step()
 
-	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
-	a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
+	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
+	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
 	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
-	m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
+	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
-		'pressure': p,
-		'velocity': v,
+		# 'pressure': p,
+		# 'velocity': v,
 		# 'divergence': d,
 		# 'mass flux': f,
 		# 'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
+		'velocity @ viscosity=1e-4': v1,
+		'velocity @ viscosity=10': v2,
+		'p1': p1,
+		'p2': p2,
 	})
 
 	''' Save to disk ''' 
@@ -307,7 +337,8 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		[[[v]], [[p]]],
+		# [[[v]], [[p]]],
+		[[[v1]], [[v2]]],
 		# [[[a]], [[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
