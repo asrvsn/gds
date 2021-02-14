@@ -165,6 +165,27 @@ def vector_advection_test_suite():
 	v, u = vector_advection_test(v_field, check=True)
 	u.step(1.0)
 
+def circulation_transfer():
+	G = nx.Graph()
+	G.add_nodes_from(list(range(1,7)))
+	G.add_edges_from([
+		(1,2),(2,3),(3,4),(4,1),
+		(4,5),(5,6),(6,3),
+	])
+	negated = set([(1,4),(3,6),])
+	def v_field(e):
+		ret = 1.0
+		if e in negated:
+			ret *= -1
+		if e == (5,6):
+			ret *= 2
+		return ret
+	u = gds.edge_gds(G)
+	u.set_evolution(dydt=lambda t, y: -u.advect())
+	u.set_initial(y0=v_field)
+	return u
+
+
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
 
@@ -211,5 +232,6 @@ if __name__ == '__main__':
 	# sys = gds.couple({'flow': flow, 'obs': obs})
 	# gds.render(sys)
 
-	flow = vector_advection_circle()
-	gds.render(flow)
+	# flow = vector_advection_circle()
+	flow = circulation_transfer()
+	gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)

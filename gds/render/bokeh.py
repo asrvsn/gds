@@ -40,7 +40,7 @@ class Renderer(ABC):
 				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.2, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
-				edge_colors=False,
+				edge_colors=False, min_rng_size=0,
 				title=None, plot_titles=True,
 			):
 		self.canvas: Canvas = canvas
@@ -59,6 +59,7 @@ class Renderer(ABC):
 		self.dynamic_ranges = dynamic_ranges
 		self.x_rng, self.y_rng = x_rng, y_rng
 		self.edge_colors = edge_colors
+		self.min_rng_size = min_rng_size
 		self.title = title
 		self.plot_titles = plot_titles
 		if layout_func is None:
@@ -263,14 +264,20 @@ class LiveRenderer(Renderer):
 				if obs.Gd is GraphDomain.nodes:
 					self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
 					if self.dynamic_ranges:
-						self.node_cmaps[obs.plot_id].low = obs.y.min()
-						self.node_cmaps[obs.plot_id].high = obs.y.max()
+						lo, hi = obs.y.min(), obs.y.max()
+						mid = (lo+hi)/2
+						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+						self.node_cmaps[obs.plot_id].low = lo
+						self.node_cmaps[obs.plot_id].high = hi
 				elif obs.Gd is GraphDomain.edges:
 					self.draw_arrows(obs, obs.y)
 					self.plots[obs.plot_id].renderers[0].edge_renderer.data_source.data['value'] = obs.arr_source.data['value']
 					if self.dynamic_ranges:
-						self.edge_cmaps[obs.plot_id].low = obs.arr_source.data['value'].min()
-						self.edge_cmaps[obs.plot_id].high = obs.arr_source.data['value'].max()
+						lo, hi = obs.arr_source.data['value'].min(), obs.arr_source.data['value'].max()
+						mid = (lo+hi)/2
+						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+						self.edge_cmaps[obs.plot_id].low = lo
+						self.edge_cmaps[obs.plot_id].high = hi
 		if self.rec_name != None:
 			self.dump_frame()
 
