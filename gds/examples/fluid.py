@@ -24,8 +24,8 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], out
 	def pressure_f(t, y):
 		dt = max(min_step, velocity.dt)
 		lhs = velocity.div(velocity.y/dt - velocity.advect()) + pressure.laplacian(velocity.div()) * viscosity/density
-		lhs[non_div_free] = 0.
 		lhs -= pressure.laplacian(y)/density 
+		lhs[non_div_free] = 0.
 		return lhs
 
 	def velocity_f(t, y):
@@ -158,7 +158,7 @@ def poiseuille():
 def backward_step():
 	''' Poiseuille flow with a boundary asymmetry '''
 	m=22 
-	n=67 
+	n=77 
 	step_height=12
 	step_width=10
 	obstacle=gds.utils.flatten([[(j,i) for i in range(step_height)] for j in range(step_width)])
@@ -180,7 +180,7 @@ def backward_step():
 	weight = 1.
 	nx.set_edge_attributes(G, weight, name='w')
 
-	inlet_v=1.0
+	inlet_v=100.0
 	# outlet_v=2*(m - step_height - 2)*inlet_v / (m - 2)
 	outlet_p=0.0
 	# ref_p=0.0
@@ -189,7 +189,7 @@ def backward_step():
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		# {n: grad_p/2 for n in l.nodes},
 		# {n: -grad_p/2 for n in r.nodes if n[1] > step_height//2}
-		{(n//2+1, j): outlet_p for j in range(n)}
+		{n: outlet_p for n in r.nodes}
 		# {(n//2+1,m): ref_p}
 	))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
@@ -223,23 +223,23 @@ def von_karman():
 	m=24 
 	n=113 
 	gradP=10.0
-	inlet_v = 5.0
+	inlet_v = 2.0
 	outlet_p = 0.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
 	weight = 1.0
 	nx.set_edge_attributes(G, weight, name='w')
-	j, k = 8, m//2
+	j, k = 9, m//2
 	# Introduce occlusion
 	obstacle = [ 
 		(j, k), 
 		(j+1, k),
 		(j, k+1), 
 		(j, k-1),
-		# (j-1, k), 
-		# (j+1, k+1), 
-		# (j+1, k-1),
-		# (j, k+2), 
-		# (j, k-2), 
+		(j-1, k), 
+		(j+1, k+1), 
+		(j+1, k-1),
+		(j, k+2), 
+		(j, k-2), 
 	]
 	obstacle_boundary = gds.utils.flatten([G.neighbors(n) for n in obstacle])
 	obstacle_boundary = list(nx.edge_boundary(G, obstacle_boundary, obstacle_boundary))
@@ -248,17 +248,18 @@ def von_karman():
 	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
 	G.remove_edges_from(list(nx.edge_boundary(G, r, r)))
 	G.remove_edges_from(list(nx.edge_boundary(G, [(n//2, 2*i+1) for i in range(m//2)], [(n//2, 2*i) for i in range(m//2+1)])))
-	pressure, velocity = incompressible_flow(G, viscosity=1e-4, density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
-	# pressure.set_constraints(dirichlet=gds.combine_bcs(
+	pressure, velocity = incompressible_flow(G, viscosity=0., density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		# {n: gradP/2 for n in l.nodes},
 		# {n: -gradP/2 for n in r.nodes}
-		# {(n//2+1, j): outlet_p for j in range(n)}
-	# ))
+		{n: outlet_p for n in r.nodes}
+	))
 	gradation = np.linspace(-0.5, 0.5, m+1)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		{((0, i), (1, i)): inlet_v + gradation[i] for i in range(1, m)},
-		{((n//2, i), (n//2+1, i)): inlet_v - gradation[i] for i in range(1, m)},
-		{((n//2-1, 2*i+1), (n//2, 2*i+1)): inlet_v - gradation[2*i+1] for i in range(0, m//2)},
+		# {((0, i), (1, i)): inlet_v for i in range(1, m)},
+		# {((n//2, i), (n//2+1, i)): inlet_v - gradation[i] for i in range(1, m)},
+		# {((n//2-1, 2*i+1), (n//2, 2*i+1)): inlet_v - gradation[2*i+1] for i in range(0, m//2)},
 		gds.utils.bidict({e: 0 for e in obstacle_boundary}),
 		gds.utils.bidict({e: 0 for e in t.edges}),
 		gds.utils.bidict({e: 0 for e in b.edges})
