@@ -19,14 +19,15 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], out
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
 	non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
-	min_step = 1e-3
+	div_free_sel = np.ones_like(pressure.y)
+	div_free_sel[non_div_free] = 0
+	min_step = 1e-4
 
 	def pressure_f(t, y):
 		dt = max(min_step, velocity.dt)
 		lhs = velocity.div(velocity.y/dt - velocity.advect()) + pressure.laplacian(velocity.div()) * viscosity/density
 		lhs -= pressure.laplacian(y)/density 
-		lhs[non_div_free] = 0.
-		return lhs
+		return cp.multiply(lhs, div_free_sel)
 
 	def velocity_f(t, y):
 		return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
@@ -180,18 +181,18 @@ def backward_step():
 	weight = 1.
 	nx.set_edge_attributes(G, weight, name='w')
 
-	inlet_v=100.0
+	inlet_v=1.0
 	# outlet_v=2*(m - step_height - 2)*inlet_v / (m - 2)
 	outlet_p=0.0
 	# ref_p=0.0
 	# grad_p=100.0
-	pressure, velocity = incompressible_flow(G, viscosity=100., density=1.0, inlets=l.nodes, outlets=r.nodes, w_key='w')
-	pressure.set_constraints(dirichlet=gds.combine_bcs(
+	pressure, velocity = incompressible_flow(G, viscosity=1e-3, density=1.0, inlets=l.nodes, outlets=r.nodes, w_key='w')
+	# pressure.set_constraints(dirichlet=gds.combine_bcs(
 		# {n: grad_p/2 for n in l.nodes},
 		# {n: -grad_p/2 for n in r.nodes if n[1] > step_height//2}
-		{n: outlet_p for n in r.nodes}
+		# {n: outlet_p for n in r.nodes}
 		# {(n//2+1,m): ref_p}
-	))
+	# ))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		{((0, i), (1, i)): inlet_v for i in range(step_height+1, m)},
 		# {((n//2, i), (n//2+1, i)): outlet_v for i in range(1, m)},
@@ -301,33 +302,33 @@ if __name__ == '__main__':
 
 	# p, v = poiseuille()
 	# p, v = poiseuille_asymmetric(gradP=10.0)
-	# p, v = lid_driven_cavity()
+	p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
 	# p, v = box_inlets()
-	p1, v1 = vortex_transfer(viscosity=1e-4)
-	p2, v2 = vortex_transfer(viscosity=10)
+	# p1, v1 = vortex_transfer(viscosity=1e-4)
+	# p2, v2 = vortex_transfer(viscosity=10)
 	# p, v = von_karman()
 	# p, v = backward_step()
 
-	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
-	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
+	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
+	a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
 	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
-		# 'pressure': p,
-		# 'velocity': v,
-		# 'divergence': d,
+		'pressure': p,
+		'velocity': v,
+		'divergence': d,
 		# 'mass flux': f,
-		# 'advection': a,
+		'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
-		'velocity @ viscosity=1e-4': v1,
-		'velocity @ viscosity=10': v2,
-		'p1': p1,
-		'p2': p2,
+		# 'velocity @ viscosity=1e-4': v1,
+		# 'velocity @ viscosity=10': v2,
+		# 'p1': p1,
+		# 'p2': p2,
 	})
 
 	''' Save to disk ''' 
@@ -338,13 +339,13 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		# [[[v]], [[p]]],
-		[[[v1]], [[v2]]],
-		# [[[a]], [[d]]],
+		[[[v]], [[p]]],
+		# [[[v1]], [[v2]]],
+		[[[a]], [[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
-	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
+	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
 
 
