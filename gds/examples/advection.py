@@ -224,7 +224,7 @@ if __name__ == '__main__':
 	# })
 	# canvas = [
 	# 	[[[u_1]], [[u_2]], [[u_3]]],
-	# 	[[[v_1]], [[v_2]], [[u_3]]],
+	# 	[[[v_1]], [[v_2]], [[v_3]]],
 	# ]
 	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
 
