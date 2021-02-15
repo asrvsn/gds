@@ -100,9 +100,9 @@ def vector_advection_circle():
 	flow.set_evolution(dydt=lambda t, y: -flow.advect(vectorized=False))
 	# flow.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	def init_flow(e):
-		if e == (2,3): return 0.5
-		elif e == (0,n-1): return -0.5
-		return 0.5
+		if e == (2,3): return 2.0
+		elif e == (0,n-1): return -0.1
+		return 0.1
 	flow.set_initial(y0=init_flow)
 	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
 	return flow
@@ -181,7 +181,7 @@ def circulation_transfer():
 			ret *= 2
 		return ret
 	u = gds.edge_gds(G)
-	u.set_evolution(dydt=lambda t, y: -u.advect())
+	u.set_evolution(dydt=lambda t, y: -u.advect(vectorized=False))
 	u.set_initial(y0=v_field)
 	return u
 
@@ -205,22 +205,22 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	# vector_advection_test_suite()
+	vector_advection_test_suite()
 
 	# cProfile.run('vector_advection_test_suite()', 'out.prof')
 	# prof = pstats.Stats('out.prof')
 	# prof.sort_stats('time').print_stats(40)
 
-	# v_1, u_1 = vector_advection_test([1,1,1,1,1])
-	# v_2, u_2 = vector_advection_test([1,1,1,1,-1])
-	# v_3, u_3 = vector_advection_test([-1,1,1,1,-1])
+	# v_1, u_1 = vector_advection_test([1,1,1,1,1], vectorized=False)
+	# v_2, u_2 = vector_advection_test([1,1,1,1,-1], vectorized=False)
+	# v_3, u_3 = vector_advection_test([-1,1,1,1,-1], vectorized=False)
 	# sys = gds.couple({
 	# 	'u_1': u_1,
-		# 'v_1': v_1,
-		# 'u_2': u_2,
-		# 'v_2': v_2,
-		# 'u_3': u_3,
-		# 'v_3': v_3,
+	# 	'v_1': v_1,
+	# 	'u_2': u_2,
+	# 	'v_2': v_2,
+	# 	'u_3': u_3,
+	# 	'v_3': v_3,
 	# })
 	# canvas = [
 	# 	[[[u_1]], [[u_2]], [[u_3]]],
@@ -233,5 +233,5 @@ if __name__ == '__main__':
 	# gds.render(sys)
 
 	# flow = vector_advection_circle()
-	flow = circulation_transfer()
-	gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
+	# flow = circulation_transfer()
+	# gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)

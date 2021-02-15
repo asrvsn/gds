@@ -232,7 +232,9 @@ class edge_gds(gds):
 			V = sp.diags(v_field*s)
 			Y = sp.diags(y*s)
 
-			ret = np.asarray((A@V@Y).sum(1) - (Y@A.T@V).sum(1)).ravel()
+			F = V@A@Y
+
+			ret = np.asarray(F.sum(1) - F.T.sum(1)).ravel()
 			ret *= -s
 			ret[self.dirichlet_indices] = 0
 
@@ -264,7 +266,7 @@ class edge_gds(gds):
 							y_j *= -1
 
 						if e_j[1] == e_i[0]:
-							ret_in[i] += v_j * y_j 
+							ret_in[i] += v_i * y_j 
 						if e_i[1] == e_j[0]:
 							ret_out[i] += v_j * y_i 
 			ret = (ret_in - ret_out) * np.sign(v_field)
