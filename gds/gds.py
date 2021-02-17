@@ -285,10 +285,6 @@ class edge_gds(gds):
 				return self.t
 		return DualGraphObservable(G_, GraphDomain.nodes)
 
-class triangle_gds(gds):
-	''' Dynamical system defined on 3-cliques of a graph ''' 
+class simplex_gds(gds):
+	''' Dynamical system defined on k-simplices of a graph ''' 
 	pass
-
-class tet_gds(gds):
-	''' Dynamical system defined on k-cliques of a graph ''' 
-	pass		

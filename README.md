@@ -212,9 +212,8 @@ temperature.set_constraints(dirichlet=gds.combine_bcs(
 gds.render(temperature, title='Heat equation with time-varying boundary')
 ```
 
-Here we have used `gds.render()`, which solves & renders `temperature` in real-time to a [bokeh](https://bokeh.org/) plot. There are [many options](https://github.com/asrvsn/gds/blob/master/gds/render/bokeh.py#L37) for rendering. 
+Here we have used `gds.render()`, which solves & renders `temperature` in real-time to a [bokeh](https://bokeh.org/) plot. There are [many options](https://github.com/asrvsn/gds/blob/master/gds/render/bokeh.py#L37) for rendering. The result:
 
-The result:
 <img src="images/heat_tv.gif" width="50%" style="margin-left: auto; margin-right: auto; display: block;"/>
 
 ## Gallery 
@@ -241,7 +240,40 @@ pressure.set_evolution(lhs=pressure_f)
 
 ### SIR epidemic on a network
 ```python
+def SIR_model(G, dS=0.1, dI=0.5, dR=0.0, alpha1=0.1, alpha2=0.02, alpha3=0.03, L=0.5, mu=0.1, beta=0.2, r=0.5, **kwargs):
+  ''' 
+  Reaction-Diffusion SIR model
+  Based on Lotfi et al, https://www.hindawi.com/journals/ijpde/2014/186437/
+  '''
+  susceptible = gds.node_gds(G, **kwargs)
+  infected = gds.node_gds(G, **kwargs)
+  recovered = gds.node_gds(G, **kwargs)
 
+  def N():
+    return 1 + alpha1*susceptible.y + alpha2*infected.y + alpha3*susceptible.y*infected.y
+
+  susceptible.set_evolution(dydt=lambda t, y:
+    dS*susceptible.laplacian() + L - mu*susceptible.y - beta*susceptible.y*infected.y / N()
+  )
+
+  infected.set_evolution(dydt=lambda t, y:
+    dI*infected.laplacian() + beta*susceptible.y*infected.y / N()
+  )
+
+  recovered.set_evolution(dydt=lambda t, y:
+    dR*recovered.laplacian() + r*infected.y - mu*recovered.y
+  )
+
+  susceptible.set_initial(y0=lambda x: np.random.uniform())
+  infected.set_initial(y0=lambda x: np.random.uniform())
+
+  sys = gds.couple({
+    'Susceptible': susceptible,
+    'Infected': infected,
+    'Recovered': recovered
+  })
+
+  return sys
 ```
 
 
