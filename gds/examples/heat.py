@@ -83,13 +83,13 @@ if __name__ == '__main__':
 	# p3 = grid_sinus_boundary(steady_state=True)	
 	# p4 = grid_sinus_boundary(steady_state=True, phi=np.pi/4)
 
-	t1, t2 = heat_test()
+	# t1, t2 = heat_test()
 
-	sys = gds.couple({
+	# sys = gds.couple({
 		# 'heat0': p1,
-		'heat1': t1,
+		# 'heat1': t1,
 		# 'heat2': t2
-	})
+	# })
 
 	# G = nx.random_geometric_graph(200, 0.125)
 	# p5 = gds.node_gds(G)
@@ -97,4 +97,13 @@ if __name__ == '__main__':
 	# p5.set_constraints({random.randint(0, 200): 1.0 for _ in range(10)})
 
 	# gds.render(p5, title='Diffusion on a random geometric graph')
-	gds.render(sys, dynamic_ranges=True)
+	# gds.render(sys, dynamic_ranges=True)
+
+	G = gds.square_lattice(10, 10)
+	temperature = gds.node_gds(G)
+	temperature.set_evolution(dydt=lambda t, y: temperature.laplacian())
+	temperature.set_constraints(dirichlet=gds.combine_bcs(
+		lambda x: 0 if x[0] == 9 else None,
+		lambda t, x: np.sin(t+x[1]/4)**2 if x[0] == 0 else None
+	))
+	gds.render(temperature, title='Heat equation with time-varying boundary')

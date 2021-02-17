@@ -119,6 +119,7 @@ class Renderer(ABC):
 		orig_G = items[0].G
 		layout = self.layout_func(orig_G)
 		G = nx.convert_node_labels_to_integers(orig_G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+		G = clear_attributes(G)
 		for i, n in enumerate(orig_G.nodes()):
 			v = layout[n]
 			del layout[n]

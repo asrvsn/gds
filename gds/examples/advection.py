@@ -205,7 +205,7 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	vector_advection_test_suite()
+	# vector_advection_test_suite()
 
 	# cProfile.run('vector_advection_test_suite()', 'out.prof')
 	# prof = pstats.Stats('out.prof')
@@ -233,5 +233,8 @@ if __name__ == '__main__':
 	# gds.render(sys)
 
 	# flow = vector_advection_circle()
-	# flow = circulation_transfer()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
+
+	flow = circulation_transfer()
+	gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
+

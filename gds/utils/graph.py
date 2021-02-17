@@ -132,6 +132,18 @@ def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph,
 					_dG.add_edge(m, n)
 	return (dG, dG_L, dG_R, dG_T, dG_B)
 
+def clear_attributes(G):
+	ns = list(G.nodes(data=True))
+	es = list(G.edges(data=True))
+	if len(ns) > 0:
+		n = ns[0]
+		for attr in n[-1].keys():
+			nx.set_node_attributes(G, None, attr)
+	if len(es) > 0:
+		e = es[0]
+		for attr in e[-1].keys():
+			nx.set_node_attributes(G, None, attr)
+	return G
 
 if __name__ == '__main__':
 	# G = lattice45(4, 6)

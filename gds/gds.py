@@ -59,15 +59,6 @@ class gds(fds, GraphObservable):
 		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
 		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.weights)).tocsr() # |V| x |E| incidence
 
-		# Operators
-		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
-		self.edge_laplacian = -self.incidence.T@self.incidence # |E| x |E| laplacian operator
-		if Gd is GraphDomain.nodes:
-			self.dirichlet_laplacian = self.vertex_laplacian
-		elif Gd is GraphDomain.edges:
-			self.dirichlet_laplacian = self.edge_laplacian
-		self.neumann_correction = np.zeros(self.ndim)	
-
 		fds.__init__(self, self.X)
 
 	def set_constraints(self, *args, **kwargs):
@@ -96,6 +87,11 @@ class node_gds(gds):
 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
 		gds.__init__(self, G, GraphDomain.nodes, *args, **kwargs)
+
+		# Operators
+		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
+		self.dirichlet_laplacian = self.vertex_laplacian
+		self.neumann_correction = np.zeros(self.ndim)	
 
 	''' Differential operators: all of the following are CVXPY-compatible '''
 
@@ -133,6 +129,10 @@ class edge_gds(gds):
 	''' Dynamical system defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
 		gds.__init__(self, G, GraphDomain.edges, *args, **kwargs)
+
+		self.edge_laplacian = -self.incidence.T@self.incidence # |E| x |E| laplacian operator
+		self.dirichlet_laplacian = self.edge_laplacian
+		self.neumann_correction = np.zeros(self.ndim)	
 
 		''' Additional operators '''
 
