@@ -246,7 +246,7 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], out
   return pressure, velocity
 ```
 
-Lid-driven cavity:
+Lid-driven cavity on a triangular lattice:
 
 <img src="images/lid_driven_cavity.png" width="100%"/>
 
@@ -291,6 +291,7 @@ Zero-flux SIR model with R0=2:
 
 <img src="images/SIR.gif" width="100%"/>
 
+[Note: this assumes diffusive spread only via geographical shortest-distance.]
 
 ### Rayleigh-Benard convection
 ```python
