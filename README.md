@@ -252,32 +252,40 @@ Lid-driven cavity on a triangular lattice:
 
 ### SIR epidemic on a network
 ```python
-def SIR_model(G, dS=0.1, dI=0.5, dR=0.0, alpha1=0.1, alpha2=0.02, alpha3=0.03, L=0.5, mu=0.1, beta=0.2, r=0.5, **kwargs):
+def SIR_model(G, 
+    dS=0.1, dI=0.5, dR=0.0,   # Diffusive terms
+    muS=0.1, muI=0.3, muR=0.1,  # Death rates
+    Lambda=0.5,         # Birth rate 
+    beta=0.2,           # Rate of contact
+    gamma=0.2,          # Rate of recovery
+    initial_population=100,
+    patient_zero=None,
+    **kwargs):
   ''' 
   Reaction-Diffusion SIR model
-  Based on Lotfi et al, https://www.hindawi.com/journals/ijpde/2014/186437/
+  Based on Huang et al, https://www.researchgate.net/publication/281739911_The_reaction-diffusion_system_for_an_SIR_epidemic_model_with_a_free_boundary
   '''
   susceptible = gds.node_gds(G, **kwargs)
   infected = gds.node_gds(G, **kwargs)
   recovered = gds.node_gds(G, **kwargs)
 
-  def N():
-    return 1 + alpha1*susceptible.y + alpha2*infected.y + alpha3*susceptible.y*infected.y
-
   susceptible.set_evolution(dydt=lambda t, y:
-    dS*susceptible.laplacian() + L - mu*susceptible.y - beta*susceptible.y*infected.y / N()
+    dS*susceptible.laplacian() - muS*susceptible.y - beta*susceptible.y*infected.y + Lambda
   )
 
   infected.set_evolution(dydt=lambda t, y:
-    dI*infected.laplacian() + beta*susceptible.y*infected.y / N()
+    dI*infected.laplacian() + beta*susceptible.y*infected.y - muI*infected.y - gamma*infected.y
   )
 
   recovered.set_evolution(dydt=lambda t, y:
-    dR*recovered.laplacian() + r*infected.y - mu*recovered.y
+    dR*recovered.laplacian() + gamma*infected.y - muR*recovered.y
   )
 
-  susceptible.set_initial(y0=lambda x: np.random.uniform())
-  infected.set_initial(y0=lambda x: np.random.uniform())
+  if patient_zero is None:
+    patient_zero = random.choice(list(G.nodes()))
+  print(patient_zero)
+  susceptible.set_initial(y0=lambda x: initial_population)
+  infected.set_initial(y0=lambda x: 1 if x == patient_zero else 0.)
 
   sys = gds.couple({
     'Susceptible': susceptible,
@@ -291,7 +299,7 @@ Zero-flux SIR model with R0=2:
 
 <img src="images/SIR.gif" width="100%"/>
 
-[Note: this assumes diffusive spread only via geographical shortest-distance.]
+[Note: this assumes diffusive spread only via geographical shortest paths.]
 
 ### Rayleigh-Benard convection
 ```python
