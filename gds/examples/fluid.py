@@ -14,7 +14,6 @@ import gds
 def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
 	''' 
 	G: graph
-	viscosity & density in SI units / 1000
 	''' 
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)

@@ -221,22 +221,34 @@ Here we have used `gds.render()`, which solves & renders `temperature` in real-t
 
 ### Incompressible Navier-Stokes
 ```python
-pressure = gds.node_gds(G)
-velocity = gds.edge_gds(G)
+def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
+  ''' 
+  G: graph
+  ''' 
+  pressure = gds.node_gds(G, **kwargs)
+  velocity = gds.edge_gds(G, **kwargs)
+  non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
+  min_step = 1e-3
 
-def velocity_fun(t, y):
-  return -velocity.advect() - pressure.grad() / density + velocity.laplacian() * viscosity/density
+  def pressure_f(t, y):
+    dt = max(min_step, velocity.dt)
+    lhs = velocity.div(velocity.y/dt - velocity.advect()) + pressure.laplacian(velocity.div()) * viscosity/density
+    lhs[non_div_free] = 0.
+    lhs -= pressure.laplacian(y)/density 
+    return lhs
 
-velocity.set_evolution(dydt=velocity_fun)
+  def velocity_f(t, y):
+    return -velocity.advect() - pressure.grad()/density + velocity.laplacian() * viscosity/density
 
-def pressure_fun(t, y):
-  lhs = velocity.div(velocity.y / velocity.dt - velocity.advect())
-  lhs += pressure.laplacian(velocity.div()) * viscosity / density
-  lhs -= pressure.laplacian(y) / density
-  return lhs
+  pressure.set_evolution(lhs=pressure_f)
+  velocity.set_evolution(dydt=velocity_f)
 
-pressure.set_evolution(lhs=pressure_f)
+  return pressure, velocity
 ```
+
+Lid-driven cavity:
+
+<img src="images/lid_driven_cavity.png" width="100%"/>
 
 ### SIR epidemic on a network
 ```python
@@ -275,6 +287,9 @@ def SIR_model(G, dS=0.1, dI=0.5, dR=0.0, alpha1=0.1, alpha2=0.02, alpha3=0.03, L
 
   return sys
 ```
+Zero-flux SIR model with R0=2:
+
+<img src="images/SIR.gif" width="100%"/>
 
 
 ### Rayleigh-Benard convection
