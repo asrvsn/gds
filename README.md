@@ -308,6 +308,9 @@ temperature, velocity_x, velocity_y = gds.node_gds(G), gds.node_gds(G), gds.node
 
 ```
 
+### Electrical grid supply/buffer control
+[TODO]
+
 More examples are [coming soon](https://a0s.co/projects/gds/gallery).
 
 <!-- ROADMAP -->

@@ -11,19 +11,24 @@ import gds
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
+def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=dict(), outlets=dict(), free=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
 	''' 
 	G: graph
 	''' 
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
-	non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
+	inlet_pts, outlet_pts = list(inlets.keys()), list(outlets.keys())
+	div_offset = np.zeros(pressure.ndim)
+	div_offset[[pressure.X[x] for x in inlet_pts]] = [inlets[x] for x in inlet_pts]
+	div_offset[[pressure.X[x] for x in outlet_pts]] = [-outlets[x] for x in outlet_pts]
+	free_nodes = np.array([pressure.X[x] for x in free], dtype=np.intp)
 	min_step = 1e-3
 
 	def pressure_f(t, y):
 		dt = max(min_step, velocity.dt)
 		lhs = velocity.div(velocity.y/dt - velocity.advect()) + pressure.laplacian(velocity.div()) * viscosity/density
-		lhs[non_div_free] = 0.
+		lhs[free_nodes] = 0.
+		lhs -= div_offset
 		lhs -= pressure.laplacian(y)/density 
 		return lhs
 
@@ -53,7 +58,7 @@ def fluid_on_grid():
 	dG = nx.Graph()
 	dG.add_nodes_from([i, o])
 	pressure, velocity = incompressible_flow(G, dG)
-	pressure.set_constraints(dirichlet={i: 10.0, o: -10.0})
+	pressure.set_constraints(dirichlet={i: 10.0, o: 10.0})
 	tracer = lagrangian_tracer(velocity, [i])
 	return pressure, velocity, tracer
 
@@ -89,7 +94,7 @@ def box_inlets():
 	G = nx.Graph()
 	G.add_nodes_from([0,1,2,3,4,5,6,7])
 	G.add_edges_from([(1,2),(2,3),(2,4),(3,5),(4,5),(5,6),(0,3),(4,7)])
-	pressure, velocity = incompressible_flow(G, inlets=[1,0], outlets=[6,7], viscosity=1.)
+	pressure, velocity = incompressible_flow(G, free=[1,0,6,7], viscosity=1.)
 	def is_vortex():
 		v_23, v_35, v_45, v_24 = velocity((2,3)), velocity((3,5)), velocity((4,5)), velocity((2,4))
 		ret = np.sign(v_23) == np.sign(v_35)
@@ -207,8 +212,8 @@ def lid_driven_cavity():
 	v=10.0
 	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
-	t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	pressure, velocity = incompressible_flow(G, viscosity=200., density=0.1)
+	# t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
+	pressure, velocity = incompressible_flow(G, viscosity=200., density=0.1, inlets={(0,m): v}, outlets={(n,m): v})
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -299,33 +304,33 @@ if __name__ == '__main__':
 
 	# p, v = poiseuille()
 	# p, v = poiseuille_asymmetric(gradP=10.0)
-	# p, v = lid_driven_cavity()
+	p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
 	# p, v = box_inlets()
-	p1, v1 = vortex_transfer(viscosity=1e-4)
-	p2, v2 = vortex_transfer(viscosity=10)
+	# p1, v1 = vortex_transfer(viscosity=1e-4)
+	# p2, v2 = vortex_transfer(viscosity=10)
 	# p, v = von_karman()
 	# p, v = backward_step()
 
-	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
-	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
+	d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
+	a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
 	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
-		# 'pressure': p,
-		# 'velocity': v,
-		# 'divergence': d,
+		'pressure': p,
+		'velocity': v,
+		'divergence': d,
 		# 'mass flux': f,
-		# 'advection': a,
+		'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
-		'velocity @ viscosity=1e-4': v1,
-		'velocity @ viscosity=10': v2,
-		'p1': p1,
-		'p2': p2,
+		# 'velocity @ viscosity=1e-4': v1,
+		# 'velocity @ viscosity=10': v2,
+		# 'p1': p1,
+		# 'p2': p2,
 	})
 
 	''' Save to disk ''' 
@@ -336,13 +341,14 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		# [[[v]], [[p]]],
-		[[[v1]], [[v2]]],
-		# [[[a]], [[d]]],
+		[[[v]], [[p]]],
+		# [[[v1]], [[v2]]],
+		[[[a]], [[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
+	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True)
 
 
