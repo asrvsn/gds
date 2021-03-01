@@ -30,12 +30,17 @@ def advection_on_grid():
 	conc.set_initial(y0 = lambda x: 1.0 if x == (0, 0) else 0.) # delta initial condition
 	return conc, flow
 
-def advection_on_triangles():
+def advection_on_triangles(periodic=False):
 	m, n = 20, 20
 	G = gds.triangular_lattice(m, n*2)
+	if periodic:
+		G.add_edges_from([((n, y), (0, y)) for y in range(m+1)])
 	def v_field(e):
-		if e[1][0] > e[0][0] and e[0][1] == e[1][1]:
-			return 1.
+		if e[0][1] == e[1][1]:
+			if e[0][0] == 0 and e[1][0] == n:
+				return -1.
+			if e[1][0] > e[0][0]:
+				return 1.
 		return 0.
 	conc, flow = advection(G, v_field)
 	conc.set_initial(y0 = lambda x: np.exp(-((x[0]-2)**2 + (x[1]-n/2)**2)/15)) 
@@ -189,12 +194,12 @@ def circulation_transfer():
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
 
-	# conc, flow = advection_on_triangles()
-	# sys = gds.couple({
-	# 	'conc': conc,
-	# 	'flow': flow,
-	# })
-	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, colorbars=False, plot_height=600, node_size=.05, y_rng=(-1.1,0.8), title='Advection of a Gaussian concentration')
+	conc, flow = advection_on_triangles(periodic=True)
+	sys = gds.couple({
+		'conc': conc,
+		'flow': flow,
+	})
+	gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, plot_height=600, node_size=.05, y_rng=(-1.1,0.8), title='Advection of a Gaussian concentration')
 
 	# conc, flow = advection_on_random_graph()
 	# sys = gds.couple({
@@ -235,6 +240,6 @@ if __name__ == '__main__':
 	# flow = vector_advection_circle()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
 
-	flow = circulation_transfer()
-	gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
+	# flow = circulation_transfer()
+	# gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
 

@@ -52,7 +52,7 @@
   <img src="images/wave_simp.gif" width="32%" style="vertical-align: top;"/>
 </p>
 <p float="left">
-  <img src="images/scalar_adv1.gif" width="32%" style="vertical-align: top;"/>
+  <img src="images/scalar_adv3.gif" width="32%" style="vertical-align: top;"/>
   <img src="images/circle_adv.gif" width="32%" style="vertical-align: top;"/> 
   <img src="images/scalar_adv2.gif" width="32%" style="vertical-align: top;"/>
 </p>
