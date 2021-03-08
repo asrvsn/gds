@@ -120,10 +120,10 @@ class node_gds(gds):
 			assert v_field.G is self.G, 'Incompatible domains'
 			v_field = v_field.y
 		if y is None: y=self.y
-		N = self.incidence@sp.diags(np.sign(v_field))
-		N.data[N.data > 0] = 0.
-		N.data *= -1
-		return -self.incidence@sp.diags(v_field)@N.T@y
+		Bp = self.incidence@sp.diags(np.sign(v_field))
+		Bp.data[Bp.data > 0] = 0.
+		Bp.data *= -1
+		return -self.incidence@sp.diags(v_field)@Bp.T@y
 
 class edge_gds(gds):
 	''' Dynamical system defined on the edges of a graph ''' 

@@ -70,19 +70,36 @@ def differential_inlets():
 	G = nx.Graph()
 	G.add_nodes_from([1,2,3,4,5,6])
 	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
-	pressure, velocity = incompressible_flow(G, inlets=[1,4], outlets=[6], viscosity=1.,)
+	pressure, velocity = incompressible_flow(G, inlets=[1,4], outlets=[6], viscosity=1e-2,)
 	def vel_f(t, e):
-		omega = 2*np.pi
+		# omega = 2*np.pi
 		if e == (1, 2):
 			return 1.
 			# return np.sin(omega*t)
-		elif e == (2, 3):
-			return 1.
-		elif e == (3, 4):
-			return 1.
+		# elif e == (3, 4):
+		# 	return 1.
 			# return -np.cos(omega*t)
 	velocity.set_constraints(dirichlet=vel_f)
-	# pressure.set_constraints(dirichlet={6: 0.0})
+	velocity.set_initial(y0=lambda e: -1.0 if e == (2, 3) else 0)
+	pressure.set_constraints(dirichlet={6: 0.0})
+	return pressure, velocity
+
+def differential_outlets():
+	G = nx.Graph()
+	G.add_nodes_from(list(range(8)))
+	G.add_edges_from([
+		(0, 1), 
+		(1, 2), (2, 4), (4, 6),
+		(1, 3), (3, 5), (5, 7),
+		(4, 5)
+	])
+	pressure, velocity = incompressible_flow(G, inlets=[0], outlets=[6, 7], viscosity=1.)
+	def positive_outlets(vel):
+		for outlet in [(4, 6), (5, 7)]:
+			vel[velocity.X[outlet]] = max(0, vel[velocity.X[outlet]])
+		return vel
+	velocity.set_constraints(dirichlet={(0, 1): 1.0}, project=positive_outlets)
+	pressure.set_constraints(dirichlet={6: 2.0, 7: 1.98})
 	return pressure, velocity
 
 def box_inlets():
@@ -100,12 +117,12 @@ def box_inlets():
 	def vel_f(t, e):
 		if e == (1, 2):
 			return 0 if is_vortex() else np.sin(t) 
-		if e == (5,6):
-			return 0 if is_vortex() else np.sin(t + np.pi/2)
 		if e == (0, 3):
-			return 0 if is_vortex() else np.sin(t + np.pi)
+			return 0 if is_vortex() else np.sin(t + np.pi/2)
+		if e == (5,6):
+			return 0 if is_vortex() else -np.sin(t + np.pi)
 		if e == (4, 7):
-			return 0 if is_vortex() else np.sin(t + 3*np.pi/2)
+			return 0 if is_vortex() else -np.sin(t + 3*np.pi/2)
 	velocity.set_constraints(dirichlet=vel_f)
 	# velocity.set_initial(y0=gds.utils.dict_fun({(2,4): 1.0, (4,5): 1.0, (2,3): -1.0, (3,5): -1.0}))
 	# pressure.set_constraints(dirichlet={3: 1.0, 4: -1.0})
@@ -302,9 +319,10 @@ if __name__ == '__main__':
 	# p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
+	p, v = differential_outlets()
 	# p, v = box_inlets()
-	p1, v1 = vortex_transfer(viscosity=1e-4)
-	p2, v2 = vortex_transfer(viscosity=10)
+	# p1, v1 = vortex_transfer(viscosity=1e-1)
+	# p2, v2 = vortex_transfer(viscosity=100)
 	# p, v = von_karman()
 	# p, v = backward_step()
 
@@ -314,18 +332,18 @@ if __name__ == '__main__':
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
-		# 'pressure': p,
-		# 'velocity': v,
+		'pressure': p,
+		'velocity': v,
 		# 'divergence': d,
 		# 'mass flux': f,
 		# 'advection': a,
 		# 'momentum diffusion': m,
 		# 'tracer': t,
 		# 'grad': grad,
-		'velocity @ viscosity=1e-4': v1,
-		'velocity @ viscosity=10': v2,
-		'p1': p1,
-		'p2': p2,
+		# 'velocity @ viscosity=1e-1': v1,
+		# 'velocity @ viscosity=100': v2,
+		# 'p1': p1,
+		# 'p2': p2,
 	})
 
 	''' Save to disk ''' 
@@ -336,13 +354,14 @@ if __name__ == '__main__':
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
 	canvas = [
-		# [[[v]], [[p]]],
-		[[[v1]], [[v2]]],
+		[[[v]], [[p]]],
+		# [[[v1]], [[v2]]],
 		# [[[a]], [[d]]],
 		# [[[a]], [[f]]], 
 		# [[[m]]],
 	]
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
+	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_max=0.8, dynamic_ranges=True)
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
 
 

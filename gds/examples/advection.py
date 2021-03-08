@@ -30,7 +30,7 @@ def advection_on_grid():
 	conc.set_initial(y0 = lambda x: 1.0 if x == (0, 0) else 0.) # delta initial condition
 	return conc, flow
 
-def advection_on_triangles(periodic=False):
+def advection_on_triangles(periodic=False, v=1.0):
 	m, n = 20, 20
 	G = gds.triangular_lattice(m, n*2)
 	if periodic:
@@ -38,9 +38,9 @@ def advection_on_triangles(periodic=False):
 	def v_field(e):
 		if e[0][1] == e[1][1]:
 			if e[0][0] == 0 and e[1][0] == n:
-				return -1.
+				return -v
 			if e[1][0] > e[0][0]:
-				return 1.
+				return v
 		return 0.
 	conc, flow = advection(G, v_field)
 	conc.set_initial(y0 = lambda x: np.exp(-((x[0]-2)**2 + (x[1]-n/2)**2)/15)) 
@@ -55,15 +55,15 @@ def advection_on_random_graph():
 	conc.set_initial(y0 = lambda x: 1.) 
 	return conc, flow
 
-def advection_on_circle():
+def advection_on_circle(v=1.0):
 	n = 10
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
 	def v_field(e):
 		if e == (n-1, 0) or e == (0, n-1):
-			return -1.0
-		return 1.0
+			return -v
+		return v
 	conc, flow = advection(G, v_field)
 	conc.set_initial(y0 = lambda x: 1.0 if x == 0 else 0.) # delta initial condition
 	return conc, flow
@@ -105,9 +105,9 @@ def vector_advection_circle():
 	flow.set_evolution(dydt=lambda t, y: -flow.advect(vectorized=False))
 	# flow.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	def init_flow(e):
-		if e == (2,3): return 2.0
-		elif e == (0,n-1): return -0.1
-		return 0.1
+		if e == (2,3): return 1.5
+		elif e == (0,n-1): return -1.0
+		return 1.0
 	flow.set_initial(y0=init_flow)
 	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
 	return flow
@@ -122,9 +122,9 @@ def vector_advection_circle_2():
 	flow.set_evolution(dydt=lambda t, y: np.zeros_like(y))
 	obs.set_evolution(dydt=lambda t, y: -obs.advect(flow, vectorized=False))
 	def init_obs(e):
-		if e == (2,3): return 2.0
-		elif e == (0,n-1): return -0.1
-		return 0.1
+		if e == (2,3): return 1.5
+		elif e == (0,n-1): return -1.0
+		return 1.0
 	obs.set_initial(y0=init_obs)
 	def init_flow(e):
 		if e == (0,n-1): return -1.0
@@ -194,12 +194,20 @@ def circulation_transfer():
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
 
-	conc, flow = advection_on_triangles(periodic=True)
-	sys = gds.couple({
-		'conc': conc,
-		'flow': flow,
-	})
-	gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, plot_height=600, node_size=.05, y_rng=(-1.1,0.8), title='Advection of a Gaussian concentration')
+	# conc, flow = advection_on_triangles(periodic=True)
+	# sys = gds.couple({
+	# 	'conc': conc,
+	# 	'flow': flow,
+	# })
+	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, plot_height=600, node_size=.05, y_rng=(-1.1,0.8), title='Advection of a Gaussian concentration')
+
+	# conc, flow = advection_on_circle(v=1.0)
+	# sys = gds.couple({
+	# 	'conc': conc,
+	# 	'flow': flow,
+	# })
+	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, plot_height=600, node_size=.05, min_rng_size=0.05, y_rng=(-1.1,0.8), title='Advection on a circle')
+
 
 	# conc, flow = advection_on_random_graph()
 	# sys = gds.couple({
@@ -233,12 +241,12 @@ if __name__ == '__main__':
 	# ]
 	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
 
-	# flow, obs = vector_advection_circle_2()
-	# sys = gds.couple({'flow': flow, 'obs': obs})
-	# gds.render(sys)
+	flow, obs = vector_advection_circle_2()
+	sys = gds.couple({'flow': flow, 'obs': obs})
+	gds.render(sys, edge_rng=(0,1.5), dynamic_ranges=True)
 
 	# flow = vector_advection_circle()
-	# gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
+	# gds.render(flow, edge_max=0.5, edge_rng=(0,1.5), min_rng_size=0.05)
 
 	# flow = circulation_transfer()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')

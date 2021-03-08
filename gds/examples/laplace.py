@@ -29,14 +29,21 @@ def sinus_boundary_timevarying():
 	eq.set_constraints(dirichlet=dirichlet)
 	return eq
 
-def edge_diffusion(m, n, constr):
+def edge_diffusion(m, n, constr, periodic=False):
 	# G = lattice45(10, 11)
 	G, (l, r, t, b) = constr(m, n, with_boundaries=True)
+	if periodic:
+		for x in l.nodes:
+			for y in r.nodes:
+				if x[1] == y[1]:
+					G.add_edge(x, y)
 	# G = nx.hexagonal_lattice_graph(10, 11)
 	# G = grid_graph(10, 11, diagonals=True)
 	v = gds.edge_gds(G)
 	v.set_evolution(dydt=lambda t, y: v.laplacian(y))
 	def boundary(e):
+		if e[0] in l.nodes and e[1] in r.nodes and e[0][1] == 0:
+			return -1.0
 		if e in b.edges:
 			return 1.0
 		elif e in t.edges:
@@ -47,8 +54,8 @@ def edge_diffusion(m, n, constr):
 
 if __name__ == '__main__':
 	# eq = sinus_boundary_timevarying()
-	eq1 = edge_diffusion(10, 21, gds.triangular_lattice)
-	eq2 = edge_diffusion(10, 12, gds.square_lattice)
+	eq1 = edge_diffusion(10, 22, gds.triangular_lattice, periodic=True)
+	eq2 = edge_diffusion(10, 12, gds.square_lattice, periodic=True)
 
 	sys = gds.couple({
 		'Edge diffusion on a triangular lattice': eq1,
