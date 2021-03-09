@@ -204,10 +204,10 @@ class Renderer(ABC):
 		w = 0.1
 		absy = np.abs(y)
 		if self.dynamic_ranges:
-			magn = (self.edge_max / max(np.log(1+absy).max(), 1e-6)) * np.log(1+absy)
+			magn = (self.edge_max / max(np.sqrt(absy).max(), 1e-6)) * np.sqrt(absy)
 		else:
 			# TODO: cleanup
-			magn = np.clip(np.log(1 + absy), a_min=None, a_max=self.edge_max)
+			magn = np.clip(np.sqrt(absy), a_min=None, a_max=self.edge_max)
 		dx = -np.sign(obs.y) * magn * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
 		dy = obs.layout['m'] * dx
 		p1x = obs.layout['x_mid'] - dx/2
