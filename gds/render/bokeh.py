@@ -67,11 +67,14 @@ class Renderer(ABC):
 		self.plot_titles = plot_titles
 		if layout_func is None:
 			def func(G):
-				pos_attr = nx.get_node_attributes(G, 'pos')
-				if len(pos_attr) > 0: # G already has self-defined positions
-					vmin = min(map(lambda a: min(a), pos_attr.values()))
-					vmax = max(map(lambda a: max(a), pos_attr.values()))
-					return {k: ((np.array(v) - vmin)/(vmax - vmin) - 0.5)*2 for k, v in pos_attr.items()}
+				pos = nx.get_node_attributes(G, 'pos')
+				if len(pos) > 0: # G already has self-defined positions
+					xmin = min(map(lambda a: a[0], pos.values()))
+					xmax = max(map(lambda a: a[0], pos.values()))
+					ymin = min(map(lambda a: a[1], pos.values()))
+					ymax = max(map(lambda a: a[1], pos.values()))
+					vmin, vmax = np.array([xmin, ymin]), np.array([xmax, ymax])
+					return {k: ((np.array(v) - vmin)/(vmax - vmin) - 0.5)*2 for k, v in pos.items()}
 				else:
 					return nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1, dim=dim)
 			self.layout_func = func

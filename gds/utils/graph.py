@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 ''' Graph generators ''' 
 
-def grid_graph_layout(G: nx.Graph):
+def set_grid_graph_layout(G: nx.Graph):
 	m, n = 0, 0
 	nodes = set(G.nodes())
 	for node in nodes:
@@ -22,22 +22,21 @@ def grid_graph_layout(G: nx.Graph):
 		for j in range(m):
 			if (i, j) in nodes:
 				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
-	return layout
+	nx.set_node_attributes(G, layout, 'pos')
 
 def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
+	set_grid_graph_layout(G)
 	if diagonals:
 		for i in range(n-1):
 			for j in range(m-1):
 				G.add_edges_from([((i, j), (i+1, j+1)), ((i, j+1), (i+1, j))])
-	pos = grid_graph_layout(G)
-	nx.set_node_attributes(G, pos, 'pos')
 	if with_boundaries:
 		l = G.subgraph([(0, i) for i in range(m)])
 		r = G.subgraph([(n-1, i) for i in range(m)])
 		t = G.subgraph([(j, m-1) for j in range(n)])
 		b = G.subgraph([(j, 0) for j in range(n)])
-		return G, (l, r, t, b)
+		return G, (l.copy(), r.copy(), t.copy(), b.copy())
 	else:
 		return G
 
@@ -153,7 +152,7 @@ def clear_attributes(G):
 			nx.set_node_attributes(G, None, attr)
 	return G
 
-def embedded_faces(G):
+def embedded_faces(G, use_spring_default=True):
 	'''
 	Returns the faces of a graph G by embedding within a 2-manifold of minimal genus. 
 	- Currently works only for planar graphs (LOL) 
@@ -205,26 +204,31 @@ def embedded_faces(G):
 					if path != None:
 						faces.append(tuple(path))
 						half_edges_seen.update([(path[-1], path[0])] + [(path[i-1], path[i]) for i in range(1, len(path))])
-		largest = max([len(f) for f in faces])
-		faces = [f for f in faces if len(f) < largest]
+		# largest = max([len(f) for f in faces])
+		# faces = [f for f in faces if len(f) < largest]
 		# print('\n'.join([repr(f) for f in faces]))
-		# print(f'Faces: {len(faces)}')
+		print(f'Faces: {len(faces)}')
 		# pdb.set_trace()
 		return faces
 	else:
 		(is_planar, embedding) = nx.algorithms.planarity.check_planarity(G)
 		if is_planar:
-			half_edges_seen = set()
-			faces = []
-			for edge in G.edges():
-				for half_edge in (edge, (edge[1], edge[0])):
-					if not (half_edge in half_edges_seen):
-						face = embedding.traverse_face(half_edge[0], half_edge[1], mark_half_edges=half_edges_seen)
-						faces.append(tuple(face))
-			# Set the node positions now that we have used used this embedding
-			pos = nx.algorithms.planar_drawing.combinatorial_embedding_to_pos(embedding)
-			nx.set_node_attributes(G, pos, 'pos')
-			return faces
+			if use_spring_default:
+				 pos = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1, dim=2)
+				 nx.set_node_attributes(G, pos, 'pos')
+				 return embedded_faces(G)
+			else:
+				half_edges_seen = set()
+				faces = []
+				for edge in G.edges():
+					for half_edge in (edge, (edge[1], edge[0])):
+						if not (half_edge in half_edges_seen):
+							face = embedding.traverse_face(half_edge[0], half_edge[1], mark_half_edges=half_edges_seen)
+							faces.append(tuple(face))
+				# Set the node positions now that we have used used this embedding
+				pos = nx.algorithms.planar_drawing.combinatorial_embedding_to_pos(embedding)
+				nx.set_node_attributes(G, pos, 'pos')
+				return faces
 		else:
 			raise Exception('TODO: implement faces for non-planar graphs')
 

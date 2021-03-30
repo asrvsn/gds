@@ -157,9 +157,41 @@ def poiseuille():
 	m=14 
 	n=31 
 	gradP=1.0
-	# assert n % 2 == 1
-	# G = lattice45(m, n)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
+	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
+		{n: gradP/2 for n in l.nodes},
+		{n: -gradP/2 for n in r.nodes}
+	))
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		gds.zero_edge_bc(t),
+		gds.zero_edge_bc(b),
+	))
+	return pressure, velocity
+
+def poiseuille_sq():
+	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
+	m=14 
+	n=14 
+	gradP=1.0
+	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
+	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
+		{n: gradP/2 for n in l.nodes},
+		{n: -gradP/2 for n in r.nodes}
+	))
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		gds.zero_edge_bc(t),
+		gds.zero_edge_bc(b),
+	))
+	return pressure, velocity
+
+def poiseuille_hex():
+	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
+	m=14 
+	n=14 
+	gradP=1.0
+	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
 	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes},
@@ -234,6 +266,47 @@ def lid_driven_cavity():
 	))
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
 	return pressure, velocity
+
+def lid_driven_cavity_sq():
+	''' Drag-induced flow ''' 
+	m=18
+	n=21
+	v=10.0
+	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
+	t.remove_nodes_from([(0, m-1), (1, m-1), (n-1, m-1), (n, m-1)])
+	pressure, velocity = incompressible_flow(G, viscosity=200., density=0.1)
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		gds.const_edge_bc(t, v),
+		gds.zero_edge_bc(b),
+		gds.zero_edge_bc(l),
+		gds.zero_edge_bc(r),
+	))
+	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
+	return pressure, velocity
+
+def lid_driven_cavity_hex():
+	''' Drag-induced flow ''' 
+	m=18
+	n=21
+	v=10.0
+	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
+	t.remove_nodes_from([(0, m*2), (1, m*2), (0, m*2+1), (1, m*2+1), (n-1, 2*m), (n, 2*m), (n-1, 2*m+1), (n, 2*m+1)])
+	pressure, velocity = incompressible_flow(G, viscosity=200., density=0.1)
+	def inlet_bc(e):
+		if e in t.edges:
+			if e[1][1] > e[0][1] and e[0][0] % 2 == 0:
+				# Hack to fix hexagonal bcs
+				return -v
+			return v
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		inlet_bc,
+		gds.zero_edge_bc(b),
+		gds.zero_edge_bc(l),
+		gds.zero_edge_bc(r),
+	))
+	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
+	return pressure, velocity
+
 
 def von_karman():
 	m=24 
@@ -314,17 +387,25 @@ def test2():
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	# p, v = poiseuille()
+	# p1, v1 = poiseuille()
+	# p2, v2 = poiseuille_sq()
+	# p3, v3 = poiseuille_hex()
+
+	# p1, v1 = lid_driven_cavity()
+	# p1, v1 = lid_driven_cavity_sq()
+	# p1, v1 = lid_driven_cavity_hex()
+
 	# p, v = poiseuille_asymmetric(gradP=10.0)
-	# p, v = lid_driven_cavity()
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
-	p, v = differential_outlets()
+	p1, v1 = differential_outlets()
 	# p, v = box_inlets()
 	# p1, v1 = vortex_transfer(viscosity=1e-1)
 	# p2, v2 = vortex_transfer(viscosity=100)
 	# p, v = von_karman()
 	# p, v = backward_step()
+
+	c1 = v1.project(GraphDomain.faces, lambda v: v.curl())
 
 	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
 	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
@@ -332,8 +413,13 @@ if __name__ == '__main__':
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
-		'pressure': p,
-		'velocity': v,
+		'velocity': v1,
+		'pressure': p1,
+		'vorticity': c1,
+		# 'velocity2': v2,
+		# 'velocity3': v3,
+		# 'pressure2': p2,
+		# 'pressure3': p3,
 		# 'divergence': d,
 		# 'mass flux': f,
 		# 'advection': a,
@@ -353,15 +439,9 @@ if __name__ == '__main__':
 	# sys = System.from_disk('von_karman')
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
-	canvas = [
-		[[[v]], [[p]]],
-		# [[[v1]], [[v2]]],
-		# [[[a]], [[d]]],
-		# [[[a]], [[f]]], 
-		# [[[m]]],
-	]
+	canvas = gds.grid_canvas(sys.observables.values(), 3)
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_max=0.8, dynamic_ranges=True)
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, face_palette=cc.rainbow, edge_max=0.6, dynamic_ranges=True, node_size=0.05, plot_width=800, edge_colors=True)
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
 
 
