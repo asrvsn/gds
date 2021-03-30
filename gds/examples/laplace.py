@@ -45,6 +45,9 @@ def edge_diffusion(m, n, constr, periodic=False):
 		if e[0] in l.nodes and e[1] in r.nodes and e[0][1] == 0:
 			return -1.0
 		if e in b.edges:
+			if e[1][1] > e[0][1] and e[0][0] % 2 == 0:
+				# Hack to fix hexagonal bcs
+				return -1.0
 			return 1.0
 		elif e in t.edges:
 			return 0.0
