@@ -36,8 +36,8 @@ from .base import *
 class Renderer(ABC):
 	def __init__(self, 
 				canvas: Canvas,
-				node_palette=cc.fire, edge_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
-				node_rng=(0., 1.), edge_rng=(0., 1.), edge_max=0.2, colorbars=True, 
+				node_palette=cc.fire, edge_palette=cc.fire, face_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
+				node_rng=(0., 1.), edge_rng=(0., 1.), face_rng=(0., 1.), edge_max=0.2, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
 				edge_colors=False, min_rng_size=0,
@@ -47,10 +47,13 @@ class Renderer(ABC):
 		self.plots: Dict[PlotID, Plot] = dict()
 		self.node_cmaps: Dict[PlotID, ColorBar] = dict()
 		self.edge_cmaps: Dict[PlotID, ColorBar] = dict()
+		self.face_cmaps: Dict[PlotID, ColorBar] = dict()
 		self.node_palette = node_palette
 		self.edge_palette = edge_palette
+		self.face_palette = face_palette
 		self.node_rng = node_rng
 		self.edge_rng = edge_rng
+		self.face_rng = face_rng
 		self.colorbars = colorbars
 		self.edge_max = edge_max
 		self.node_size = node_size
@@ -117,13 +120,10 @@ class Renderer(ABC):
 	def create_plot(self, items: List[Observable]):
 		assert all([obs.G is items[0].G for obs in items]), 'Co-rendered observables must use the same graph'
 		orig_G = items[0].G
-		layout = self.layout_func(orig_G)
+		orig_layout = self.layout_func(orig_G)
 		G = nx.convert_node_labels_to_integers(orig_G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
 		G = clear_attributes(G)
-		for i, n in enumerate(orig_G.nodes()):
-			v = layout[n]
-			del layout[n]
-			layout[i] = v
+		layout = {i: orig_layout[n] for i, n in enumerate(orig_G.nodes())}
 		def helper(obs: Observable, plot=None):
 			if plot is None:
 				plot = figure(x_range=self.x_rng, y_range=self.y_rng, tooltips=[], width=self.plot_width, height=self.plot_height) 
@@ -167,6 +167,20 @@ class Renderer(ABC):
 						else:
 							plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
 							plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
+				elif obs.Gd is GraphDomain.faces:
+					cmap = LinearColorMapper(palette=self.face_palette, low=self.face_rng[0], high=self.face_rng[1])
+					self.face_cmaps[obs.plot_id] = cmap
+					obs.face_source = ColumnDataSource()
+					xs = [[orig_layout[n][0] for n in f] for f in obs.faces]
+					ys = [[orig_layout[n][1] for n in f] for f in obs.faces]
+					obs.face_source.data['xs'] = xs
+					obs.face_source.data['ys'] = ys
+					obs.face_source.data['value'] = np.zeros(obs.ndim)
+					faces = Patches(xs='xs', ys='ys', fill_color=field('value', cmap), line_color='#FFFFFF', line_width=2)
+					plot.add_glyph(obs.face_source, faces)
+					if self.colorbars:
+						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='face')
+						plot.add_layout(cbar, 'right')
 				else:
 					raise Exception('unknown graph domain.')
 			return plot
@@ -203,11 +217,12 @@ class Renderer(ABC):
 		h = 0.1
 		w = 0.1
 		absy = np.abs(y)
+		scaler = lambda x: x
 		if self.dynamic_ranges:
-			magn = (self.edge_max / max(np.sqrt(absy).max(), 1e-6)) * np.sqrt(absy)
+			magn = (self.edge_max / max(scaler(absy).max(), 1e-6)) * scaler(absy)
 		else:
 			# TODO: cleanup
-			magn = np.clip(np.sqrt(absy), a_min=None, a_max=self.edge_max)
+			magn = np.clip(scaler(absy), a_min=None, a_max=self.edge_max)
 		dx = -np.sign(obs.y) * magn * obs.layout['dx_dir'] * h / np.sqrt(obs.layout['m'] ** 2 + 1)
 		dy = obs.layout['m'] * dx
 		p1x = obs.layout['x_mid'] - dx/2
@@ -279,6 +294,14 @@ class LiveRenderer(Renderer):
 						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
 						self.edge_cmaps[obs.plot_id].low = lo
 						self.edge_cmaps[obs.plot_id].high = hi
+				elif obs.Gd is GraphDomain.faces:
+					obs.face_source.data['value'] = obs.y
+					if self.dynamic_ranges:
+						lo, hi = obs.y.min(), obs.y.max()
+						mid = (lo+hi)/2
+						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+						self.face_cmaps[obs.plot_id].low = lo
+						self.face_cmaps[obs.plot_id].high = hi
 		if self.rec_name != None:
 			self.dump_frame()
 

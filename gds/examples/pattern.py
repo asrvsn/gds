@@ -27,6 +27,6 @@ def spirals(G):
 	return swift_hohenberg(G, 0.3, -1, 1, -2, 1)
 
 if __name__ == '__main__':
-	G = nx.hexagonal_lattice_graph(22, 22)
+	G = nx.hexagonal_lattice_graph(22, 23)
 	eq = spirals(G)
 	gds.render(eq, node_size=0.035, plot_width=800, node_palette=cc.bgy, dynamic_ranges=True, title='Pattern formation on a hexagonal lattice')

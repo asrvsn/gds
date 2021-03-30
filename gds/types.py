@@ -8,7 +8,8 @@ import numpy as np
 Node = Any
 Edge = Tuple[Node, Node]
 Triangle = Tuple[Node, Node, Node]
-Point = Union[Node, Edge, Triangle] # A point in the graph domain
+Face = List[Node]
+Point = Union[Node, Edge, Triangle, Face] # A point in the graph domain
 
 ''' Types for dynamics on graph domains '''
 
@@ -21,6 +22,7 @@ class GraphDomain(Enum):
 	nodes = 0
 	edges = 1
 	triangles = 2
+	faces = 3
 
 Orientation = Dict[Edge, Sign]
 

@@ -54,12 +54,29 @@ def edge_diffusion(m, n, constr, periodic=False):
 
 if __name__ == '__main__':
 	# eq = sinus_boundary_timevarying()
-	eq1 = edge_diffusion(10, 22, gds.triangular_lattice, periodic=True)
-	eq2 = edge_diffusion(10, 12, gds.square_lattice, periodic=True)
+	# eq1 = edge_diffusion(10, 22, gds.triangular_lattice, periodic=True)
+	# eq2 = edge_diffusion(10, 12, gds.square_lattice, periodic=True)
 
+	# sys = gds.couple({
+	# 	'Edge diffusion on a triangular lattice': eq1,
+	# 	'Edge diffusion on a square lattice': eq2,
+	# })
+
+	# gds.render(sys)
+
+	eq1 = edge_diffusion(10, 22, gds.triangular_lattice, periodic=False)
+	curl1 = eq1.project(gds.GraphDomain.faces, lambda eq: eq.curl())
+	eq2 = edge_diffusion(10, 12, gds.square_lattice, periodic=False)
+	curl2 = eq2.project(gds.GraphDomain.faces, lambda eq: eq.curl())
+	eq3 = edge_diffusion(10, 12, gds.hexagonal_lattice, periodic=False)
+	curl3 = eq3.project(gds.GraphDomain.faces, lambda eq: eq.curl())
 	sys = gds.couple({
-		'Edge diffusion on a triangular lattice': eq1,
-		'Edge diffusion on a square lattice': eq2,
+		'flow1': eq1,
+		'curl1': curl1,
+		'flow2': eq2,
+		'curl2': curl2,
+		'flow3': eq3,
+		'curl3': curl3,
 	})
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.6)
 
-	gds.render(sys)

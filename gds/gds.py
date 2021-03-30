@@ -7,6 +7,7 @@ import itertools
 from .types import *
 from .fds import *
 from .utils import *
+from .utils.graph import embedded_faces
 
 ''' Observables on graph domains ''' 
 
@@ -24,6 +25,8 @@ class GraphObservable(Observable):
 			if len(clique) == 3:
 				self.triangles[tuple(clique)] = tri_index
 				tri_index += 1
+		self.faces = {f: i for i, f in enumerate(embedded_faces(G))}
+		self.faces_i = {i: f for f, i in self.faces.items()}
 
 		if Gd is GraphDomain.nodes:
 			X = self.nodes
@@ -31,6 +34,8 @@ class GraphObservable(Observable):
 			X = self.edges
 		elif Gd is GraphDomain.triangles:
 			X = self.triangles
+		elif Gd is GraphDomain.faces:
+			X = self.faces
 		Observable.__init__(self, X)
 
 	def project(self, Gd: GraphDomain, view: Callable[['GraphObservable'], np.ndarray]) -> 'GraphObservable':
@@ -147,14 +152,31 @@ class edge_gds(gds):
 			return 0
 		self.edge_adj = sparse_product(self.edges.keys(), self.edges.keys(), edge_adj_func).tocsr() # |E| x |E| edge adjacency matrix
 
-		def curl_element(tri, edge):
+		def simplicial_curl(tri, edge):
+			# TODO: proper weighting
 			if edge[0] in tri and edge[1] in tri:
 				c = np.sqrt(self.weights[self.edges[edge]])
 				if edge == (tri[0], tri[1]) or edge == (tri[1], tri[2]) or edge == (tri[2], tri[0]): # Orientation of triangle
 					return c
 				return -c
 			return 0
-		self.curl3 = sparse_product(self.triangles.keys(), self.edges.keys(), curl_element).tocsr() # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
+		if len(self.triangles) > 0:
+			self.curl3 = sparse_product(self.triangles.keys(), self.edges.keys(), simplicial_curl).tocsr() # |T| x |E| curl operator, where T is the set of 3-cliques in G; respects implicit orientation
+		else:
+			self.curl3 = sp.csr_matrix((1, len(self.edges)))
+
+		def geometric_curl(face, edge):
+			# TODO: proper weighting
+			if edge[0] in face and edge[1] in face:
+				c = np.sqrt(self.weights[self.edges[edge]])
+				if any([edge == (face[i-1], face[i]) for i in range(1, len(face))]) or edge == (face[-1], face[0]):
+					return c
+				return -c
+			return 0
+		if len(self.faces) > 0:
+			self.curl_face = sparse_product(self.faces.keys(), self.edges.keys(), geometric_curl).tocsr() # |F| x |E| curl operator, where F is the set of faces in G; respects implicit orientation
+		else:
+			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
 	def __call__(self, x: Edge):
 		return self.orientation[x] * self.y[self.X[x]]
@@ -181,7 +203,9 @@ class edge_gds(gds):
 
 	def curl(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
-		raise self.curl3@y
+		# curl_op self.curl3@y
+		curl_op = self.curl_face
+		return curl_op@y
 
 	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' Vector laplacian or discrete Helmholtz operator or Hodge-1 laplacian
@@ -190,8 +214,9 @@ class edge_gds(gds):
 		''' 
 		if y is None: y=self.y
 		ret = self.dirichlet_laplacian@y 
-		if self.curl3.shape[0] > 0:
-			ret -= self.curl3.T@self.curl3@y
+		# curl_op self.curl3@y
+		curl_op = self.curl_face
+		ret += -curl_op.T@curl_op@y
 		return ret
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:

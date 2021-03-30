@@ -86,15 +86,23 @@ def triangular_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 		else:
 			return G
 
-def hexagonal_lattice(*args, **kwargs) -> nx.Graph:
+def hexagonal_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 	''' Sanitize networkx properties for Bokeh consumption ''' 
 	if 'periodic' in kwargs:
 		kwargs['with_positions'] = False
-		G = nx.hexagonal_lattice_graph(*args, **kwargs)
+		G = nx.hexagonal_lattice_graph(m, n, **kwargs)
 		nx.set_node_attributes(G, None, 'contraction')
 		return G
 	else:
-		return nx.triangular_lattice_graph(*args, **kwargs)
+		G = nx.hexagonal_lattice_graph(m, n, **kwargs)
+		if with_boundaries:
+			l = G.subgraph([(0, i) for i in range(m*2+2)])
+			r = G.subgraph([(n, i) for i in range(m*2+2)])
+			t = G.subgraph([(j, m*2) for j in range(n+1)] + [(j, m*2+1) for j in range(n+1)])
+			b = G.subgraph([(j, 0) for j in range(n+1)] + [(j, 1) for j in range(n+1)])
+			return G, (l.copy(), r.copy(), t.copy(), b.copy())
+		else:
+			return G
 
 
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
@@ -145,17 +153,86 @@ def clear_attributes(G):
 			nx.set_node_attributes(G, None, attr)
 	return G
 
-if __name__ == '__main__':
-	# G = lattice45(4, 6)
-	G = square_lattice(10, 10)
-	G_ = nx.line_graph(G)
-	G__ = nx.line_graph(G_)
+def embedded_faces(G):
+	'''
+	Returns the faces of a graph G by embedding within a 2-manifold of minimal genus. 
+	- Currently works only for planar graphs (LOL) 
+	- extension to non-zero genus requires a graph embedding (TODO)
+	'''
+	pos =  nx.get_node_attributes(G, 'pos')
+	if pos != {}:
+		# Position data already calculated (e.g. in planar graph generators)
+		def normalize_angle(theta):
+			sign, magn = np.sign(theta), np.abs(theta) % (2*np.pi)
+			if sign < 0:
+				return 2*np.pi - magn
+			else:
+				return magn
 
-	plt.figure()
+		def incident_angle(e1, e2):
+			# Returns the angle measured from e1 to e2, where -pi <= angle <= pi
+			x1, y1 = pos[e1[1]][0]-pos[e1[0]][0], pos[e1[1]][1]-pos[e1[0]][1]
+			x2, y2 = pos[e2[1]][0]-pos[e2[0]][0], pos[e2[1]][1]-pos[e2[0]][1]
+			theta = normalize_angle(np.arctan2(y2, x2) - np.arctan2(y1, x1))
+			return (theta-2*np.pi) if theta > np.pi else theta
+
+		faces = []
+		half_edges_seen = set()
+		for edge in G.edges():
+			for half_edge in (edge, (edge[1], edge[0])):
+				if not (half_edge in half_edges_seen):
+					# "Keep going left" -- uses orientability of plane
+					(tail, head) = half_edge
+					path = [head]
+					while True:
+						ccw = None
+						ccw_angle = -float('inf')
+						for node in G.neighbors(head):
+							if node != tail:
+								angle = incident_angle((tail, head), (head, node))
+								if angle > ccw_angle:
+									ccw_angle = angle
+									ccw = node
+						if ccw == None:
+							path = None
+							break
+						else:
+							if ccw == path[0]:
+								break
+							path.append(ccw)
+							tail = head
+							head = ccw
+					if path != None:
+						faces.append(tuple(path))
+						half_edges_seen.update([(path[-1], path[0])] + [(path[i-1], path[i]) for i in range(1, len(path))])
+		largest = max([len(f) for f in faces])
+		faces = [f for f in faces if len(f) < largest]
+		# print('\n'.join([repr(f) for f in faces]))
+		# print(f'Faces: {len(faces)}')
+		# pdb.set_trace()
+		return faces
+	else:
+		(is_planar, embedding) = nx.algorithms.planarity.check_planarity(G)
+		if is_planar:
+			half_edges_seen = set()
+			faces = []
+			for edge in G.edges():
+				for half_edge in (edge, (edge[1], edge[0])):
+					if not (half_edge in half_edges_seen):
+						face = embedding.traverse_face(half_edge[0], half_edge[1], mark_half_edges=half_edges_seen)
+						faces.append(tuple(face))
+			# Set the node positions now that we have used used this embedding
+			pos = nx.algorithms.planar_drawing.combinatorial_embedding_to_pos(embedding)
+			nx.set_node_attributes(G, pos, 'pos')
+			return faces
+		else:
+			raise Exception('TODO: implement faces for non-planar graphs')
+
+if __name__ == '__main__':
+	G = hexagonal_lattice(3, 4)
+	faces = embedded_faces(G)
+	pdb.set_trace()
+
 	nx.draw_spectral(G)
-	plt.figure()
-	nx.draw_spectral(G_)
-	plt.figure()
-	nx.draw_spectral(G__)
 
 	plt.show()
