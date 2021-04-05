@@ -16,7 +16,7 @@ import random
 from bokeh.core.properties import field
 from bokeh.plotting import figure, from_networkx
 from bokeh.layouts import row, column, gridplot, widgetbox
-from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead, ColumnDataSource
+from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead, ColumnDataSource, Arc
 from bokeh.models.glyphs import Ellipse, MultiLine, Patches
 from bokeh.transform import linear_cmap
 from bokeh.command.util import build_single_handler_applications
@@ -42,6 +42,7 @@ class Renderer(ABC):
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
 				edge_colors=False, min_rng_size=0,
 				title=None, plot_titles=True,
+				face_orientations=False,
 			):
 		self.canvas: Canvas = canvas
 		self.plots: Dict[PlotID, Plot] = dict()
@@ -65,6 +66,7 @@ class Renderer(ABC):
 		self.min_rng_size = min_rng_size
 		self.title = title
 		self.plot_titles = plot_titles
+		self.face_orientations = face_orientations
 		if layout_func is None:
 			def func(G):
 				pos = nx.get_node_attributes(G, 'pos')
@@ -130,7 +132,7 @@ class Renderer(ABC):
 		def helper(obs: Observable, plot=None):
 			if plot is None:
 				plot = figure(x_range=self.x_rng, y_range=self.y_rng, tooltips=[], width=self.plot_width, height=self.plot_height) 
-				plot.axis.visible = None
+				plot.axis.visible = False
 				plot.xgrid.grid_line_color = None
 				plot.ygrid.grid_line_color = None
 				renderer = from_networkx(G, layout)
@@ -181,6 +183,20 @@ class Renderer(ABC):
 					obs.face_source.data['value'] = np.zeros(obs.ndim)
 					faces = Patches(xs='xs', ys='ys', fill_color=field('value', cmap), line_color='#FFFFFF', line_width=2)
 					plot.add_glyph(obs.face_source, faces)
+					if self.face_orientations:
+						# TODO: only works for convex faces
+						radius = 0.05
+						height = 0.02
+						obs.centroid_x, obs.centroid_y = np.array([np.mean(row) for row in xs]), np.array([np.mean(row) for row in ys])
+						arrows_ys = np.stack((obs.centroid_y-radius, obs.centroid_y-radius+height/2, obs.centroid_y-radius-height/2), axis=1)
+						obs.face_source.data['centroid_x'] = obs.centroid_x
+						obs.face_source.data['centroid_y'] = obs.centroid_y
+						obs.face_source.data['arrows_ys'] = (arrows_ys + 0.01).tolist()
+						self.draw_face_orientations(obs, cmap)
+						arcs = Arc(x='centroid_x', y='centroid_y', radius=radius, start_angle=-0.9, end_angle=4.1, line_color=field('arrow_color', cmap))
+						arrows = Patches(xs='arrows_xs', ys='arrows_ys', fill_color=field('arrow_color', cmap), line_color=field('arrow_color', cmap))
+						plot.add_glyph(obs.face_source, arcs)
+						plot.add_glyph(obs.face_source, arrows)
 					if self.colorbars:
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='face')
 						plot.add_layout(cbar, 'right')
@@ -237,6 +253,15 @@ class Renderer(ABC):
 		obs.arr_source.data['xs'] = np.stack((p1x, p2x, p3x), axis=1).tolist()
 		obs.arr_source.data['ys'] = np.stack((p1y, p2y, p3y), axis=1).tolist()
 		obs.arr_source.data['value'] = absy
+
+	def draw_face_orientations(self, obs, cmap):
+		width = 0.03
+		handedness = np.sign(obs.face_orientation_vector * obs.y)
+		head, tail = obs.centroid_x + handedness * width / 2, obs.centroid_x - handedness * width / 2
+		obs.face_source.data['arrows_xs'] = np.stack((head, tail, tail), axis=1).tolist()
+		mid = (cmap.high + cmap.low) / 2
+		parity = np.sign(obs.y - mid).clip(0)
+		obs.face_source.data['arrow_color'] = parity * cmap.low + (1-parity) * cmap.high
 
 ''' Derivations ''' 
 
@@ -305,6 +330,8 @@ class LiveRenderer(Renderer):
 						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
 						self.face_cmaps[obs.plot_id].low = lo
 						self.face_cmaps[obs.plot_id].high = hi
+					if self.face_orientations:
+						self.draw_face_orientations(obs, self.face_cmaps[obs.plot_id])
 		if self.rec_name != None:
 			self.dump_frame()
 

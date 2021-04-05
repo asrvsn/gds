@@ -15,6 +15,7 @@ class GraphObservable(Observable):
 	def __init__(self, G: nx.Graph, Gd: GraphDomain):
 		self.G = G
 		self.Gd = Gd
+
 		# Domains
 		self.nodes = {v: i for i, v in enumerate(G.nodes())}
 		self.nodes_i = {i: v for v, i in self.nodes.items()}
@@ -27,6 +28,11 @@ class GraphObservable(Observable):
 				tri_index += 1
 		self.faces = {f: i for i, f in enumerate(embedded_faces(G))}
 		self.faces_i = {i: f for f, i in self.faces.items()}
+
+		# Orientations
+		self.edge_orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
+		self.face_orientation = {f: 1 for f in self.faces} # Orientation of faces; 1: CCW, -1: CW
+		self.face_orientation_vector = np.array([self.face_orientation[f] for f in self.faces])
 
 		if Gd is GraphDomain.nodes:
 			X = self.nodes
@@ -60,8 +66,6 @@ class gds(fds, GraphObservable):
 			for i, e in enumerate(G.edges()):
 				self.weights[i] = G[e[0]][e[1]][w_key]
 
-		# Orientation / incidence
-		self.orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
 		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.weights)).tocsr() # |V| x |E| incidence
 
 		fds.__init__(self, self.X)
@@ -179,7 +183,7 @@ class edge_gds(gds):
 			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
 	def __call__(self, x: Edge):
-		return self.orientation[x] * self.y[self.X[x]]
+		return self.edge_orientation[x] * self.y[self.X[x]]
 
 	''' Differential operators: all of the following are CVXPY-compatible '''
 
@@ -313,3 +317,11 @@ class edge_gds(gds):
 class simplex_gds(gds):
 	''' Dynamical system defined on k-simplices of a graph ''' 
 	pass
+
+class face_gds(gds):
+	''' Dynamical system defined on the faces of a graph ''' 
+
+	def __init__(self, G: nx.Graph, *args, **kwargs):
+		gds.__init__(self, G, GraphDomain.faces, *args, **kwargs)
+
+		# Operators: TODO

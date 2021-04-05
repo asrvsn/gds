@@ -31,6 +31,7 @@ class fds(Observable, Steppable):
 			lhs: Callable[[Time, np.ndarray], np.ndarray]=None, cost: Callable[[Time, np.ndarray], float]=None, 
 			map_fun: Callable[[Time, np.ndarray], np.ndarray]=None, dt: float=1.0,
 			traj_t: Iterable[Time]=None, traj_y: Iterable[np.ndarray]=None,
+			nil: bool=False,
 		): 
 		''' Define evolution law for the dynamics.
 
@@ -61,8 +62,11 @@ class fds(Observable, Steppable):
 		Option 4: As a data-derived trajectory
 			traj_t: Iterable[Time]
 			traj_y: Iterable[np.ndarray]
+
+		Option 5: As a nil-evolution (time-invariant system)
+			nil: bool
 		'''
-		assert oneof([dydt != None, lhs != None, cost != None, map_fun != None, traj_t != None]), 'Exactly one evolution law must be specified'
+		assert oneof([dydt != None, lhs != None, cost != None, map_fun != None, traj_t != None, nil]), 'Exactly one evolution law must be specified'
 
 		if dydt != None:
 			self.iter_mode = IterationMode.dydt
@@ -111,6 +115,12 @@ class fds(Observable, Steppable):
 			self._t = self.t0
 			self._i = 0
 
+		elif nil:
+			self.iter_mode = IterationMode.nil
+			self._t = 0
+			self._y = np.zeros(self.ndim)
+			self.y0 = np.zeros(self.ndim)
+
 	def set_initial(self, 
 			t0: float=0., 
 			y0: Union[Callable[[Point], float], np.ndarray]=lambda _: 0.,
@@ -137,6 +147,8 @@ class fds(Observable, Steppable):
 		elif self.iter_mode is IterationMode.map:
 			self._t = t0
 			self._n = int(t0)
+		elif self.iter_mode is IterationMode.nil:
+			self._t = t0
 
 		for x in self.X.keys() - self.X_dirichlet:
 			i, y = self.X[x], y0(x)
@@ -144,7 +156,7 @@ class fds(Observable, Steppable):
 
 			if self.iter_mode is IterationMode.dydt:
 				self.integrator.y[i] = y
-			elif self.iter_mode is IterationMode.cvx or self.iter_mode is IterationMode.map:
+			elif self.iter_mode in [IterationMode.cvx, IterationMode.map, IterationMode.nil]:
 				self._y[i] = y
 
 	def set_constraints(self, 
@@ -162,7 +174,6 @@ class fds(Observable, Steppable):
 			Project solutions onto feasible set.
 		''' 
 		assert self.iter_mode != IterationMode.none, 'Use set_evolution() before setting boundary conditions'
-		assert self.iter_mode != IterationMode.traj, 'Cannot set constraints on trajectory-derived system'
 		
 		self._set_bcs(dirichlet, neumann, project)
 
@@ -178,6 +189,8 @@ class fds(Observable, Steppable):
 			self._prb = cp.Problem(self._prb.objective, constr)
 		elif self.iter_mode is IterationMode.map:
 			self._y = self.y0.copy()
+		else:
+			raise Exception('Unsupported iteration mode for set_constraints()')
 
 	def _set_bcs(self, 
 			dirichlet: BoundaryCondition={}, 
@@ -247,6 +260,8 @@ class fds(Observable, Steppable):
 			self.step_map(dt)
 		elif self.iter_mode is IterationMode.traj:
 			self.step_traj(dt)
+		elif self.iter_mode is IterationMode.nil:
+			self._t += dt
 		else:
 			raise Exception(f'Unsupported evolution law: {self.iter_mode}')
 
@@ -344,7 +359,7 @@ class fds(Observable, Steppable):
 			return np.zeros(self.ndim)
 		elif self.iter_mode is IterationMode.dydt:
 			return self.integrator.y[:self.ndim]
-		elif self.iter_mode is IterationMode.cvx or self.iter_mode is IterationMode.map:
+		elif self.iter_mode in [IterationMode.cvx, IterationMode.map, IterationMode.nil]:
 			return self._y
 		elif self.iter_mode is IterationMode.traj:
 			return self.traj_y[self._n]
@@ -353,7 +368,7 @@ class fds(Observable, Steppable):
 	def t(self):
 		if self.iter_mode is IterationMode.dydt:
 			return self.integrator.t
-		elif self.iter_mode is IterationMode.cvx or self.iter_mode is IterationMode.map:
+		elif self.iter_mode in [IterationMode.cvx, IterationMode.map, IterationMode.nil]:
 			return self._t
 		elif self.iter_mode is IterationMode.traj:
 			return self.traj_t[self._n]

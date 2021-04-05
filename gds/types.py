@@ -35,11 +35,12 @@ BoundaryCondition = Union[
 ''' Base interfaces ''' 
 
 class IterationMode(Enum):
-	none = 0
+	none = 0 # Unspecified
 	dydt = 1 # Differential
 	cvx = 2 # Convex program
 	map = 3 # Recurrence relation
 	traj = 4 # Recorded trajectory
+	nil = 5 # Nil iteration
 
 class Steppable(ABC):
 	''' An object which can be stepped through time ''' 

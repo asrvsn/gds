@@ -156,6 +156,7 @@ def embedded_faces(G, use_spring_default=True):
 	'''
 	Returns the faces of a graph G by embedding within a 2-manifold of minimal genus. 
 	- Currently works only for planar graphs (LOL) 
+	- Orients planar faces in CCW direction
 	- extension to non-zero genus requires a graph embedding (TODO)
 	'''
 	pos =  nx.get_node_attributes(G, 'pos')
@@ -204,11 +205,14 @@ def embedded_faces(G, use_spring_default=True):
 					if path != None:
 						faces.append(tuple(path))
 						half_edges_seen.update([(path[-1], path[0])] + [(path[i-1], path[i]) for i in range(1, len(path))])
-		# largest = max([len(f) for f in faces])
-		# faces = [f for f in faces if len(f) < largest]
-		# print('\n'.join([repr(f) for f in faces]))
+
+		# Remove outer face by the following buggy heuristic (will not work in pathological cases!)
+		if len(faces) > 1:
+			largest = max([len(f) for f in faces])
+			faces = [f for f in faces if len(f) < largest]
+
+		print('\n'.join([repr(f) for f in faces]))
 		print(f'Faces: {len(faces)}')
-		# pdb.set_trace()
 		return faces
 	else:
 		(is_planar, embedding) = nx.algorithms.planarity.check_planarity(G)

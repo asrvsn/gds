@@ -93,7 +93,7 @@ def differential_outlets():
 		(1, 3), (3, 5), (5, 7),
 		(4, 5)
 	])
-	pressure, velocity = incompressible_flow(G, inlets=[0], outlets=[6, 7], viscosity=1.)
+	pressure, velocity = incompressible_flow(G, inlets=[0], outlets=[6, 7], viscosity=0.01)
 	def positive_outlets(vel):
 		for outlet in [(4, 6), (5, 7)]:
 			vel[velocity.X[outlet]] = max(0, vel[velocity.X[outlet]])
@@ -398,14 +398,15 @@ if __name__ == '__main__':
 	# p, v = poiseuille_asymmetric(gradP=10.0)
 	# p, v, t = fluid_on_grid()
 	# p, v = differential_inlets()
-	p1, v1 = differential_outlets()
+	# p1, v1 = differential_outlets()
 	# p, v = box_inlets()
-	# p1, v1 = vortex_transfer(viscosity=1e-1)
-	# p2, v2 = vortex_transfer(viscosity=100)
+	p1, v1 = vortex_transfer(viscosity=1)
+	p2, v2 = vortex_transfer(viscosity=10)
 	# p, v = von_karman()
 	# p, v = backward_step()
 
 	c1 = v1.project(GraphDomain.faces, lambda v: v.curl())
+	c2 = v2.project(GraphDomain.faces, lambda v: v.curl())
 
 	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
 	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
@@ -413,12 +414,13 @@ if __name__ == '__main__':
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
-		'velocity': v1,
-		'pressure': p1,
-		'vorticity': c1,
-		# 'velocity2': v2,
+		'velocity1 @ viscosity = 1': v1,
+		'pressure1': p1,
+		'vorticity1': c1,
+		'velocity2 @ viscosity = 10': v2,
+		'pressure2': p2,
+		'vorticity2': c2,
 		# 'velocity3': v3,
-		# 'pressure2': p2,
 		# 'pressure3': p3,
 		# 'divergence': d,
 		# 'mass flux': f,
@@ -441,7 +443,7 @@ if __name__ == '__main__':
 
 	canvas = gds.grid_canvas(sys.observables.values(), 3)
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, face_palette=cc.rainbow, edge_max=0.6, dynamic_ranges=True, node_size=0.05, plot_width=800, edge_colors=True)
+	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, face_palette=cc.rainbow, edge_max=0.6, dynamic_ranges=True, node_size=0.05, plot_width=800, edge_colors=True, min_rng_size=0.0001)
 	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
 
 
