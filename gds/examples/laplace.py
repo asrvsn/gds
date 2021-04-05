@@ -41,14 +41,15 @@ def edge_diffusion(m, n, constr, periodic=False):
 	# G = grid_graph(10, 11, diagonals=True)
 	v = gds.edge_gds(G)
 	v.set_evolution(dydt=lambda t, y: v.laplacian(y))
+	velocity = -1.0
 	def boundary(e):
 		if e[0] in l.nodes and e[1] in r.nodes and e[0][1] == 0:
-			return -1.0
+			return -velocity
 		if e in b.edges:
 			if e[1][1] > e[0][1] and e[0][0] % 2 == 0:
 				# Hack to fix hexagonal bcs
-				return -1.0
-			return 1.0
+				return -velocity
+			return velocity
 		elif e in t.edges:
 			return 0.0
 		return None
@@ -81,5 +82,5 @@ if __name__ == '__main__':
 		'flow3': eq3,
 		'curl3': curl3,
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.6)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.6, face_orientations=True)
 

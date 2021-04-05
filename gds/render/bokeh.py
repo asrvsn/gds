@@ -185,15 +185,16 @@ class Renderer(ABC):
 					plot.add_glyph(obs.face_source, faces)
 					if self.face_orientations:
 						# TODO: only works for convex faces
-						radius = 0.05
-						height = 0.02
 						obs.centroid_x, obs.centroid_y = np.array([np.mean(row) for row in xs]), np.array([np.mean(row) for row in ys])
-						arrows_ys = np.stack((obs.centroid_y-radius, obs.centroid_y-radius+height/2, obs.centroid_y-radius-height/2), axis=1)
+						obs.radius = 0.3 * np.array([min([np.sqrt((xs[i][j] - obs.centroid_x[i])**2 + (ys[i][j] - obs.centroid_y[i])**2) for j in range(len(xs[i]))]) for i in range(len(xs))])
+						height = 2/5 * obs.radius
+						arrows_ys = np.stack((obs.centroid_y-obs.radius, obs.centroid_y-obs.radius+height/2, obs.centroid_y-obs.radius-height/2), axis=1)
 						obs.face_source.data['centroid_x'] = obs.centroid_x
 						obs.face_source.data['centroid_y'] = obs.centroid_y
+						obs.face_source.data['radius'] = obs.radius
 						obs.face_source.data['arrows_ys'] = (arrows_ys + 0.01).tolist()
 						self.draw_face_orientations(obs, cmap)
-						arcs = Arc(x='centroid_x', y='centroid_y', radius=radius, start_angle=-0.9, end_angle=4.1, line_color=field('arrow_color', cmap))
+						arcs = Arc(x='centroid_x', y='centroid_y', radius='radius', start_angle=-0.9, end_angle=4.1, line_color=field('arrow_color', cmap))
 						arrows = Patches(xs='arrows_xs', ys='arrows_ys', fill_color=field('arrow_color', cmap), line_color=field('arrow_color', cmap))
 						plot.add_glyph(obs.face_source, arcs)
 						plot.add_glyph(obs.face_source, arrows)
@@ -255,12 +256,12 @@ class Renderer(ABC):
 		obs.arr_source.data['value'] = absy
 
 	def draw_face_orientations(self, obs, cmap):
-		width = 0.03
+		width = 3/5 * obs.radius
 		handedness = np.sign(obs.face_orientation_vector * obs.y)
 		head, tail = obs.centroid_x + handedness * width / 2, obs.centroid_x - handedness * width / 2
 		obs.face_source.data['arrows_xs'] = np.stack((head, tail, tail), axis=1).tolist()
 		mid = (cmap.high + cmap.low) / 2
-		parity = np.sign(obs.y - mid).clip(0)
+		parity = np.sign(np.abs(obs.y) - mid).clip(0)
 		obs.face_source.data['arrow_color'] = parity * cmap.low + (1-parity) * cmap.high
 
 ''' Derivations ''' 
@@ -323,9 +324,10 @@ class LiveRenderer(Renderer):
 						self.edge_cmaps[obs.plot_id].low = lo
 						self.edge_cmaps[obs.plot_id].high = hi
 				elif obs.Gd is GraphDomain.faces:
-					obs.face_source.data['value'] = obs.y
+					absy = np.abs(obs.y)
+					obs.face_source.data['value'] = absy
 					if self.dynamic_ranges:
-						lo, hi = obs.y.min(), obs.y.max()
+						lo, hi = absy.min(), absy.max()
 						mid = (lo+hi)/2
 						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
 						self.face_cmaps[obs.plot_id].low = lo

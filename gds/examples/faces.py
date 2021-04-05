@@ -6,8 +6,8 @@ import networkx as nx
 import numpy as np
 
 def test_orientation():
-	# G = gds.hexagonal_lattice(3, 4)
-	# G = nx.random_geometric_graph(20, 0.50)
+	G = gds.hexagonal_lattice(3, 4)
+	# G = gds.random_planar_graph(100, 0.2)
 
 	eq1 = gds.face_gds(G)
 	eq1.set_evolution(nil=True)

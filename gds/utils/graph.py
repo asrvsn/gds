@@ -104,6 +104,14 @@ def hexagonal_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 			return G
 
 
+def random_planar_graph(n, dist):
+	assert n > 0
+	G = nx.random_geometric_graph(n, dist)
+	G = planarize(G)
+	largest_cc = max(nx.connected_components(G), key=len)
+	G = G.subgraph(largest_cc).copy()
+	return G
+
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
 	''' Get boundary of planar graph using layout coordinates. ''' 
 	nodes = set(G.nodes())
@@ -211,7 +219,7 @@ def embedded_faces(G, use_spring_default=True):
 			largest = max([len(f) for f in faces])
 			faces = [f for f in faces if len(f) < largest]
 
-		print('\n'.join([repr(f) for f in faces]))
+		# print('\n'.join([repr(f) for f in faces]))
 		print(f'Faces: {len(faces)}')
 		return faces
 	else:
@@ -235,6 +243,59 @@ def embedded_faces(G, use_spring_default=True):
 				return faces
 		else:
 			raise Exception('TODO: implement faces for non-planar graphs')
+
+def planarize(G: nx.Graph):
+	'''
+	Takes a graph with node embeddings in R^2 and removes random edges until planar.
+	'''
+	pos = nx.get_node_attributes(G, 'pos')
+	assert pos != {}, 'planarize() needs a node embedding'
+
+	def on_segment(p, q, r):
+		if r[0] <= max(p[0], q[0]) and r[0] >= min(p[0], q[0]) and r[1] <= max(p[1], q[1]) and r[1] >= min(p[1], q[1]):
+			return True
+		return False
+
+	def orientation(p, q, r):
+		val = ((q[1] - p[1]) * (r[0] - q[0])) - ((q[0] - p[0]) * (r[1] - q[1]))
+		if val == 0 : return 0
+		return 1 if val > 0 else -1
+
+	def intersects(seg1, seg2):
+		p1, q1 = seg1
+		p2, q2 = seg2
+
+		o1 = orientation(p1, q1, p2)
+		o2 = orientation(p1, q1, q2)
+		o3 = orientation(p2, q2, p1)
+		o4 = orientation(p2, q2, q1)
+
+		if o1 != o2 and o3 != o4:
+			return True
+
+		if o1 == 0 and on_segment(p1, q1, p2) : return True
+		if o2 == 0 and on_segment(p1, q1, q2) : return True
+		if o3 == 0 and on_segment(p2, q2, p1) : return True
+		if o4 == 0 and on_segment(p2, q2, q1) : return True
+
+		return False
+
+	deleted = set()
+	for e1 in G.edges():
+		for e2 in G.edges():
+			if not (
+				e1 in deleted or 
+				e2 in deleted or 
+				e1[0] in e2 or 
+				e1[1] in e2
+			):
+				e1_pos = (pos[e1[0]], pos[e1[1]])
+				e2_pos = (pos[e2[0]], pos[e2[1]])
+				if intersects(e1_pos, e2_pos):
+					deleted.add(e1)
+
+	G.remove_edges_from(deleted)
+	return G
 
 if __name__ == '__main__':
 	G = hexagonal_lattice(3, 4)
