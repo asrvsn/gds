@@ -10,7 +10,6 @@ from tqdm import tqdm
 
 from .types import *
 from .render.base import *
-from .utils.graph import get_planar_mesh
 
 ''' System objects ''' 
 
@@ -46,12 +45,12 @@ class System:
 		dump['t'] = []
 		for name, obs in obs_items:
 			dump[name] = []
-			# try:
-			mesh = obs.mesh()
-			hkl.dump(mesh, f'{path}/{name}_mesh.hkl', mode='w', compression='gzip')
-			print(f'Dumped mesh for: {name}')
-			# except:
-			# 	print(f'Failed dumping mesh for: {name}')
+			try:
+				mesh = obs.mesh()
+				hkl.dump(mesh, f'{path}/{name}_mesh.hkl', mode='w', compression='gzip')
+				print(f'Dumped mesh for: {name}')
+			except:
+				print(f'Failed dumping mesh for: {name}')
 		t = 0.
 		try:
 			with tqdm(total=int(T / dt), desc=folder) as pbar:
