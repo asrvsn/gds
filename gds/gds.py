@@ -7,7 +7,7 @@ import itertools
 from .types import *
 from .fds import *
 from .utils import *
-from .utils.graph import embedded_faces
+from .utils.graph import embedded_faces, get_edge_weights, get_planar_mesh
 
 ''' Observables on graph domains ''' 
 
@@ -28,6 +28,10 @@ class GraphObservable(Observable):
 				tri_index += 1
 		self.faces = {f: i for i, f in enumerate(embedded_faces(G))}
 		self.faces_i = {i: f for f, i in self.faces.items()}
+
+		# Weights
+		w_map = get_edge_weights(G)
+		self.edge_weights = np.array([w_map[e] for e in self.edges])
 
 		# Orientations
 		self.edge_orientation = {**{e: 1 for e in self.edges}, **{(e[1], e[0]): -1 for e in self.edges}} # Orientation implicit by stored keys in domain
@@ -54,21 +58,36 @@ class GraphObservable(Observable):
 				return self.t
 		return ProjectedObservable(self.G, Gd)
 
+	''' Meshing '''
+
+	def mesh(self) -> dict:
+		mesh = get_planar_mesh(self.G)
+
+		if self.Gd is GraphDomain.nodes:
+			mesh = np.array([mesh[k] for k in self.nodes])
+			return mesh
+		elif self.Gd is GraphDomain.edges:
+			mesh = np.array([
+				((mesh[k[0]][0] + mesh[k[1]][0])/2, (mesh[k[0]][1] + mesh[k[1]][1])/2) for k in self.edges
+			])
+			return mesh
+		elif self.Gd is GraphDomain.faces:
+			mesh = np.array([
+				(np.mean([mesh[n][0] for n in k]), np.mean([mesh[n][1] for n in k])) for k in self.faces
+			])
+			return mesh
+		else: 
+			raise Exception('unsupported domain for mesh()')
+
 ''' Dynamical systems on generic graph domains ''' 
 
 class gds(fds, GraphObservable):
-	def __init__(self, G: nx.Graph, Gd: GraphDomain, w_key: str=None):
+	def __init__(self, G: nx.Graph, Gd: GraphDomain):
 		GraphObservable.__init__(self, G, Gd)
-
-		# Weights
-		self.weights = np.ones(len(G.edges()))
-		if w_key is not None:
-			for i, e in enumerate(G.edges()):
-				self.weights[i] = G[e[0]][e[1]][w_key]
-
-		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.weights)).tocsr() # |V| x |E| incidence
-
 		fds.__init__(self, self.X)
+
+		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.edge_weights)).tocsr() # |V| x |E| incidence
+
 
 	def set_constraints(self, *args, **kwargs):
 		# TODO: better way to handle constraints on >=1-dimensional objects (need to detect alternating signs)
@@ -105,7 +124,7 @@ class node_gds(gds):
 	''' Differential operators: all of the following are CVXPY-compatible '''
 
 	def partial(self, e: Edge) -> float:
-		return np.sqrt(self.weights[self.edges[e]]) * (self(e[1]) - self(e[0])) 
+		return np.sqrt(self.edge_weights[self.edges[e]]) * (self(e[1]) - self(e[0])) 
 
 	def grad(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
@@ -134,6 +153,7 @@ class node_gds(gds):
 		Bp.data *= -1
 		return -self.incidence@sp.diags(v_field)@Bp.T@y
 
+
 class edge_gds(gds):
 	''' Dynamical system defined on the edges of a graph ''' 
 	def __init__(self, G: nx.Graph, *args, **kwargs):
@@ -159,7 +179,7 @@ class edge_gds(gds):
 		def simplicial_curl(tri, edge):
 			# TODO: proper weighting
 			if edge[0] in tri and edge[1] in tri:
-				c = np.sqrt(self.weights[self.edges[edge]])
+				c = np.sqrt(self.edge_weights[self.edges[edge]])
 				if edge == (tri[0], tri[1]) or edge == (tri[1], tri[2]) or edge == (tri[2], tri[0]): # Orientation of triangle
 					return c
 				return -c
@@ -172,7 +192,7 @@ class edge_gds(gds):
 		def geometric_curl(face, edge):
 			# TODO: proper weighting
 			if edge[0] in face and edge[1] in face:
-				c = np.sqrt(self.weights[self.edges[edge]])
+				c = np.sqrt(self.edge_weights[self.edges[edge]])
 				if any([edge == (face[i-1], face[i]) for i in range(1, len(face))]) or edge == (face[-1], face[0]):
 					return c
 				return -c
@@ -313,6 +333,7 @@ class edge_gds(gds):
 			def t(other):
 				return self.t
 		return DualGraphObservable(G_, GraphDomain.nodes)
+
 
 class simplex_gds(gds):
 	''' Dynamical system defined on k-simplices of a graph ''' 

@@ -42,7 +42,7 @@ class Renderer(ABC):
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
 				edge_colors=False, min_rng_size=0,
 				title=None, plot_titles=True,
-				face_orientations=False,
+				face_orientations=True,
 			):
 		self.canvas: Canvas = canvas
 		self.plots: Dict[PlotID, Plot] = dict()

@@ -3,6 +3,7 @@ import networkx as nx
 import numpy as np
 import pdb
 import matplotlib.pyplot as plt
+from typing import Union, Callable
 
 ''' Graph generators ''' 
 
@@ -296,6 +297,52 @@ def planarize(G: nx.Graph):
 
 	G.remove_edges_from(deleted)
 	return G
+
+def get_edge_lengths(G: nx.Graph):
+	'''
+	Takes a graph with node embeddings in R^2 and returns the edge lengths.
+	'''
+	pos = nx.get_node_attributes(G, 'pos')
+	assert pos != {}, 'need a node embedding'
+	lengths = dict()
+	for edge in G.edges():
+		lengths[edge] = np.sqrt((pos[edge[0]][0] - pos[edge[1]][0])**2 + (pos[edge[0]][1] - pos[edge[1]][1])**2)
+	return lengths
+
+def get_edge_weights(G: nx.Graph, key='weight', default=1.0):
+	weights = dict()
+	for (u, v, d) in G.edges(data=True):
+		if key in d: 
+			weights[(u, v)] = d[key]
+		else:
+			weights[(u, v)] = default
+	return weights
+
+def set_edge_weights(G: nx.Graph, w: Union[Callable, float], key='weight'):
+	try: 
+		value = float(w)
+		w = lambda e: value
+	except:
+		assert callable(w), 'w must be float or callable'
+	for u, v in G.edges():
+		G[u][v][key] = w((u, v))
+	return G
+
+def get_planar_mesh(G: nx.Graph, tol: float=1e-4):
+	'''
+	Takes a planar graph and returns its edge-weighted approximation of R^2 as mesh coordinates.
+	'''
+	pos = nx.get_node_attributes(G, 'pos')
+	assert pos != {}, 'need a node embedding'
+	lengths = get_edge_lengths(G)
+	weights = get_edge_weights(G)
+	factors = [1 / (weights[k] * lengths[k]) for k in lengths.keys()]
+	assert np.abs(min(factors) - max(factors)) <= tol, 'Cannot achieve desired mesh with uniform scaling.'
+	# Rescale and translate
+	factor = factors[0]
+	xmin, ymin = min([pos[k][0] for k in pos.keys()]), min([pos[k][1] for k in pos.keys()])
+	real_pos = {k: (factor*(v[0] - xmin), factor*(v[1] - ymin)) for k, v in pos.items()}
+	return real_pos
 
 if __name__ == '__main__':
 	G = hexagonal_lattice(3, 4)

@@ -155,13 +155,13 @@ def vortex_transfer(viscosity=1e-3):
 def poiseuille():
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	m=14 
-	n=31 
+	n=58 
 	gradP=1.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
 	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes}
+		{n: gradP/2 for n in l.nodes if not (n in t.nodes or n in b.nodes)},
+		{n: -gradP/2 for n in r.nodes if not (n in t.nodes or n in b.nodes)}
 	))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.zero_edge_bc(t),
@@ -172,13 +172,13 @@ def poiseuille():
 def poiseuille_sq():
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	m=14 
-	n=14 
+	n=28 
 	gradP=1.0
 	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes}
+		{n: gradP/2 for n in l.nodes if not (n in t.nodes or n in b.nodes)},
+		{n: -gradP/2 for n in r.nodes if not (n in t.nodes or n in b.nodes)}
 	))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.zero_edge_bc(t),
@@ -189,13 +189,13 @@ def poiseuille_sq():
 def poiseuille_hex():
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	m=14 
-	n=14 
+	n=28 
 	gradP=1.0
 	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
 	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes}
+		{n: gradP/2 for n in l.nodes if not (n in t.nodes or n in b.nodes)},
+		{n: -gradP/2 for n in r.nodes if not (n in t.nodes or n in b.nodes)}
 	))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.zero_edge_bc(t),
@@ -387,9 +387,9 @@ def test2():
 if __name__ == '__main__':
 	''' Solve ''' 
 
-	# p1, v1 = poiseuille()
-	# p2, v2 = poiseuille_sq()
-	# p3, v3 = poiseuille_hex()
+	p1, v1 = poiseuille()
+	p2, v2 = poiseuille_sq()
+	p3, v3 = poiseuille_hex()
 
 	# p1, v1 = lid_driven_cavity()
 	# p1, v1 = lid_driven_cavity_sq()
@@ -400,13 +400,14 @@ if __name__ == '__main__':
 	# p, v = differential_inlets()
 	# p1, v1 = differential_outlets()
 	# p, v = box_inlets()
-	p1, v1 = vortex_transfer(viscosity=1)
-	p2, v2 = vortex_transfer(viscosity=10)
+	# p1, v1 = vortex_transfer(viscosity=1)
+	# p2, v2 = vortex_transfer(viscosity=10)
 	# p, v = von_karman()
 	# p, v = backward_step()
 
 	c1 = v1.project(GraphDomain.faces, lambda v: v.curl())
 	c2 = v2.project(GraphDomain.faces, lambda v: v.curl())
+	c3 = v3.project(GraphDomain.faces, lambda v: v.curl())
 
 	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
 	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
@@ -414,12 +415,15 @@ if __name__ == '__main__':
 	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
-		'velocity1 @ viscosity = 1': v1,
-		'pressure1': p1,
-		'vorticity1': c1,
-		'velocity2 @ viscosity = 10': v2,
-		'pressure2': p2,
-		'vorticity2': c2,
+		'tri_velocity': v1,
+		'tri_pressure': p1,
+		'tri_vorticity': c1,
+		'sq_velocity': v2,
+		'sq_pressure': p2,
+		'sq_vorticity': c2,
+		'hex_velocity': v3,
+		'hex_pressure': p3,
+		'hex_vorticity': c3,
 		# 'velocity3': v3,
 		# 'pressure3': p3,
 		# 'divergence': d,
@@ -435,15 +439,15 @@ if __name__ == '__main__':
 	})
 
 	''' Save to disk ''' 
-	# sys.solve_to_disk(20, 1e-2, 'poiseuille')
+	sys.solve_to_disk(5.0, 0.01, 'poiseuille')
 
 	''' Load from disk ''' 
 	# sys = System.from_disk('von_karman')
 	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
-	canvas = gds.grid_canvas(sys.observables.values(), 3)
-	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
-	gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, face_palette=cc.rainbow, edge_max=0.6, dynamic_ranges=True, node_size=0.05, plot_width=800, edge_colors=True, min_rng_size=0.0001)
-	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
+	# canvas = gds.grid_canvas(sys.observables.values(), 3)
+	# # gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
+	# # gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
+	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, face_palette=cc.rainbow, edge_max=0.6, dynamic_ranges=True, node_size=0.05, plot_width=800, edge_colors=True, min_rng_size=0.0001)
 
 
