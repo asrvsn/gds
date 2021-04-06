@@ -38,7 +38,7 @@ class System:
 		if not os.path.isdir(path):
 			os.mkdir(path)
 		else:
-			for f in glob.glob(f'{path}/*'):
+			for f in glob.glob(f'{path}/*.hkl'):
 				os.remove(f)
 		dump = dict()
 		obs_items = self.observables.items()
