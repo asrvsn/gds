@@ -152,6 +152,126 @@ def vortex_transfer(viscosity=1e-3):
 	pressure.set_constraints(dirichlet={0: 0.}) # Pressure reference
 	return pressure, velocity
 
+def sq_couette():
+	m, n = 11, 10
+	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
+	faces, outer_face = gds.embedded_faces(G)
+	for j in range(m):
+		G.add_edge((n-1, j), (0, j))
+	aux_faces = [((n-1, j), (0, j), (0, j+1), (n-1, j+1)) for j in range(m-1)]
+	G.faces = faces + aux_faces # Hacky
+	G.rendered_faces = np.array(range(len(faces)), dtype=np.intp) # Hacky
+
+	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2)
+	vel = 1.0
+	def walls(e):
+		if e in t.edges or e == ((0, m-1), (n-1, m-1)):
+			return 0
+		elif e in b.edges: 
+			return vel
+		elif e == ((0, 0), (n-1, 0)):
+			return -vel
+		return None
+	velocity.set_constraints(dirichlet=walls)
+	return pressure, velocity
+
+def tri_couette():
+	m, n = 10, 20
+	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
+	faces, outer_face = gds.embedded_faces(G)
+	for j in range(m+1):
+		G = nx.algorithms.minors.contracted_nodes(G, (0, j), ((n + 1) // 2, j))
+	rendered_faces = set()
+	r_nodes = set(r.nodes())
+	for i, face in enumerate(faces):
+		face = list(face)
+		modified = False
+		for j, node in enumerate(face):
+			if node in r_nodes:
+				n_l = (0, node[1]) # identified
+				face[j] = n_l
+				faces[i] = tuple(face)
+				modified = True
+		if not modified:
+			rendered_faces.add(i)
+	G.faces = faces
+	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
+
+	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2)
+	vel = 1.0
+	def walls(e):
+		if e in b.edges:
+			return vel
+		elif e == ((0, 0), (n//2-1, 0)):
+			return -vel
+		elif e in t.edges or e == ((0, m), (n//2-1, m)):
+			return 0.0
+		return None
+	velocity.set_constraints(dirichlet=walls)
+	return pressure, velocity
+
+def hex_couette():
+	m, n = 6, 12
+	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
+	faces, outer_face = gds.embedded_faces(G)
+	contractions = {}
+	for j in range(1, 2*m+1):
+		G = nx.algorithms.minors.contracted_nodes(G, (0, j), (n, j))
+		contractions[(n, j)] = (0, j)
+	nx.set_node_attributes(G, None, 'contraction')
+	rendered_faces = set()
+	for i, face in enumerate(faces):
+		face = list(face)
+		modified = False
+		for j, node in enumerate(face):
+			if node in contractions:
+				n_l = contractions[node] # identified
+				face[j] = n_l
+				faces[i] = tuple(face)
+				modified = True
+		if not modified:
+			rendered_faces.add(i)
+	G.faces = faces
+	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
+
+	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2)
+	vel = 1.0
+	def walls(e):
+		if (e[0][1] == e[1][1] == 0) and (e[0][0] == e[1][0] - 1):
+			return vel
+		elif e in t.edges or e == ((0, 2*m), (n, 2*m+1)):
+			return 0.0
+		return None
+	velocity.set_constraints(dirichlet=walls)
+	return pressure, velocity
+
+def fluid_test(pressure, velocity):
+	sys = gds.couple({
+		'pressure': pressure,
+		'velocity': velocity,
+		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
+	})
+	gds.render(sys, edge_max=0.6, dynamic_ranges=True)
+
+def couette_comp():
+	p1, v1 = sq_couette()
+	p2, v2 = tri_couette()
+	p3, v3 = hex_couette()
+
+	sys = gds.couple({
+		'velocity_square': v1,
+		'velocity_tri': v2,
+		'velocity_hex': v3,
+		'pressure_square': p1,
+		'pressure_tri': p2,
+		'pressure_hex': p3,
+		'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+	})
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
+
 def poiseuille():
 	''' Pressure-driven flow by gradient across dG_L -> dG_R ''' 
 	m=14 
@@ -384,26 +504,10 @@ def test2():
 	velocity.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	return pressure, velocity
 
-if __name__ == '__main__':
-	''' Solve ''' 
-
+def save_poiseuille():
 	p1, v1 = poiseuille()
 	p2, v2 = poiseuille_sq()
 	p3, v3 = poiseuille_hex()
-
-	# p1, v1 = lid_driven_cavity()
-	# p1, v1 = lid_driven_cavity_sq()
-	# p1, v1 = lid_driven_cavity_hex()
-
-	# p, v = poiseuille_asymmetric(gradP=10.0)
-	# p, v, t = fluid_on_grid()
-	# p, v = differential_inlets()
-	# p1, v1 = differential_outlets()
-	# p, v = box_inlets()
-	# p1, v1 = vortex_transfer(viscosity=1)
-	# p2, v2 = vortex_transfer(viscosity=10)
-	# p, v = von_karman()
-	# p, v = backward_step()
 
 	c1 = v1.project(GraphDomain.faces, lambda v: v.curl())
 	c2 = v2.project(GraphDomain.faces, lambda v: v.curl())
@@ -420,11 +524,6 @@ if __name__ == '__main__':
 	a1 = v1.project(GraphDomain.edges, lambda v: -v.advect()) 
 	a2 = v2.project(GraphDomain.edges, lambda v: -v.advect()) 
 	a3 = v3.project(GraphDomain.edges, lambda v: -v.advect()) 
-
-	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
-	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
-	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
-	# m = v.project(GraphDomain.edges, lambda v: v.laplacian()) # momentum diffusion
 
 	sys = gds.couple({
 		'tri_velocity': v1,
@@ -462,13 +561,8 @@ if __name__ == '__main__':
 	''' Save to disk ''' 
 	sys.solve_to_disk(5.0, 0.01, 'poiseuille')
 
-	''' Load from disk ''' 
-	# sys = System.from_disk('von_karman')
-	# p, v, d, a = sys.observables['pressure'], sys.observables['velocity'], sys.observables['divergence'], sys.observables['advection']
 
-	# canvas = gds.grid_canvas(sys.observables.values(), 3)
-	# # gds.render(sys, canvas=canvas, node_palette=cc.rainbow, node_size=0.06, edge_max=0.8, y_rng=(-1.1,1.1))
-	# # gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, dynamic_ranges=True, node_size=0.03, edge_max=0.3, edge_colors=True, plot_width=800, plot_height=500, y_rng=(-1.1,0.5))
-	# gds.render(sys, canvas=canvas, node_palette=cc.rainbow, edge_palette=cc.rainbow, face_palette=cc.rainbow, edge_max=0.6, dynamic_ranges=True, node_size=0.05, plot_width=800, edge_colors=True, min_rng_size=0.0001)
-
+if __name__ == '__main__':
+	# fluid_test(*hex_couette())
+	couette_comp()
 

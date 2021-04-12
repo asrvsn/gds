@@ -27,7 +27,10 @@ class GraphObservable(Observable):
 				self.triangles[tuple(clique)] = tri_index
 				tri_index += 1
 
-		faces, outer_face = embedded_faces(G)
+		if hasattr(G, 'faces'): # TODO: hacky
+			faces = G.faces
+		else:
+			faces, self.outer_face = embedded_faces(G)
 		self.faces = {f: i for i, f in enumerate(faces)}
 		self.faces_i = {i: f for f, i in self.faces.items()}
 
@@ -84,8 +87,8 @@ class GraphObservable(Observable):
 ''' Dynamical systems on generic graph domains ''' 
 
 class gds(fds, GraphObservable):
-	def __init__(self, G: nx.Graph, Gd: GraphDomain):
-		GraphObservable.__init__(self, G, Gd)
+	def __init__(self, G: nx.Graph, Gd: GraphDomain, **kwargs):
+		GraphObservable.__init__(self, G, Gd, **kwargs)
 		fds.__init__(self, self.X)
 
 		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.edge_weights)).tocsr() # |V| x |E| incidence
@@ -201,6 +204,7 @@ class edge_gds(gds):
 			return 0
 		if len(self.faces) > 0:
 			self.curl_face = sparse_product(self.faces.keys(), self.edges.keys(), geometric_curl).tocsr() # |F| x |E| curl operator, where F is the set of faces in G; respects implicit orientation
+			# self.curl_outer_face = sparse_product([self.outer_face], self.edges.keys(), geometric_curl).tocsr() # 1 x |E| curl operator, where F is the set of faces in G; respects implicit orientation
 		else:
 			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
@@ -239,11 +243,9 @@ class edge_gds(gds):
 		TODO: neumann conditions
 		''' 
 		if y is None: y=self.y
-		ret = self.dirichlet_laplacian@y 
-		# curl_op self.curl3@y
-		curl_op = self.curl_face
-		ret += -curl_op.T@curl_op@y
-		return ret
+		dd_ = self.dirichlet_laplacian@y 
+		d_d = -self.curl_face.T@self.curl_face@y
+		return dd_ + d_d
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' 

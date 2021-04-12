@@ -178,6 +178,9 @@ class Renderer(ABC):
 					obs.face_source = ColumnDataSource()
 					xs = [[orig_layout[n][0] for n in f] for f in obs.faces]
 					ys = [[orig_layout[n][1] for n in f] for f in obs.faces]
+					if hasattr(obs.G, 'rendered_faces'): # Hacky
+						xs = [xs[i] for i in obs.G.rendered_faces]
+						ys = [ys[i] for i in obs.G.rendered_faces]
 					obs.face_source.data['xs'] = xs
 					obs.face_source.data['ys'] = ys
 					obs.face_source.data['value'] = np.zeros(obs.ndim)
@@ -257,11 +260,14 @@ class Renderer(ABC):
 
 	def draw_face_orientations(self, obs, cmap):
 		width = 3/5 * obs.radius
-		handedness = np.sign(obs.face_orientation_vector * obs.y)
+		handedness, absy = np.sign(obs.face_orientation_vector * obs.y), np.abs(obs.y)
+		if hasattr(obs.G, 'rendered_faces'): # Hacky
+			handedness = handedness[obs.G.rendered_faces]
+			absy = absy[obs.G.rendered_faces]
 		head, tail = obs.centroid_x + handedness * width / 2, obs.centroid_x - handedness * width / 2
 		obs.face_source.data['arrows_xs'] = np.stack((head, tail, tail), axis=1).tolist()
 		mid = (cmap.high + cmap.low) / 2
-		parity = np.sign(np.abs(obs.y) - mid).clip(0)
+		parity = np.sign(absy - mid).clip(0)
 		obs.face_source.data['arrow_color'] = parity * cmap.low + (1-parity) * cmap.high
 
 ''' Derivations ''' 
@@ -325,6 +331,8 @@ class LiveRenderer(Renderer):
 						self.edge_cmaps[obs.plot_id].high = hi
 				elif obs.Gd is GraphDomain.faces:
 					absy = np.abs(obs.y)
+					if hasattr(obs.G, 'rendered_faces'): # Hacky
+						absy = absy[obs.G.rendered_faces]
 					obs.face_source.data['value'] = absy
 					if self.dynamic_ranges:
 						lo, hi = absy.min(), absy.max()

@@ -26,7 +26,7 @@ def set_grid_graph_layout(G: nx.Graph):
 				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
 	nx.set_node_attributes(G, layout, 'pos')
 
-def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, **kwargs) -> nx.Graph:
+def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, with_faces=False, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
 	set_grid_graph_layout(G)
 	if diagonals:
@@ -42,7 +42,7 @@ def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, **kwa
 	else:
 		return G
 
-def lattice45(m: int, n: int) -> nx.Graph:
+def diagonal_lattice(m: int, n: int) -> nx.Graph:
 	''' Creates 45-degree rotated square lattice; make n odd for symmetric boundaries '''
 	G = nx.Graph()
 	layout = dict()
@@ -104,6 +104,7 @@ def hexagonal_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 			return G, (l.copy(), r.copy(), t.copy(), b.copy())
 		else:
 			return G
+
 
 
 def random_planar_graph(n, dist):
