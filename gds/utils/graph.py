@@ -4,6 +4,7 @@ import numpy as np
 import pdb
 import matplotlib.pyplot as plt
 from typing import Union, Callable
+from shapely.geometry import Point, Polygon
 
 ''' Graph generators ''' 
 
@@ -215,14 +216,20 @@ def embedded_faces(G, use_spring_default=True):
 						faces.append(tuple(path))
 						half_edges_seen.update([(path[-1], path[0])] + [(path[i-1], path[i]) for i in range(1, len(path))])
 
-		# Remove outer face by the following buggy heuristic (will not work in pathological cases!)
-		if len(faces) > 1:
-			largest = max([len(f) for f in faces])
-			faces = [f for f in faces if len(f) < largest]
+		# Determine the outer face
+		outer_face = None
+		points = [Point(*pos[node]) for node in G.nodes()]
+		for i, face in enumerate(faces):
+			poly = Polygon([pos[node] for node in face])
+			if all([poly.intersects(p) for p in points]):
+				outer_face = face
+				del faces[i]
+				break
+		assert outer_face != None, 'Could not find outer face!'
 
 		# print('\n'.join([repr(f) for f in faces]))
 		print(f'Faces: {len(faces)}')
-		return faces
+		return faces, outer_face
 	else:
 		(is_planar, embedding) = nx.algorithms.planarity.check_planarity(G)
 		if is_planar:
@@ -243,6 +250,7 @@ def embedded_faces(G, use_spring_default=True):
 				nx.set_node_attributes(G, pos, 'pos')
 				return faces
 		else:
+			# Try using a force-directed layout in 3 dimensions
 			raise Exception('TODO: implement faces for non-planar graphs')
 
 def planarize(G: nx.Graph):

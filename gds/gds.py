@@ -26,7 +26,9 @@ class GraphObservable(Observable):
 			if len(clique) == 3:
 				self.triangles[tuple(clique)] = tri_index
 				tri_index += 1
-		self.faces = {f: i for i, f in enumerate(embedded_faces(G))}
+
+		faces, outer_face = embedded_faces(G)
+		self.faces = {f: i for i, f in enumerate(faces)}
 		self.faces_i = {i: f for f, i in self.faces.items()}
 
 		# Weights

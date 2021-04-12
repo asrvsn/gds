@@ -40,7 +40,7 @@ class Renderer(ABC):
 				node_rng=(0., 1.), edge_rng=(0., 1.), face_rng=(0., 1.), edge_max=0.2, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
-				edge_colors=False, min_rng_size=0,
+				edge_colors=False, min_rng_size=1e-6,
 				title=None, plot_titles=True,
 				face_orientations=True,
 			):

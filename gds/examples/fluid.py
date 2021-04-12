@@ -413,6 +413,14 @@ if __name__ == '__main__':
 	d2 = v2.project(GraphDomain.nodes, lambda v: v.div())
 	d3 = v3.project(GraphDomain.nodes, lambda v: v.div())
 
+	m1 = v1.project(GraphDomain.edges, lambda v: v.laplacian()) 
+	m2 = v2.project(GraphDomain.edges, lambda v: v.laplacian()) 
+	m3 = v3.project(GraphDomain.edges, lambda v: v.laplacian()) 
+
+	a1 = v1.project(GraphDomain.edges, lambda v: -v.advect()) 
+	a2 = v2.project(GraphDomain.edges, lambda v: -v.advect()) 
+	a3 = v3.project(GraphDomain.edges, lambda v: -v.advect()) 
+
 	# d = v.project(GraphDomain.nodes, lambda v: v.div()) # divergence of velocity
 	# a = v.project(GraphDomain.edges, lambda v: -v.advect()) # advective strength
 	# f = v.project(GraphDomain.nodes, lambda v: v.influx()) # mass flux through nodes; assumes divergence-free flow
@@ -423,14 +431,20 @@ if __name__ == '__main__':
 		'tri_pressure': p1,
 		'tri_vorticity': c1,
 		'tri_divergence': d1,
+		'tri_diffusion': m1,
+		'tri_advection': a1,
 		'sq_velocity': v2,
 		'sq_pressure': p2,
 		'sq_vorticity': c2,
 		'sq_divergence': d2,
+		'sq_diffusion': m2,
+		'sq_advection': a2,
 		'hex_velocity': v3,
 		'hex_pressure': p3,
 		'hex_vorticity': c3,
 		'hex_divergence': d3,
+		'hex_diffusion': m3,
+		'hex_advection': a3,
 		# 'velocity3': v3,
 		# 'pressure3': p3,
 		# 'divergence': d,

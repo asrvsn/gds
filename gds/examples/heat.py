@@ -8,7 +8,7 @@ import random
 import gds
 
 def heat_grid(n = 10, steady_state=False) -> gds.node_gds:
-	G = gds.grid_graph(n, n)
+	G = gds.square_lattice(n, n)
 	temp = gds.node_gds(G)
 	if steady_state:
 		''' Steady-state version (for comparison) ''' 
@@ -51,6 +51,16 @@ def grid_sinus_boundary(steady_state=False, phi=0) -> gds.node_gds:
 	temp.set_constraints(dirichlet=dirichlet)
 	return temp
 
+def grid_tv_boundary():
+	G = gds.square_lattice(10, 10)
+	temperature = gds.node_gds(G)
+	temperature.set_evolution(dydt=lambda t, y: temperature.laplacian())
+	temperature.set_constraints(dirichlet=gds.combine_bcs(
+		lambda x: 0 if x[0] == 9 else None,
+		lambda t, x: np.sin(t+x[1]/4)**2 if x[0] == 0 else None
+	))
+	gds.render(temperature, title='Heat equation with time-varying boundary')
+
 def grid_linear(steady_state=False) -> gds.node_gds:
 	n = 10
 	temp = heat_grid(n=n, steady_state=steady_state)
@@ -77,6 +87,14 @@ def heat_test():
 	temp2.set_constraints(dirichlet={x: 1.0})
 	return temp1, temp2
 
+def heat_free_lr():
+	temp = heat_grid(10)
+	temp.set_constraints(dirichlet=gds.combine_bcs(
+		lambda x: 0. if x[1] == 9 else None,
+		lambda x: 1. if x[1] == 0 else None,
+	))
+	gds.render(temp)
+
 if __name__ == '__main__':
 	# Use coupling to visualize multiple PDEs simultaneously
 	# p1 = grid_linear(steady_state=True)
@@ -99,11 +117,4 @@ if __name__ == '__main__':
 	# gds.render(p5, title='Diffusion on a random geometric graph')
 	# gds.render(sys, dynamic_ranges=True)
 
-	G = gds.square_lattice(10, 10)
-	temperature = gds.node_gds(G)
-	temperature.set_evolution(dydt=lambda t, y: temperature.laplacian())
-	temperature.set_constraints(dirichlet=gds.combine_bcs(
-		lambda x: 0 if x[0] == 9 else None,
-		lambda t, x: np.sin(t+x[1]/4)**2 if x[0] == 0 else None
-	))
-	gds.render(temperature, title='Heat equation with time-varying boundary')
+	heat_free_lr()

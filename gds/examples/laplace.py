@@ -30,15 +30,12 @@ def sinus_boundary_timevarying():
 	return eq
 
 def edge_diffusion(m, n, constr, periodic=False):
-	# G = lattice45(10, 11)
 	G, (l, r, t, b) = constr(m, n, with_boundaries=True)
 	if periodic:
 		for x in l.nodes:
 			for y in r.nodes:
 				if x[1] == y[1]:
 					G.add_edge(x, y)
-	# G = nx.hexagonal_lattice_graph(10, 11)
-	# G = grid_graph(10, 11, diagonals=True)
 	v = gds.edge_gds(G)
 	v.set_evolution(dydt=lambda t, y: v.laplacian(y))
 	velocity = -1.0
@@ -56,18 +53,7 @@ def edge_diffusion(m, n, constr, periodic=False):
 	v.set_constraints(dirichlet=boundary)
 	return v
 
-if __name__ == '__main__':
-	# eq = sinus_boundary_timevarying()
-	# eq1 = edge_diffusion(10, 22, gds.triangular_lattice, periodic=True)
-	# eq2 = edge_diffusion(10, 12, gds.square_lattice, periodic=True)
-
-	# sys = gds.couple({
-	# 	'Edge diffusion on a triangular lattice': eq1,
-	# 	'Edge diffusion on a square lattice': eq2,
-	# })
-
-	# gds.render(sys)
-
+def edge_diffusion_comp():
 	eq1 = edge_diffusion(10, 22, gds.triangular_lattice, periodic=False)
 	curl1 = eq1.project(gds.GraphDomain.faces, lambda eq: eq.curl())
 	eq2 = edge_diffusion(10, 12, gds.square_lattice, periodic=False)
@@ -82,5 +68,52 @@ if __name__ == '__main__':
 		'flow3': eq3,
 		'curl3': curl3,
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.6, face_orientations=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.6)
 
+
+def square_lattice_edge_diffusion():
+	G, (l, r, t, b) = gds.square_lattice(10, 10, with_boundaries=True)
+	v = gds.edge_gds(G)
+	v.set_evolution(dydt=lambda t, y: v.laplacian(y))
+	velocity = 1.0
+	def boundary(e):
+		if e in b.edges:
+			return velocity
+		elif e in t.edges:
+			return 0.0
+		return None
+	v.set_constraints(dirichlet=boundary)
+	sys = gds.couple({
+		'velocity': v,
+		'divergence': v.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		'curl': v.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'curl*curl': v.project(gds.GraphDomain.edges, lambda v: v.curl_face.T@v.curl_face@v.y),
+	})
+	gds.render(sys, edge_max=0.6, dynamic_ranges=True)
+
+def test_curl():
+	G1 = nx.Graph()
+	G1.add_nodes_from([1, 2, 3, 4])
+	G1.add_edges_from([(1,2), (2,3), (3, 4), (4, 1)])
+	v1 = gds.edge_gds(G1)
+	v1.set_evolution(nil=True)
+	v1.set_initial(y0=lambda e: 1 if e == (1,2) else 0)
+	G2 = nx.Graph()
+	G2.add_nodes_from([1, 2, 3, 4, 5, 6])
+	G2.add_edges_from([(1,2), (2,3), (3, 4), (4, 1), (1, 5), (5, 6), (6, 2)])
+	v2 = gds.edge_gds(G2)
+	v2.set_evolution(nil=True)
+	v2.set_initial(y0=lambda e: 1 if e == (1,2) else 0)
+	sys = gds.couple({
+		'velocity1': v1,
+		'curl1': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'curl*curl1': v1.project(gds.GraphDomain.edges, lambda v: v.curl_face.T@v.curl_face@v.y),
+		'velocity2': v2,
+		'curl2': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'curl*curl2': v2.project(gds.GraphDomain.edges, lambda v: v.curl_face.T@v.curl_face@v.y)
+	})
+	gds.render(sys, edge_max=0.5, canvas=gds.grid_canvas(sys.observables.values(), 3), dynamic_ranges=True)
+
+if __name__ == '__main__':
+	square_lattice_edge_diffusion()
+	# test_curl()

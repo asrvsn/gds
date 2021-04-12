@@ -12,3 +12,4 @@ networkx
 cvxpy
 selenium
 pillow
+shapely
