@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_flow
+from .fluid import incompressible_ns_flow
 
 ''' Systems ''' 
 
@@ -23,7 +23,7 @@ def sq_couette():
 	G.faces = faces + aux_faces # Hacky
 	G.rendered_faces = np.array(range(len(faces)), dtype=np.intp) # Hacky
 
-	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
 	vel = 1.0
 	def walls(e):
 		if e in t.edges or e == ((0, m-1), (n-1, m-1)):
@@ -58,7 +58,7 @@ def tri_couette():
 	G.faces = faces
 	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
 
-	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
 	vel = 1.0
 	def walls(e):
 		if e in b.edges:
@@ -95,7 +95,7 @@ def hex_couette():
 	G.faces = faces
 	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
 
-	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
 	vel = 1.0
 	def walls(e):
 		if (e[0][1] == e[1][1] == 0) and (e[0][0] == e[1][0] - 1):

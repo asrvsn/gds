@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_flow
+from .fluid import incompressible_ns_flow, incompressible_stokes_flow
 
 ''' Systems ''' 
 
@@ -18,7 +18,7 @@ def tri_poiseuille():
 	n=58 
 	gradP=1.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes if not (n in t.nodes or n in b.nodes)},
 		{n: -gradP/2 for n in r.nodes if not (n in t.nodes or n in b.nodes)}
@@ -32,12 +32,13 @@ def tri_poiseuille():
 def sq_poiseuille():
 	m=14 
 	n=28 
-	gradP=1.0
+	gradP=6.0
 	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
+	v_free = (set(l.nodes()) | set(r.nodes())) - (set(t.nodes()) | set(b.nodes()))
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_free)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes if not (n in t.nodes or n in b.nodes)},
-		{n: -gradP/2 for n in r.nodes if not (n in t.nodes or n in b.nodes)}
+		{n: gradP/2 for n in l.nodes},
+		{n: -gradP/2 for n in r.nodes}
 	))
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.zero_edge_bc(t),
@@ -45,12 +46,32 @@ def sq_poiseuille():
 	))
 	return pressure, velocity
 
+def poiseuille_flow():
+	G, (G_L, G_R, G_T, G_B) = gds.square_lattice(m, n, with_boundaries=True)
+
+	velocity = Field(GraphDomain.Edges, G)
+	velocity.set_dirichlet_boundary(set(G_T.edges()) | set(G_B.edges()), 0.)
+	velocity.set_free_boundary(set(G_L.edges()) | set(G_R.edges()))
+
+	pressure = Field(GraphDomain.Nodes, G)
+	pressure.set_dirichlet_boundary(set(G_L.edges()), 1.)
+	pressure.set_dirichlet_boundary(set(G_R.edges()), -1.)
+	pressure.set_free_boundary(set(G_T.edges()) | set(G_B.edges()))
+
+	dt = 1e-3
+	velocity.set_evolution(
+		dydt = -advect(velocity, velocity) - grad(pressure) / density + laplacian(velocity) * viscosity / density
+	)
+	pressure.set_evolution(
+		lhs = div(velocity / dt - advect(velocity, velocity)) - laplacian(pressure) / density + laplacian(div(velocity)) * viscosity / density
+	)
+
 def hex_poiseuille():
 	m=14 
 	n=28 
 	gradP=1.0
 	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
-	pressure, velocity = incompressible_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, inlets=l.nodes, outlets=r.nodes)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes if not (n in t.nodes or n in b.nodes)},
 		{n: -gradP/2 for n in r.nodes if not (n in t.nodes or n in b.nodes)}
@@ -66,21 +87,29 @@ def hex_poiseuille():
 
 def render():
 	p1, v1 = sq_poiseuille()
-	p2, v2 = tri_poiseuille()
-	p3, v3 = hex_poiseuille()
+	# p2, v2 = tri_poiseuille()
+	# p3, v3 = hex_poiseuille()
 
 	sys = gds.couple({
 		'velocity_square': v1,
-		'velocity_tri': v2,
-		'velocity_hex': v3,
+		# 'velocity_tri': v2,
+		# 'velocity_hex': v3,
 		'pressure_square': p1,
-		'pressure_tri': p2,
-		'pressure_hex': p3,
+		# 'pressure_tri': p2,
+		# 'pressure_hex': p3,
 		'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'div_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		# 'div_tri': v2.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		# 'div_hex': v3.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		'laplacian_square': v1.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
+		# 'laplacian_tri': v2.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
+		# 'laplacian_hex': v3.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
+		'dd*': v1.project(gds.GraphDomain.edges, lambda v: v.dd_()),
+		'd*d': v1.project(gds.GraphDomain.edges, lambda v: v.d_d()),
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 4), edge_max=0.6, dynamic_ranges=True)
 
 def dump():
 	p1, v1 = sq_poiseuille()

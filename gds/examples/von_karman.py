@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_flow
+from .fluid import incompressible_ns_flow
 
 ''' Systems ''' 
 
@@ -42,7 +42,7 @@ def von_karman():
 	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
 	G.remove_edges_from(list(nx.edge_boundary(G, r, r)))
 	G.remove_edges_from(list(nx.edge_boundary(G, [(n//2, 2*i+1) for i in range(m//2)], [(n//2, 2*i) for i in range(m//2+1)])))
-	pressure, velocity = incompressible_flow(G, viscosity=1e-4, density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1e-4, density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
 	# pressure.set_constraints(dirichlet=gds.combine_bcs(
 		# {n: gradP/2 for n in l.nodes},
 		# {n: -gradP/2 for n in r.nodes}

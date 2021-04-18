@@ -4,26 +4,22 @@ import pdb
 from itertools import count
 import colorcet as cc
 import random
-import cvxpy as cp
 
 from gds.types import *
 import gds
 
 ''' Definitions ''' 
 
-def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
-	''' 
-	G: graph
-	''' 
+def incompressible_ns_flow(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
-	non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
+	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)
 	min_step = 1e-3
 
 	def pressure_f(t, y):
 		dt = max(min_step, velocity.dt)
 		lhs = velocity.div(velocity.y/dt - velocity.advect()) + pressure.laplacian(velocity.div()) * viscosity/density
-		lhs[non_div_free] = 0.
+		lhs[v_free] = 0.
 		lhs -= pressure.laplacian(y)/density 
 		return lhs
 
@@ -37,6 +33,28 @@ def incompressible_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], out
 
 def compressible_flow(G: nx.Graph, viscosity=1.0) -> (gds.node_gds, gds.edge_gds):
 	raise Exception('Not implemented')
+
+def incompressible_stokes_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
+	pressure = gds.node_gds(G, **kwargs)
+	velocity = gds.edge_gds(G, **kwargs)
+	non_div_free = np.array([pressure.X[x] for x in set(inlets) | set(outlets)], dtype=np.intp)
+	min_step = 1e-3
+
+	def pressure_f(t, y):
+		dt = max(min_step, velocity.dt)
+		lhs = velocity.div(velocity.y/dt) + pressure.laplacian(velocity.div()) * viscosity/density
+		lhs[non_div_free] = 0.
+		lhs -= pressure.laplacian(y)/density 
+		return lhs
+
+	def velocity_f(t, y):
+		return - pressure.grad()/density + velocity.laplacian() * viscosity/density
+
+	pressure.set_evolution(lhs=pressure_f)
+	velocity.set_evolution(dydt=velocity_f)
+
+	return pressure, velocity
+
 
 def lagrangian_tracer(velocity: gds.edge_gds, inlets: List[Node], alpha=1.0) -> gds.node_gds:
 	''' Passive tracer ''' 
@@ -52,7 +70,7 @@ def fluid_on_grid():
 	i, o = (3,3), (6,6)
 	dG = nx.Graph()
 	dG.add_nodes_from([i, o])
-	pressure, velocity = incompressible_flow(G, dG)
+	pressure, velocity = incompressible_ns_flow(G, dG)
 	pressure.set_constraints(dirichlet={i: 10.0, o: -10.0})
 	tracer = lagrangian_tracer(velocity, [i])
 	return pressure, velocity, tracer
@@ -62,7 +80,7 @@ def fluid_on_circle():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
-	pressure, velocity = incompressible_flow(G)
+	pressure, velocity = incompressible_ns_flow(G)
 	pressure.set_constraints(dirichlet={0: 1.0, n-1: -1.0})
 	return pressure, velocity
 
@@ -70,7 +88,7 @@ def differential_inlets():
 	G = nx.Graph()
 	G.add_nodes_from([1,2,3,4,5,6])
 	G.add_edges_from([(1,2),(2,3),(4,3),(2,5),(3,5),(5,6)])
-	pressure, velocity = incompressible_flow(G, inlets=[1,4], outlets=[6], viscosity=1e-2,)
+	pressure, velocity = incompressible_ns_flow(G, inlets=[1,4], outlets=[6], viscosity=1e-2,)
 	def vel_f(t, e):
 		# omega = 2*np.pi
 		if e == (1, 2):
@@ -93,7 +111,7 @@ def differential_outlets():
 		(1, 3), (3, 5), (5, 7),
 		(4, 5)
 	])
-	pressure, velocity = incompressible_flow(G, inlets=[0], outlets=[6, 7], viscosity=0.01)
+	pressure, velocity = incompressible_ns_flow(G, inlets=[0], outlets=[6, 7], viscosity=0.01)
 	def positive_outlets(vel):
 		for outlet in [(4, 6), (5, 7)]:
 			vel[velocity.X[outlet]] = max(0, vel[velocity.X[outlet]])
@@ -106,7 +124,7 @@ def box_inlets():
 	G = nx.Graph()
 	G.add_nodes_from([0,1,2,3,4,5,6,7])
 	G.add_edges_from([(1,2),(2,3),(2,4),(3,5),(4,5),(5,6),(0,3),(4,7)])
-	pressure, velocity = incompressible_flow(G, inlets=[1,0], outlets=[6,7], viscosity=1.)
+	pressure, velocity = incompressible_ns_flow(G, inlets=[1,0], outlets=[6,7], viscosity=1.)
 	def is_vortex():
 		v_23, v_35, v_45, v_24 = velocity((2,3)), velocity((3,5)), velocity((4,5)), velocity((2,4))
 		ret = np.sign(v_23) == np.sign(v_35)
@@ -147,7 +165,7 @@ def vortex_transfer(viscosity=1e-3):
 		ret = 1.0 if e in outer else 0
 		ret *= -1.0 if e in negated else 1.0
 		return ret
-	pressure, velocity = incompressible_flow(G, viscosity=viscosity)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity)
 	velocity.set_initial(y0=v_field)
 	pressure.set_constraints(dirichlet={0: 0.}) # Pressure reference
 	return pressure, velocity
@@ -193,7 +211,7 @@ def backward_step():
 	outlet_p=0.0
 	# ref_p=0.0
 	# grad_p=100.0
-	pressure, velocity = incompressible_flow(G, viscosity=100., density=1.0, inlets=l.nodes, outlets=r.nodes, w_key='w')
+	pressure, velocity = incompressible_ns_flow(G, viscosity=100., density=1.0, inlets=l.nodes, outlets=r.nodes, w_key='w')
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		# {n: grad_p/2 for n in l.nodes},
 		# {n: -grad_p/2 for n in r.nodes if n[1] > step_height//2}
@@ -215,7 +233,7 @@ def random_graph():
 	n = 30
 	eps = 0.3
 	G = nx.random_geometric_graph(n, eps)
-	pressure, velocity = incompressible_flow(G)
+	pressure, velocity = incompressible_ns_flow(G)
 	pressure.set_constraints(dirichlet=dict_fun({4: 1.0, 21: -1.0}))
 	return pressure, velocity
 
@@ -223,7 +241,7 @@ def test1():
 	G = nx.Graph()
 	G.add_nodes_from([1,2,3,4])
 	G.add_edges_from([(1,2),(2,3),(3,4)])
-	pressure, velocity = incompressible_flow(G)
+	pressure, velocity = incompressible_ns_flow(G)
 	p_vals = {}
 	v_vals = {(1, 2): 1.0, (2, 3): 1.0}
 	pressure.set_constraints(dirichlet=dict_fun(p_vals))
@@ -235,7 +253,7 @@ def test2():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
-	pressure, velocity = incompressible_flow(G, nx.Graph(), viscosity=0.)
+	pressure, velocity = incompressible_ns_flow(G, nx.Graph(), viscosity=0.)
 	velocity.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	return pressure, velocity
 

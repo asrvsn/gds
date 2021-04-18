@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_flow
+from .fluid import incompressible_ns_flow
 
 ''' Systems ''' 
 
@@ -20,7 +20,7 @@ def tri_lid_driven_cavity():
 	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
 	t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	pressure, velocity = incompressible_flow(G, viscosity=200., density=0.1)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -36,7 +36,7 @@ def sq_lid_driven_cavity():
 	v=10.0
 	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	t.remove_nodes_from([(0, m-1), (1, m-1), (n-1, m-1), (n, m-1)])
-	pressure, velocity = incompressible_flow(G, viscosity=200., density=0.1)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -52,7 +52,7 @@ def hex_lid_driven_cavity():
 	v=10.0
 	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
 	t.remove_nodes_from([(0, m*2), (1, m*2), (0, m*2+1), (1, m*2+1), (n-1, 2*m), (n, 2*m), (n-1, 2*m+1), (n, 2*m+1)])
-	pressure, velocity = incompressible_flow(G, viscosity=200., density=0.1)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	def inlet_bc(e):
 		if e in t.edges:
 			if e[1][1] > e[0][1] and e[0][0] % 2 == 0:

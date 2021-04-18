@@ -103,10 +103,10 @@ class gds(fds, GraphObservable):
 			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
 			self.dirichlet_laplacian.eliminate_zeros()
 			self.neumann_correction[self.neumann_indices] = self.neumann_values
-		else:
-			self.dirichlet_laplacian = self.edge_laplacian.copy()
-			self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
-			self.dirichlet_laplacian.eliminate_zeros()
+		# elif self.Gd is GraphDomain.edges:
+		# 	self.dirichlet_laplacian = self.edge_laplacian.copy()
+		# 	self.dirichlet_laplacian[self.dirichlet_indices, :] = 0
+		# 	self.dirichlet_laplacian.eliminate_zeros()
 			# TODO: neumann conditions
 
 		if self.iter_mode is IterationMode.cvx:
@@ -237,15 +237,24 @@ class edge_gds(gds):
 		curl_op = self.curl_face
 		return curl_op@y
 
+	def dd_(self, y: np.ndarray=None) -> np.ndarray:
+		if y is None: y=self.y
+		ret = -self.incidence.T@self.incidence@y
+		ret[self.dirichlet_indices] = 0
+		return ret
+
+	def d_d(self, y: np.ndarray=None) -> np.ndarray:
+		if y is None: y=self.y
+		ret = -self.curl_face.T@self.curl_face@y
+		ret[self.dirichlet_indices] = 0
+		return ret
+
 	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' Vector laplacian or discrete Helmholtz operator or Hodge-1 laplacian
 		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
 		TODO: neumann conditions
 		''' 
-		if y is None: y=self.y
-		dd_ = self.dirichlet_laplacian@y 
-		d_d = -self.curl_face.T@self.curl_face@y
-		return dd_ + d_d
+		return self.dd_(y=y) + self.d_d(y=y)
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' 
