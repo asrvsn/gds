@@ -26,7 +26,7 @@ def set_grid_graph_layout(G: nx.Graph):
 				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
 	nx.set_node_attributes(G, layout, 'pos')
 
-def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, with_faces=False, **kwargs) -> nx.Graph:
+def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
 	set_grid_graph_layout(G)
 	if diagonals:

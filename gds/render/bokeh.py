@@ -183,7 +183,7 @@ class Renderer(ABC):
 						ys = [ys[i] for i in obs.G.rendered_faces]
 					obs.face_source.data['xs'] = xs
 					obs.face_source.data['ys'] = ys
-					obs.face_source.data['value'] = np.zeros(obs.ndim)
+					obs.face_source.data['value'] = np.zeros(len(xs))
 					faces = Patches(xs='xs', ys='ys', fill_color=field('value', cmap), line_color='#FFFFFF', line_width=2)
 					plot.add_glyph(obs.face_source, faces)
 					if self.face_orientations:
