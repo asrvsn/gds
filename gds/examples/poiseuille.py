@@ -213,5 +213,5 @@ def dump():
 	sys.solve_to_disk(5.0, 0.01, 'poiseuille')
 
 if __name__ == '__main__':
-	render()
-	# dump()
+	# render()
+	dump()
