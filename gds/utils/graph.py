@@ -226,7 +226,7 @@ def embedded_faces(G, use_spring_default=True):
 				outer_face = face
 				del faces[i]
 				break
-		assert outer_face != None, 'Could not find outer face!'
+		# assert outer_face != None, 'Could not find outer face!'
 
 		# print('\n'.join([repr(f) for f in faces]))
 		print(f'Faces: {len(faces)}')

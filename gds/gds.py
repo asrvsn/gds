@@ -233,9 +233,7 @@ class edge_gds(gds):
 
 	def curl(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
-		# curl_op self.curl3@y
-		curl_op = self.curl_face
-		return curl_op@y
+		return self.curl_face@y
 
 	def dd_(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
