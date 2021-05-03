@@ -123,25 +123,33 @@ class Renderer(ABC):
 		root.children.append(self.root_plot)
 
 	def create_plot(self, items: List[Observable]):
-		assert all([obs.G is items[0].G for obs in items]), 'Co-rendered observables must use the same graph'
-		orig_G = items[0].G
-		orig_layout = self.layout_func(orig_G)
-		G = nx.convert_node_labels_to_integers(orig_G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-		G = clear_attributes(G)
-		layout = {i: orig_layout[n] for i, n in enumerate(orig_G.nodes())}
+		orig_G = None 
+		for obs in items:
+			if isinstance(obs, GraphObservable):
+				if orig_G is None:
+					orig_G = obs.G
+				else:
+					assert obs.G is orig_G, 'Co-rendered observables must use the same graph'
+		if orig_G != None:
+			# TODO brittle
+			orig_layout = self.layout_func(orig_G)
+			G = nx.convert_node_labels_to_integers(orig_G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+			G = clear_attributes(G)
+			layout = {i: orig_layout[n] for i, n in enumerate(orig_G.nodes())}
 		def helper(obs: Observable, plot=None):
-			if plot is None:
-				plot = figure(x_range=self.x_rng, y_range=self.y_rng, tooltips=[], width=self.plot_width, height=self.plot_height) 
+			# Domain-specific rendering
+			if isinstance(obs, GraphObservable):
+				if plot is None:
+					plot = figure(x_range=self.x_rng, y_range=self.y_rng, tooltips=[], width=self.plot_width, height=self.plot_height) 
 				plot.axis.visible = False
 				plot.xgrid.grid_line_color = None
 				plot.ygrid.grid_line_color = None
 				renderer = from_networkx(G, layout)
 				plot.renderers.append(renderer)
-				plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node'), ('edge', '@edge')]))
 				plot.toolbar_location = None
-			# Domain-specific rendering
-			if isinstance(obs, GraphObservable):
+
 				if obs.Gd is GraphDomain.nodes: 
+					plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('node', '@node')]))
 					plot.renderers[0].node_renderer.data_source.data['node'] = list(map(str, items[0].G.nodes()))
 					plot.renderers[0].node_renderer.data_source.data['value'] = obs.y 
 					cmap = LinearColorMapper(palette=self.node_palette, low=self.node_rng[0], high=self.node_rng[1])
@@ -155,6 +163,7 @@ class Renderer(ABC):
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='node')
 						plot.add_layout(cbar, 'right')
 				elif obs.Gd is GraphDomain.edges:
+					plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('edge', '@edge')]))
 					self.prep_layout_data(obs, G, layout)
 					obs.arr_source.data['edge'] = list(map(str, items[0].G.edges()))
 					self.draw_arrows(obs, obs.y)
@@ -173,6 +182,7 @@ class Renderer(ABC):
 							plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
 							plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
 				elif obs.Gd is GraphDomain.faces:
+					plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('face', '@face')]))
 					cmap = LinearColorMapper(palette=self.face_palette, low=self.face_rng[0], high=self.face_rng[1])
 					self.face_cmaps[obs.plot_id] = cmap
 					obs.face_source = ColumnDataSource()
@@ -206,6 +216,18 @@ class Renderer(ABC):
 						plot.add_layout(cbar, 'right')
 				else:
 					raise Exception('unknown graph domain.')
+			elif isinstance(obs, PointObservable):
+				plot = figure(width=self.plot_width, height=self.plot_height)
+				plot.add_tools(HoverTool(tooltips=[('time', '@t'), ('value', '@value')]))
+				plot.toolbar_location = 'above'
+				plot.x_range.follow = 'end'
+				plot.x_range.follow_interval = 10.0
+				plot.x_range.range_padding = 0
+				obs.src = ColumnDataSource({'t': [], 'value': []})
+				# TODO: handle vector plotting
+				plot.line('t', 'value', line_color='black', source=obs.src)
+			else:
+				raise Exception('unknown observable type: ', obs)
 			return plot
 		
 		plot = None
@@ -312,36 +334,40 @@ class LiveRenderer(Renderer):
 		for obs in self.observables:
 			if hasattr(obs, 'plot_id'):
 				plot = self.plots[obs.plot_id]
-				if obs.Gd is GraphDomain.nodes:
-					self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
-					if self.dynamic_ranges:
-						lo, hi = obs.y.min(), obs.y.max()
-						mid = (lo+hi)/2
-						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
-						self.node_cmaps[obs.plot_id].low = lo
-						self.node_cmaps[obs.plot_id].high = hi
-				elif obs.Gd is GraphDomain.edges:
-					self.draw_arrows(obs, obs.y)
-					self.plots[obs.plot_id].renderers[0].edge_renderer.data_source.data['value'] = obs.arr_source.data['value']
-					if self.dynamic_ranges:
-						lo, hi = obs.arr_source.data['value'].min(), obs.arr_source.data['value'].max()
-						mid = (lo+hi)/2
-						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
-						self.edge_cmaps[obs.plot_id].low = lo
-						self.edge_cmaps[obs.plot_id].high = hi
-				elif obs.Gd is GraphDomain.faces:
-					absy = np.abs(obs.y)
-					if hasattr(obs.G, 'rendered_faces'): # Hacky
-						absy = absy[obs.G.rendered_faces]
-					obs.face_source.data['value'] = absy
-					if self.dynamic_ranges:
-						lo, hi = absy.min(), absy.max()
-						mid = (lo+hi)/2
-						lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
-						self.face_cmaps[obs.plot_id].low = lo
-						self.face_cmaps[obs.plot_id].high = hi
-					if self.face_orientations:
-						self.draw_face_orientations(obs, self.face_cmaps[obs.plot_id])
+				if isinstance(obs, GraphObservable):
+					if obs.Gd is GraphDomain.nodes:
+						self.plots[obs.plot_id].renderers[0].node_renderer.data_source.data['value'] = obs.y
+						if self.dynamic_ranges:
+							lo, hi = obs.y.min(), obs.y.max()
+							mid = (lo+hi)/2
+							lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+							self.node_cmaps[obs.plot_id].low = lo
+							self.node_cmaps[obs.plot_id].high = hi
+					elif obs.Gd is GraphDomain.edges:
+						self.draw_arrows(obs, obs.y)
+						self.plots[obs.plot_id].renderers[0].edge_renderer.data_source.data['value'] = obs.arr_source.data['value']
+						if self.dynamic_ranges:
+							lo, hi = obs.arr_source.data['value'].min(), obs.arr_source.data['value'].max()
+							mid = (lo+hi)/2
+							lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+							self.edge_cmaps[obs.plot_id].low = lo
+							self.edge_cmaps[obs.plot_id].high = hi
+					elif obs.Gd is GraphDomain.faces:
+						absy = np.abs(obs.y)
+						if hasattr(obs.G, 'rendered_faces'): # Hacky
+							absy = absy[obs.G.rendered_faces]
+						obs.face_source.data['value'] = absy
+						if self.dynamic_ranges:
+							lo, hi = absy.min(), absy.max()
+							mid = (lo+hi)/2
+							lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+							self.face_cmaps[obs.plot_id].low = lo
+							self.face_cmaps[obs.plot_id].high = hi
+						if self.face_orientations:
+							self.draw_face_orientations(obs, self.face_cmaps[obs.plot_id])
+				elif isinstance(obs, PointObservable):
+					# TODO: handle vector plotting
+					obs.src.stream({'t': [obs.t], 'value': [obs.y]}, 200)
 		if self.rec_name != None:
 			self.dump_frame()
 

@@ -159,20 +159,20 @@ def poiseuille_flow():
 def render():
 	# p1, v1 = sq_poiseuille_periodic()
 	p1, v1 = sq_poiseuille()
-	p2, v2 = tri_poiseuille()
-	p3, v3 = hex_poiseuille()
+	# p2, v2 = tri_poiseuille()
+	# p3, v3 = hex_poiseuille()
 
 	# v = v3
 	sys = gds.couple({
 		'velocity_square': v1,
-		'velocity_tri': v2,
-		'velocity_hex': v3,
+		# 'velocity_tri': v2,
+		# 'velocity_hex': v3,
 		'pressure_square': p1,
-		'pressure_tri': p2,
-		'pressure_hex': p3,
+		# 'pressure_tri': p2,
+		# 'pressure_hex': p3,
 		'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'div_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'div_tri': v2.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'div_hex': v3.project(gds.GraphDomain.nodes, lambda v: v.div()),
@@ -181,6 +181,8 @@ def render():
 		# 'laplacian_hex': v3.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'dd*': v.project(gds.GraphDomain.edges, lambda v: v.dd_()),
 		# 'd*d': v.project(gds.GraphDomain.edges, lambda v: v.d_d()),
+		'energy_square': v1.project(PointObservable, lambda v: (v.y ** 2).sum()),
+		'momentum_square': v1.project(PointObservable, lambda v: np.abs(v.y).sum()),
 	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
 
@@ -213,5 +215,5 @@ def dump():
 	sys.solve_to_disk(5.0, 0.01, 'poiseuille')
 
 if __name__ == '__main__':
-	# render()
-	dump()
+	render()
+	# dump()

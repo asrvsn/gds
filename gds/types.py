@@ -71,6 +71,7 @@ class Observable(ABC):
 	@property
 	@abstractmethod
 	def y(self) -> np.ndarray:
+		# TODO check dimensions
 		pass
 
 	def __getitem__(self, idx):
@@ -82,3 +83,23 @@ class Observable(ABC):
 
 	def __len__(self):
 		return self.ndim
+
+	def project(self, other: type, view: Callable[['Observable'], np.ndarray], *args, **kwargs):
+		class Projection(other):
+			def __init__(projected_self):
+				other.__init__(projected_self, *args, **kwargs)
+			@property
+			def t(projected_self):
+				return self.t
+			@property
+			def y(projected_self):
+				return view(self)
+		return Projection()
+
+class PointObservable(Observable):
+	'''
+	Observe values on a zero-dimensional space
+	'''
+	def __init__(self):
+		super().__init__(dict())
+

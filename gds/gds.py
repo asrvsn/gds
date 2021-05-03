@@ -53,15 +53,12 @@ class GraphObservable(Observable):
 			X = self.faces
 		Observable.__init__(self, X)
 
-	def project(self, Gd: GraphDomain, view: Callable[['GraphObservable'], np.ndarray]) -> 'GraphObservable':
-		class ProjectedObservable(GraphObservable):
-			@property
-			def y(other):
-				return view(self)
-			@property
-			def t(other):
-				return self.t
-		return ProjectedObservable(self.G, Gd)
+	def project(self, other: Union[GraphDomain, Observable], view: Callable[['GraphObservable'], np.ndarray], *args, **kwargs) -> 'GraphObservable':
+		if type(other) is GraphDomain:
+			return super().project(GraphObservable, view, self.G, other)
+		else:
+			return super().project(other, view, *args, **kwargs)
+
 
 	''' Meshing '''
 
