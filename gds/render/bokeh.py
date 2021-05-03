@@ -223,6 +223,9 @@ class Renderer(ABC):
 				plot.x_range.follow = 'end'
 				plot.x_range.follow_interval = 10.0
 				plot.x_range.range_padding = 0
+				if 'min_rng' in obs.render_params:
+					plot.y_range.range_padding_units = 'absolute'
+					plot.y_range.range_padding = obs.render_params['min_rng'] / 2
 				obs.src = ColumnDataSource({'t': [], 'value': []})
 				# TODO: handle vector plotting
 				plot.line('t', 'value', line_color='black', source=obs.src)
@@ -367,7 +370,7 @@ class LiveRenderer(Renderer):
 							self.draw_face_orientations(obs, self.face_cmaps[obs.plot_id])
 				elif isinstance(obs, PointObservable):
 					# TODO: handle vector plotting
-					obs.src.stream({'t': [obs.t], 'value': [obs.y]}, 200)
+					obs.src.stream({'t': [obs.t], 'value': [obs.y]}, obs.render_params['retention'])
 		if self.rec_name != None:
 			self.dump_frame()
 

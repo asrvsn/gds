@@ -68,23 +68,48 @@ def hex_lid_driven_cavity():
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
 	return pressure, velocity
 
+def sq_lid_driven_cavity_ivp():
+	m=18
+	n=21
+	v=10.0
+	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
+	t.remove_nodes_from([(0, m-1), (1, m-1), (2, m-1), (n-2, m-1), (n-1, m-1), (n, m-1)])
+	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
+	velocity.set_initial(y0=lambda e: v if e in t.edges else 0)
+	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
+	return pressure, velocity
+
+def tri_lid_driven_cavity_ivp():
+	m=18
+	n=21
+	v=1.0
+	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
+	t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
+	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
+	velocity.set_initial(y0=lambda e: v if e in t.edges else 0)
+	return pressure, velocity
+
 ''' Testing functions ''' 
 
 def render():
-	p1, v1 = sq_lid_driven_cavity()
-	p2, v2 = tri_lid_driven_cavity()
-	p3, v3 = hex_lid_driven_cavity()
+	# p1, v1 = sq_lid_driven_cavity_ivp()
+	p1, v1 = tri_lid_driven_cavity_ivp()
+	# p1, v1 = sq_lid_driven_cavity()
+	# p2, v2 = tri_lid_driven_cavity()
+	# p3, v3 = hex_lid_driven_cavity()
 
 	sys = gds.couple({
 		'velocity_square': v1,
-		'velocity_tri': v2,
-		'velocity_hex': v3,
+		# 'velocity_tri': v2,
+		# 'velocity_hex': v3,
 		'pressure_square': p1,
-		'pressure_tri': p2,
-		'pressure_hex': p3,
+		# 'pressure_tri': p2,
+		# 'pressure_hex': p3,
 		'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'energy': v1.project(PointObservable, lambda v: (v1.y ** 2).sum(), min_rng=0.01),
+		'momentum': v1.project(PointObservable, lambda v: np.abs(v1.y).sum(), min_rng=0.01),
 	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
 

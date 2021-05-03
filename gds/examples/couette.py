@@ -106,23 +106,47 @@ def hex_couette():
 	velocity.set_constraints(dirichlet=walls)
 	return pressure, velocity
 
+def sq_couette_ivp():
+	m, n = 11, 10
+	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
+	faces, outer_face = gds.embedded_faces(G)
+	for j in range(m):
+		G.add_edge((n-1, j), (0, j))
+	aux_faces = [((n-1, j), (0, j), (0, j+1), (n-1, j+1)) for j in range(m-1)]
+	G.faces = faces + aux_faces # Hacky
+	G.rendered_faces = np.array(range(len(faces)), dtype=np.intp) # Hacky
+
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
+	vel = 10.0
+	def walls(e):
+		if e in b.edges: 
+			return vel
+		elif e == ((0, 0), (n-1, 0)):
+			return -vel
+		return 0
+	velocity.set_initial(y0=walls)
+	return pressure, velocity
+
 ''' Testing functions ''' 
 
 def render():
-	p1, v1 = sq_couette()
-	p2, v2 = tri_couette()
-	p3, v3 = hex_couette()
+	p1, v1 = sq_couette_ivp()
+	# p1, v1 = sq_couette()
+	# p2, v2 = tri_couette()
+	# p3, v3 = hex_couette()
 
 	sys = gds.couple({
 		'velocity_square': v1,
-		'velocity_tri': v2,
-		'velocity_hex': v3,
+		# 'velocity_tri': v2,
+		# 'velocity_hex': v3,
 		'pressure_square': p1,
-		'pressure_tri': p2,
-		'pressure_hex': p3,
+		# 'pressure_tri': p2,
+		# 'pressure_hex': p3,
 		'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'energy': v1.project(PointObservable, lambda v: (v.y ** 2).sum(), min_rng=0.01),
+		'momentum': v1.project(PointObservable, lambda v: np.abs(v.y).sum(), min_rng=0.01),
 	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
 
