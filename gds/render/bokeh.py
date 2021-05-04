@@ -219,7 +219,7 @@ class Renderer(ABC):
 			elif isinstance(obs, PointObservable):
 				plot = figure(width=self.plot_width, height=self.plot_height)
 				plot.add_tools(HoverTool(tooltips=[('time', '@t'), ('value', '@value')]))
-				plot.toolbar_location = 'above'
+				plot.toolbar_location = None
 				plot.x_range.follow = 'end'
 				plot.x_range.follow_interval = 10.0
 				plot.x_range.range_padding = 0
