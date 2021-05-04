@@ -71,11 +71,18 @@ def hex_lid_driven_cavity():
 def sq_lid_driven_cavity_ivp():
 	m=18
 	n=21
-	v=10.0
+	v=1.0
 	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	t.remove_nodes_from([(0, m-1), (1, m-1), (2, m-1), (n-2, m-1), (n-1, m-1), (n, m-1)])
 	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
-	velocity.set_initial(y0=lambda e: v if e in t.edges else 0)
+	def walls(e):
+		if e in t.edges(): return v
+		elif e in b.edges(): return -v
+		elif e in r.edges(): return -v
+		elif (e[1],e[0]) in r.edges(): return v
+		elif e in l.edges(): return v
+		elif (e[1],e[0]) in l.edges(): return -v
+		return 0
+	velocity.set_initial(y0=walls)
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
 	return pressure, velocity
 
@@ -92,8 +99,8 @@ def tri_lid_driven_cavity_ivp():
 ''' Testing functions ''' 
 
 def render():
-	# p1, v1 = sq_lid_driven_cavity_ivp()
-	p1, v1 = tri_lid_driven_cavity_ivp()
+	p1, v1 = sq_lid_driven_cavity_ivp()
+	# p1, v1 = tri_lid_driven_cavity_ivp()
 	# p1, v1 = sq_lid_driven_cavity()
 	# p2, v2 = tri_lid_driven_cavity()
 	# p3, v3 = hex_lid_driven_cavity()
@@ -108,10 +115,12 @@ def render():
 		'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'divergence_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		'energy': v1.project(PointObservable, lambda v: (v1.y ** 2).sum(), min_rng=0.01),
 		'momentum': v1.project(PointObservable, lambda v: np.abs(v1.y).sum(), min_rng=0.01),
+		'mass influx': v1.project(PointObservable, lambda v: np.abs(v1.influx()).sum(), min_rng=0.01),
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 4), edge_max=0.6, dynamic_ranges=True)
 
 def dump():
 	p1, v1 = sq_lid_driven_cavity()
