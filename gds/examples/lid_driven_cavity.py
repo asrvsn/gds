@@ -109,18 +109,18 @@ def render():
 		'velocity_square': v1,
 		# 'velocity_tri': v2,
 		# 'velocity_hex': v3,
-		'pressure_square': p1,
+		# 'pressure_square': p1,
 		# 'pressure_tri': p2,
 		# 'pressure_hex': p3,
 		'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'divergence_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		'energy': v1.project(PointObservable, lambda v: (v1.y ** 2).sum(), min_rng=0.01),
-		'momentum': v1.project(PointObservable, lambda v: np.abs(v1.y).sum(), min_rng=0.01),
-		'mass influx': v1.project(PointObservable, lambda v: np.abs(v1.influx()).sum(), min_rng=0.01),
+		'kinetic energy': v1.project(PointObservable, lambda v: (v1.y ** 2).sum(), min_rng=0.1),
+		'momentum': v1.project(PointObservable, lambda v: np.abs(v1.y).sum(), min_rng=0.1),
+		'rotational energy': v1.project(PointObservable, lambda v: (v1.curl() ** 2).sum(), min_rng=0.1),
+		'angular momentum': v1.project(PointObservable, lambda v: np.abs(v1.curl()).sum(), min_rng=0.1),
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 4), edge_max=0.6, dynamic_ranges=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
 
 def dump():
 	p1, v1 = sq_lid_driven_cavity()

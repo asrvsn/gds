@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from typing import Union, Callable
 from shapely.geometry import Point, Polygon
 
+from .voronoi import voronoi
+
 ''' Graph generators ''' 
 
 def set_grid_graph_layout(G: nx.Graph):
@@ -105,8 +107,6 @@ def hexagonal_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 		else:
 			return G
 
-
-
 def random_planar_graph(n, dist):
 	assert n > 0
 	G = nx.random_geometric_graph(n, dist)
@@ -114,6 +114,36 @@ def random_planar_graph(n, dist):
 	largest_cc = max(nx.connected_components(G), key=len)
 	G = G.subgraph(largest_cc).copy()
 	return G
+
+def voronoi_lattice(n_boundary: int, n_interior: int, eps=0.05, with_boundaries=False):
+	assert 0 < eps < 1
+	box = np.array([0., 1., 0., 1.])
+	points = np.vstack((
+		np.vstack((np.zeros(n_boundary)+eps/2, np.linspace(0+eps/2, 1-eps/2, n_boundary))).T,
+		np.vstack((np.ones(n_boundary)-eps/2, np.linspace(0+eps/2, 1-eps/2, n_boundary))).T,
+		np.random.uniform(0+eps, 1-eps, (n_interior, 2)),
+	))
+	vor = voronoi(points, box)
+	G = nx.Graph()
+	seen = set()
+	for region in vor.filtered_regions:
+		for node in region:
+			if not (node in seen):
+				G.add_node(node)
+				G.nodes[node]['pos'] = tuple(vor.vertices[node].tolist())
+		G.add_edges_from(zip(region[:-1], region[1:]))
+		G.add_edge(region[-1], region[0])
+	# pdb.set_trace()
+	if with_boundaries:
+		l = G.subgraph([n for n in G.nodes() if 0-eps/4 <= G.nodes[n]['pos'][0] <= eps/4])
+		r = G.subgraph([n for n in G.nodes() if 1-eps/4 <= G.nodes[n]['pos'][0] <= 1+eps/4])
+		b = G.subgraph([n for n in G.nodes() if 0-eps/4 <= G.nodes[n]['pos'][1] <= eps/4])
+		t = G.subgraph([n for n in G.nodes() if 1-eps/4 <= G.nodes[n]['pos'][1] <= 1+eps/4])
+		return G, (l.copy(), r.copy(), t.copy(), b.copy())
+	else:
+		return G
+
+''' Graph helpers ''' 
 
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):
 	''' Get boundary of planar graph using layout coordinates. ''' 

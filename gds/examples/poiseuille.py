@@ -149,6 +149,54 @@ def hex_poiseuille():
 	))
 	return pressure, velocity
 
+def voronoi_poiseuille():
+	np.random.seed(401)
+	gradP=1.0
+	n_boundary = 10
+	n_interior = 100
+
+	G, (l, r, t, b) = gds.voronoi_lattice(n_boundary, n_interior, with_boundaries=True, eps=0.07)
+	# tb = set(t.nodes()) | set(b.nodes())
+	v_free_l, v_free_r = set(l.nodes()), set(r.nodes())
+	v_free = v_free_l | v_free_r
+	v_bd_l = set()
+	# for v in v_free_l:
+	# 	u = v - 1j
+	# 	G.add_node(u)
+	# 	G.add_edge(u, v)
+	# 	G.nodes[u]['pos'] = (G.nodes[v]['pos'][0] - 0.1, G.nodes[v]['pos'][1])
+	# 	v_bd_l.add(u)
+	v_bd_r = set()
+	# for v in v_free_r:
+	# 	u = v - 1j
+	# 	G.add_node(u)
+	# 	G.add_edge(v, u)
+	# 	G.nodes[u]['pos'] = (G.nodes[v]['pos'][0] + 0.1, G.nodes[v]['pos'][1])
+	# 	v_bd_r.add(u)
+	v_bd = v_bd_l | v_bd_r
+
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_bd | v_free)
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
+		{n: gradP/2 for n in v_free_l | v_bd_l},
+		{n: -gradP/2 for n in v_free_r | v_bd_r},
+	))
+	# e_free_mask = np.array([1 if len(set(velocity.iX[i]) - v_bd)==2 else 0 for i in range(velocity.ndim)])
+	# local_state = {'t': None, 'div': None}
+	# def free_boundaries(t, e):
+	# 	if local_state['t'] != t:
+	# 		local_state['div'] = velocity.div(velocity.y*e_free_mask)
+	# 		local_state['t'] = t
+	# 	if e[1] in v_bd_l:
+	# 		return -np.clip(local_state['div'][pressure.X[e[0]]], 0, None)
+	# 	elif e[1] in v_bd_r:
+	# 		return -np.clip(local_state['div'][pressure.X[e[0]]], None, 0)
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		# free_boundaries,
+		gds.zero_edge_bc(t),
+		gds.zero_edge_bc(b),
+	))
+	return pressure, velocity
+
 def poiseuille_flow():
 	''' API example ''' 
 	G, (G_L, G_R, G_T, G_B) = gds.square_lattice(m, n, with_boundaries=True)
@@ -174,25 +222,30 @@ def poiseuille_flow():
 ''' Testing functions ''' 
 
 def render():
+	p, v = voronoi_poiseuille()
 	# p1, v1 = sq_poiseuille_periodic()
 	# p1, v1 = sq_poiseuille()
-	p2, v2 = tri_poiseuille()
+	# p2, v2 = tri_poiseuille()
 	# p3, v3 = hex_poiseuille()
 
 	# v = v3
 	sys = gds.couple({
+		'velocity': v,
 		# 'velocity_square': v1,
-		'velocity_tri': v2,
+		# 'velocity_tri': v2,
 		# 'velocity_hex': v3,
+		'pressure': p,
 		# 'pressure_square': p1,
-		'pressure_tri': p2,
+		# 'pressure_tri': p2,
 		# 'pressure_hex': p3,
+		'vorticity': v.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'div_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		'div_tri': v2.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		# 'div_tri': v2.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'div_hex': v3.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		'divergence': v.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'laplacian_square': v1.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'laplacian_tri': v2.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'laplacian_hex': v3.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
@@ -201,7 +254,7 @@ def render():
 		# 'energy_square': v1.project(PointObservable, lambda v: (v.y ** 2).sum()),
 		# 'momentum_square': v1.project(PointObservable, lambda v: np.abs(v.y).sum()),
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 4), edge_max=0.6, dynamic_ranges=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.6, dynamic_ranges=True, plot_width=900, node_size=0.04)
 
 def dump():
 	p1, v1 = sq_poiseuille()

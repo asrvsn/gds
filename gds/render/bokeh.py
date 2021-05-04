@@ -17,7 +17,7 @@ from bokeh.core.properties import field
 from bokeh.plotting import figure, from_networkx
 from bokeh.layouts import row, column, gridplot, widgetbox
 from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead, ColumnDataSource, Arc
-from bokeh.models.glyphs import Ellipse, MultiLine, Patches
+from bokeh.models.glyphs import Ellipse, MultiLine, Patches, Line
 from bokeh.transform import linear_cmap
 from bokeh.command.util import build_single_handler_applications
 from bokeh.server.server import Server
@@ -229,7 +229,9 @@ class Renderer(ABC):
 					plot.y_range.range_padding = obs.render_params['min_rng'] / 2
 				obs.src = ColumnDataSource({'t': [], 'value': []})
 				# TODO: handle vector plotting
-				plot.line('t', 'value', line_color='black', source=obs.src)
+				glyph = Line(x='t', y='value')
+				plot.add_glyph(obs.src, glyph)
+				# plot.line('t', 'value', line_color='black', source=obs.src)
 			else:
 				raise Exception('unknown observable type: ', obs)
 			return plot
@@ -382,15 +384,16 @@ class LiveRenderer(Renderer):
 		self.rec_name = f'recordings/{now().strftime("%m-%d-%y %H:%M:%S")}'
 		os.makedirs(self.rec_name)
 		self.dump_frame()
-		chromedriver_path = str(Path(__file__).parent.parent.parent.parent / 'chromedriver')
-		assert os.path.exists(chromedriver_path), f'Cannot find chromedriver at: {chromedriver_path}'
-		print('got here!')
-		self.webdriver = webdriver.Chrome(chromedriver_path)
+		# chromedriver_path = str(Path(__file__).parent.parent.parent.parent / 'chromedriver')
+		# assert os.path.exists(chromedriver_path), f'Cannot find chromedriver at: {chromedriver_path}'
+		# self.webdriver = webdriver.Chrome(chromedriver_path)
 
 	def dump_frame(self):
-		if hasattr(self, 'webdriver'):
-			export_png(self.root_plot, filename=f'{self.rec_name}/{self.rec_ctr}.png', timeout=10, webdriver=self.webdriver)
-			self.rec_ctr += 1
+		# if hasattr(self, 'webdriver'):
+			# export_png(self.root_plot, filename=f'{self.rec_name}/{self.rec_ctr}.png', timeout=10, webdriver=self.webdriver)
+			# self.rec_ctr += 1
+		export_png(self.root_plot, filename=f'{self.rec_name}/{self.rec_ctr}.png', timeout=10)
+		self.rec_ctr += 1
 
 	def stop_recording(self):
 		self.rec_name = None

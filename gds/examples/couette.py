@@ -163,11 +163,45 @@ def tri_couette_ivp():
 	velocity.set_initial(y0=walls)
 	return pressure, velocity
 
+def hex_couette_ivp():
+	m, n = 10, 20
+	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
+	faces, outer_face = gds.embedded_faces(G)
+	contractions = {}
+	for j in range(1, 2*m+1):
+		G = nx.algorithms.minors.contracted_nodes(G, (0, j), (n, j))
+		contractions[(n, j)] = (0, j)
+	nx.set_node_attributes(G, None, 'contraction')
+	rendered_faces = set()
+	for i, face in enumerate(faces):
+		face = list(face)
+		modified = False
+		for j, node in enumerate(face):
+			if node in contractions:
+				n_l = contractions[node] # identified
+				face[j] = n_l
+				faces[i] = tuple(face)
+				modified = True
+		if not modified:
+			rendered_faces.add(i)
+	G.faces = faces
+	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
+
+	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
+	vel = 1.0
+	def walls(e):
+		if (e[0][1] == e[1][1] == n//2) and (e[0][0] == e[1][0] - 1):
+			return vel
+		return 0
+	velocity.set_initial(y0=walls)
+	return pressure, velocity
+
 ''' Testing functions ''' 
 
 def render():
-	p1, v1 = sq_couette_ivp()
+	# p1, v1 = sq_couette_ivp()
 	# p1, v1 = tri_couette_ivp()
+	p1, v1 = hex_couette_ivp()
 	# p1, v1 = sq_couette()
 	# p2, v2 = tri_couette()
 	# p3, v3 = hex_couette()
@@ -183,10 +217,10 @@ def render():
 		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'divergence_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		'kinetic energy': v1.project(PointObservable, lambda v: (v1.y ** 2).sum(), min_rng=0.01),
-		'momentum': v1.project(PointObservable, lambda v: np.abs(v1.y).sum(), min_rng=0.01),
-		'rotational energy': v1.project(PointObservable, lambda v: (v1.curl() ** 2).sum(), min_rng=0.01),
-		'angular momentum': v1.project(PointObservable, lambda v: np.abs(v1.curl()).sum(), min_rng=0.01),
+		'kinetic energy': v1.project(PointObservable, lambda v: (v1.y ** 2).sum(), min_rng=0.1),
+		'momentum': v1.project(PointObservable, lambda v: np.abs(v1.y).sum(), min_rng=0.1),
+		'rotational energy': v1.project(PointObservable, lambda v: (v1.curl() ** 2).sum(), min_rng=0.1),
+		'angular momentum': v1.project(PointObservable, lambda v: np.abs(v1.curl()).sum(), min_rng=0.1),
 	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, min_rng_size=1e-2)
 
