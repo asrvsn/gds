@@ -25,6 +25,7 @@ from bokeh.util.browser import view
 from bokeh.io import export_png
 from bokeh.models.widgets import Div
 from tornado.ioloop import IOLoop
+from selenium import webdriver
 
 from gds import *
 from gds.utils.zmq import *
@@ -381,10 +382,15 @@ class LiveRenderer(Renderer):
 		self.rec_name = f'recordings/{now().strftime("%m-%d-%y %H:%M:%S")}'
 		os.makedirs(self.rec_name)
 		self.dump_frame()
+		chromedriver_path = str(Path(__file__).parent.parent.parent.parent / 'chromedriver')
+		assert os.path.exists(chromedriver_path), f'Cannot find chromedriver at: {chromedriver_path}'
+		print('got here!')
+		self.webdriver = webdriver.Chrome(chromedriver_path)
 
 	def dump_frame(self):
-		export_png(self.root_plot, filename=f'{self.rec_name}/{self.rec_ctr}.png', timeout=10)
-		self.rec_ctr += 1
+		if hasattr(self, 'webdriver'):
+			export_png(self.root_plot, filename=f'{self.rec_name}/{self.rec_ctr}.png', timeout=10, webdriver=self.webdriver)
+			self.rec_ctr += 1
 
 	def stop_recording(self):
 		self.rec_name = None
