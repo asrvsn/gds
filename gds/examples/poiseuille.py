@@ -222,8 +222,8 @@ def poiseuille_flow():
 ''' Testing functions ''' 
 
 def render():
-	p, v = voronoi_poiseuille()
-	# p1, v1 = sq_poiseuille_periodic()
+	# p, v = voronoi_poiseuille()
+	p, v = sq_poiseuille()
 	# p1, v1 = sq_poiseuille()
 	# p2, v2 = tri_poiseuille()
 	# p3, v3 = hex_poiseuille()
@@ -245,16 +245,16 @@ def render():
 		# 'div_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'div_tri': v2.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'div_hex': v3.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		'divergence': v.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		# 'divergence': v.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'laplacian_square': v1.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'laplacian_tri': v2.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'laplacian_hex': v3.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'dd*': v.project(gds.GraphDomain.edges, lambda v: v.dd_()),
 		# 'd*d': v.project(gds.GraphDomain.edges, lambda v: v.d_d()),
-		# 'energy_square': v1.project(PointObservable, lambda v: (v.y ** 2).sum()),
-		# 'momentum_square': v1.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'energy': v.project(PointObservable, lambda v: (v.y ** 2).sum()),
+		'momentum': v.project(PointObservable, lambda v: np.abs(v.y).sum()),
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.6, dynamic_ranges=True, plot_width=900, node_size=0.04)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, plot_width=900, node_size=0.04)
 
 def dump():
 	p1, v1 = sq_poiseuille()

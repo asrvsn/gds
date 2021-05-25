@@ -106,102 +106,12 @@ def hex_couette():
 	velocity.set_constraints(dirichlet=walls)
 	return pressure, velocity
 
-def sq_couette_ivp():
-	m, n = 11, 10
-	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	faces, outer_face = gds.embedded_faces(G)
-	for j in range(m):
-		G.add_edge((n-1, j), (0, j))
-	# for i in range(n):
-	# 	G.add_edge((i, 0), (i, m-1))
-	aux_faces = [((n-1, j), (0, j), (0, j+1), (n-1, j+1)) for j in range(m-1)]
-	# aux_faces += [((i, 0), (i, m-1), (i+1, m-1), (i+1, 0)) for i in range(n-1)]
-	G.faces = faces + aux_faces # Hacky
-	G.rendered_faces = np.array(range(len(faces)), dtype=np.intp) # Hacky
-
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
-	vel = 1.0
-	def walls(e):
-		if e[0][1] == e[1][1] == m//2:
-			if e[0][0] == 0 and e[1][0] == n-1:
-				return -vel
-			return vel
-		return 0
-	velocity.set_initial(y0=walls)
-	return pressure, velocity
-
-def tri_couette_ivp():
-	m, n = 10, 20
-	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	faces, outer_face = gds.embedded_faces(G)
-	for j in range(m+1):
-		G = nx.algorithms.minors.contracted_nodes(G, (0, j), ((n + 1) // 2, j))
-	rendered_faces = set()
-	r_nodes = set(r.nodes())
-	for i, face in enumerate(faces):
-		face = list(face)
-		modified = False
-		for j, node in enumerate(face):
-			if node in r_nodes:
-				n_l = (0, node[1]) # identified
-				face[j] = n_l
-				faces[i] = tuple(face)
-				modified = True
-		if not modified:
-			rendered_faces.add(i)
-	G.faces = faces
-	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
-
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
-	vel = 1.0
-	def walls(e):
-		if e[0][1] == e[1][1] == m//2:
-			if e == ((0, 0), (n//2-1, 0)):
-				return -vel
-			return vel
-		return 0
-	velocity.set_initial(y0=walls)
-	return pressure, velocity
-
-def hex_couette_ivp():
-	m, n = 10, 20
-	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
-	faces, outer_face = gds.embedded_faces(G)
-	contractions = {}
-	for j in range(1, 2*m+1):
-		G = nx.algorithms.minors.contracted_nodes(G, (0, j), (n, j))
-		contractions[(n, j)] = (0, j)
-	nx.set_node_attributes(G, None, 'contraction')
-	rendered_faces = set()
-	for i, face in enumerate(faces):
-		face = list(face)
-		modified = False
-		for j, node in enumerate(face):
-			if node in contractions:
-				n_l = contractions[node] # identified
-				face[j] = n_l
-				faces[i] = tuple(face)
-				modified = True
-		if not modified:
-			rendered_faces.add(i)
-	G.faces = faces
-	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
-
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
-	vel = 1.0
-	def walls(e):
-		if (e[0][1] == e[1][1] == n//2) and (e[0][0] == e[1][0] - 1):
-			return vel
-		return 0
-	velocity.set_initial(y0=walls)
-	return pressure, velocity
-
 ''' Testing functions ''' 
 
 def render():
-	# p1, v1 = sq_couette_ivp()
+	p1, v1 = sq_couette_ivp()
 	# p1, v1 = tri_couette_ivp()
-	p1, v1 = hex_couette_ivp()
+	# p1, v1 = hex_couette_ivp()
 	# p1, v1 = sq_couette()
 	# p2, v2 = tri_couette()
 	# p3, v3 = hex_couette()
@@ -210,7 +120,7 @@ def render():
 		'velocity': v1,
 		# 'velocity_tri': v2,
 		# 'velocity_hex': v3,
-		# 'pressure': p1,
+		'pressure': p1,
 		# 'pressure_tri': p2,
 		# 'pressure_hex': p3,
 		'vorticity': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),

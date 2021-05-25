@@ -28,13 +28,23 @@ def set_grid_graph_layout(G: nx.Graph):
 				layout[(i, j)] = np.array([2*i*dh + x0, 2*j*dh + y0])
 	nx.set_node_attributes(G, layout, 'pos')
 
-def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, **kwargs) -> nx.Graph:
+def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, with_lattice_components=False, **kwargs) -> nx.Graph:
 	G = nx.grid_2d_graph(n, m, **kwargs)
 	set_grid_graph_layout(G)
 	if diagonals:
 		for i in range(n-1):
 			for j in range(m-1):
 				G.add_edges_from([((i, j), (i+1, j+1)), ((i, j+1), (i+1, j))])
+	if with_lattice_components:
+		vert = nx.Graph()
+		for j in range(n):
+			sub = G.subgraph([(j, i) for i in range(m)])
+			vert = nx.compose(vert, sub.copy())
+		horiz = nx.Graph()
+		for i in range(m):
+			sub = G.subgraph([(j, i) for j in range(n)])
+			horiz = nx.compose(horiz, sub.copy())
+		G.lattice_components = {'vert': vert, 'horiz': horiz}
 	if with_boundaries:
 		l = G.subgraph([(0, i) for i in range(m)])
 		r = G.subgraph([(n-1, i) for i in range(m)])
@@ -66,7 +76,7 @@ def diagonal_lattice(m: int, n: int) -> nx.Graph:
 	nx.set_node_attributes(G, layout, 'pos')
 	return G
 
-def triangular_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
+def triangular_lattice(m, n, with_boundaries=False, with_lattice_components=False, **kwargs) -> nx.Graph:
 	''' Sanitize networkx properties for Bokeh consumption ''' 
 	if 'periodic' in kwargs:
 		kwargs['with_positions'] = False
@@ -75,6 +85,23 @@ def triangular_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 		return G
 	else:
 		G = nx.triangular_lattice_graph(m, n, **kwargs)
+		if with_lattice_components:
+			horiz = nx.Graph()
+			for i in range(m+1):
+				sub = G.subgraph([(j, i) for j in range(n)])
+				horiz = nx.compose(horiz, sub.copy())
+			diag_l = G.copy()
+			for i in range(m+1):
+				remove_edges(diag_l, [((j, i), (j+1,i)) for j in range(n)])
+			diag_r = diag_l.copy()
+			for i in range(m+1):
+				if i % 2 == 0:
+					remove_edges(diag_l, [((j, i), (j, i+1)) for j in range(n)])
+					remove_edges(diag_r, [((j, i), (j-1, i+1)) for j in range(n)])
+				else:
+					remove_edges(diag_l, [((j, i), (j+1, i+1)) for j in range(n)])
+					remove_edges(diag_r, [((j, i), (j, i+1)) for j in range(n)])
+			G.lattice_components = {'diag_l': diag_l, 'diag_r': diag_r, 'horiz': horiz}
 		if with_boundaries:
 			l = G.subgraph([(0, i) for i in range(m+1)])
 			r_nodes = [(n//2, 2*i+1) for i in range(m//2+1)]
@@ -89,7 +116,7 @@ def triangular_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 		else:
 			return G
 
-def hexagonal_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
+def hexagonal_lattice(m, n, with_boundaries=False, with_lattice_components=False, **kwargs) -> nx.Graph:
 	''' Sanitize networkx properties for Bokeh consumption ''' 
 	if 'periodic' in kwargs:
 		kwargs['with_positions'] = False
@@ -98,6 +125,23 @@ def hexagonal_lattice(m, n, with_boundaries=False, **kwargs) -> nx.Graph:
 		return G
 	else:
 		G = nx.hexagonal_lattice_graph(m, n, **kwargs)
+		if with_lattice_components:
+			horiz = nx.Graph()
+			for i in range(m+1):
+				sub = G.subgraph([(j, i) for j in range(n)])
+				horiz = nx.compose(horiz, sub.copy())
+			diag_l = G.copy()
+			for i in range(m+1):
+				remove_edges(diag_l, [((j, i), (j+1,i)) for j in range(n)])
+			diag_r = diag_l.copy()
+			for i in range(m+1):
+				if i % 2 == 0:
+					remove_edges(diag_l, [((j, i), (j+1, i)) for j in range(n)])
+					remove_edges(diag_r, [((j, i), (j+1, i-1)) for j in range(n)])
+				else:
+					remove_edges(diag_l, [((j, i), (j+1, i+1)) for j in range(n)])
+					remove_edges(diag_r, [((j, i), (j, i+1)) for j in range(n)])
+			G.lattice_components = {'diag_l': diag_l, 'diag_r': diag_r, 'horiz': horiz}
 		if with_boundaries:
 			l = G.subgraph([(0, i) for i in range(m*2+2)])
 			r = G.subgraph([(n, i) for i in range(m*2+2)])
@@ -382,6 +426,14 @@ def get_planar_mesh(G: nx.Graph, tol: float=1e-4):
 	xmin, ymin = min([pos[k][0] for k in pos.keys()]), min([pos[k][1] for k in pos.keys()])
 	real_pos = {k: (factor*(v[0] - xmin), factor*(v[1] - ymin)) for k, v in pos.items()}
 	return real_pos
+
+def remove_edges(G: nx.Graph, edges):
+	e_set = set(G.edges())
+	for e in edges:
+		if e in e_set:
+			G.remove_edge(*e)
+		elif (e[1], e[0]) in e_set:
+			G.remove_edge(e[1], e[0])
 
 if __name__ == '__main__':
 	G = hexagonal_lattice(3, 4)

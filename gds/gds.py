@@ -56,8 +56,25 @@ class GraphObservable(Observable):
 	def project(self, other: Union[GraphDomain, Observable], view: Callable[['GraphObservable'], np.ndarray], *args, **kwargs) -> 'GraphObservable':
 		if type(other) is GraphDomain:
 			return super().project(GraphObservable, view, self.G, other)
+		elif type(other) is nx.Graph:
+			canary = GraphObservable(other, self.Gd)
+			indices = []
+			for i in range(canary.ndim):
+				x = canary.iX[i]
+				indices.append(self.X[x])
+			indices = np.array(indices, dtype=np.intp)
+			# TODO: ignores view argument
+			view = lambda obs: self.y[indices]
+			return super().project(GraphObservable, view, other, self.Gd)
 		else:
 			return super().project(other, view, *args, **kwargs)
+
+	# TODO: hacky
+	def t(self):
+		return
+
+	def y(self):
+		return
 
 
 	''' Meshing '''
