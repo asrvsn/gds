@@ -13,7 +13,7 @@ from .fluid import incompressible_ns_flow
 
 ''' Systems ''' 
 
-def sq_couette_ivp():
+def sq_couette_ivp(viscosity, density):
 	m, n = 11, 10
 	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True, with_lattice_components=True)
 	faces, outer_face = gds.embedded_faces(G)
@@ -26,7 +26,7 @@ def sq_couette_ivp():
 	G.faces = faces + aux_faces # Hacky
 	G.rendered_faces = np.array(range(len(faces)), dtype=np.intp) # Hacky
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density)
 	vel = 1.0
 	def walls(e):
 		if e[0][1] == e[1][1] == m//2:
@@ -37,7 +37,7 @@ def sq_couette_ivp():
 	velocity.set_initial(y0=walls)
 	return pressure, velocity
 
-def tri_couette_ivp():
+def tri_couette_ivp(viscosity, density):
 	m, n = 10, 20
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True, with_lattice_components=True)
 	lcomps = G.lattice_components
@@ -67,7 +67,7 @@ def tri_couette_ivp():
 		comp.remove_edges_from(set(comp.edges() - edges))
 	G.lattice_components = lcomps 
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density)
 	vel = 1.0
 	def walls(e):
 		if e[0][1] == e[1][1] == m//2:
@@ -78,7 +78,7 @@ def tri_couette_ivp():
 	velocity.set_initial(y0=walls)
 	return pressure, velocity
 
-def hex_couette_ivp():
+def hex_couette_ivp(viscosity, density):
 	m, n = 10, 20
 	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
 	faces, outer_face = gds.embedded_faces(G)
@@ -102,7 +102,7 @@ def hex_couette_ivp():
 	G.faces = faces
 	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density)
 	vel = 1.0
 	def walls(e):
 		if (e[0][1] == e[1][1] == n//2) and (e[0][0] == e[1][0] - 1):
@@ -115,21 +115,26 @@ def hex_couette_ivp():
 ''' Testing functions ''' 
 
 def render():
-	# p, v = sq_couette_ivp()
-	p, v = tri_couette_ivp()
-	# p1, v1 = hex_couette_ivp()
+	viscosity, density = 1., 1e-2
+	p, v = sq_couette_ivp(viscosity, density)
+	# p, v = tri_couette_ivp(viscosity, density)
+	# p, v = hex_couette_ivp(viscosity, density)
 
-	components = dict()
-	for (name, G) in p.G.lattice_components.items():
-		components[name] = v.project(G, lambda v: v)
-		components[f'{name}_energy'] = components[name].project(PointObservable, lambda v: (v.y ** 2).sum(), min_rng=0.1)
-		components[f'{name}_momentum'] = components[name].project(PointObservable, lambda v: v.y.sum(), min_rng=0.1)
+
+	# components = dict()
+	# for (name, G) in p.G.lattice_components.items():
+	# 	components[name] = v.project(G, lambda v: v)
+	# 	components[f'{name}_energy'] = components[name].project(PointObservable, lambda v: (v.y ** 2).sum(), min_rng=0.1)
+	# 	components[f'{name}_momentum'] = components[name].project(PointObservable, lambda v: v.y.sum(), min_rng=0.1)
 
 	sys = gds.couple({
 		'velocity': v,
 		'pressure': p,
-		'vorticity': v.project(gds.GraphDomain.faces, lambda v: v.curl()),
-	} | components)
+		'vorticity': v.project(GraphDomain.faces, lambda v: v.curl()),
+		'mass flux': v.project(GraphDomain.edges, lambda v: viscosity * v.laplacian() - p.grad()), 
+		'total mass flux': v.project(PointObservable, lambda v: (viscosity * v.laplacian() - p.grad()).sum()),
+		'divergence': v.project(GraphDomain.nodes, lambda v: v.div()),
+	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, min_rng_size=1e-2)
 
 
