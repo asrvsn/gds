@@ -13,7 +13,7 @@ from .fluid import incompressible_ns_flow, incompressible_stokes_flow
 
 ''' Systems ''' 
 
-def tri_poiseuille():
+def tri_poiseuille(viscosity, density):
 	m=14 
 	n=58 
 	gradP=1.0
@@ -27,7 +27,7 @@ def tri_poiseuille():
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	# v_free_r_int = set((n[0]-1, n[1]) for n in v_free_r)
 	v_free = v_free_l | v_free_r
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_free)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
 	e_free_mask[e_free] = 0
@@ -53,7 +53,7 @@ def tri_poiseuille():
 	))
 	return pressure, velocity
 
-def sq_poiseuille():
+def sq_poiseuille(viscosity, density):
 	m=14 
 	n=28 
 	gradP=6.0
@@ -63,13 +63,12 @@ def sq_poiseuille():
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	v_free = v_free_l | v_free_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_free)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
 
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
 	e_free_mask[e_free] = 0
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_free)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes},
 		{(n[0]+1, n[1]): gradP/2 for n in l.nodes},
@@ -92,7 +91,7 @@ def sq_poiseuille():
 	))
 	return pressure, velocity
 
-def hex_poiseuille():
+def hex_poiseuille(viscosity, density):
 	m=14 
 	n=29 
 	gradP=1.0
@@ -121,7 +120,7 @@ def hex_poiseuille():
 		v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_bd | v_free)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
 
 	e_free_mask = np.array([1 if len(set(velocity.iX[i]) - v_bd)==2 else 0 for i in range(velocity.ndim)])
 
@@ -149,7 +148,7 @@ def hex_poiseuille():
 	))
 	return pressure, velocity
 
-def voronoi_poiseuille():
+def voronoi_poiseuille(viscosity, density):
 	np.random.seed(401)
 	gradP=1.0
 	n_boundary = 10
@@ -175,7 +174,7 @@ def voronoi_poiseuille():
 	# 	v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_bd | v_free)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in v_free_l | v_bd_l},
 		{n: -gradP/2 for n in v_free_r | v_bd_r},
@@ -222,37 +221,41 @@ def poiseuille_flow():
 ''' Testing functions ''' 
 
 def render():
+	viscosity, density = 1., 1e-2
 	# p, v = voronoi_poiseuille()
-	p, v = sq_poiseuille()
-	# p1, v1 = sq_poiseuille()
-	# p2, v2 = tri_poiseuille()
-	# p3, v3 = hex_poiseuille()
+	# p, v = sq_poiseuille()
+	p1, v1 = sq_poiseuille(viscosity, density)
+	p2, v2 = tri_poiseuille(viscosity, density)
+	p3, v3 = hex_poiseuille(viscosity, density)
 
 	# v = v3
 	sys = gds.couple({
-		'velocity': v,
-		# 'velocity_square': v1,
-		# 'velocity_tri': v2,
-		# 'velocity_hex': v3,
-		'pressure': p,
-		# 'pressure_square': p1,
-		# 'pressure_tri': p2,
-		# 'pressure_hex': p3,
-		'vorticity': v.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		# 'vorticity_square': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		# 'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		# 'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		# 'div_square': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		# 'velocity': v,
+		'velocity_sq': v1,
+		'velocity_tri': v2,
+		'velocity_hex': v3,
+		# 'pressure': p,
+		'pressure_sq': p1,
+		'pressure_tri': p2,
+		'pressure_hex': p3,
+		# 'vorticity': v.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'vorticity_sq': v1.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'vorticity_tri': v2.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'vorticity_hex': v3.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'div_sq': v1.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'div_tri': v2.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'div_hex': v3.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		'mass_flux_sq': v1.project(GraphDomain.edges, lambda v: viscosity * v.laplacian() - p1.grad()), 
+		'mass_flux_tri': v2.project(GraphDomain.edges, lambda v: viscosity * v.laplacian() - p2.grad()), 
+		'mass_flux_hex': v3.project(GraphDomain.edges, lambda v: viscosity * v.laplacian() - p3.grad()), 
 		# 'divergence': v.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		# 'laplacian_square': v1.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
+		# 'laplacian_sq': v1.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'laplacian_tri': v2.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'laplacian_hex': v3.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'dd*': v.project(gds.GraphDomain.edges, lambda v: v.dd_()),
 		# 'd*d': v.project(gds.GraphDomain.edges, lambda v: v.d_d()),
-		'energy': v.project(PointObservable, lambda v: (v.y ** 2).sum()),
-		'momentum': v.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		# 'energy': v.project(PointObservable, lambda v: (v.y ** 2).sum()),
+		# 'momentum': v.project(PointObservable, lambda v: np.abs(v.y).sum()),
 	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, plot_width=900, node_size=0.04)
 
