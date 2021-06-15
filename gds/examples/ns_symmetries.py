@@ -114,7 +114,7 @@ def hex_couette_ivp(viscosity, density):
 
 ''' Testing functions ''' 
 
-def render():
+def render1():
 	viscosity, density = 1., 1e-2
 	p, v = sq_couette_ivp(viscosity, density)
 	# p, v = tri_couette_ivp(viscosity, density)
@@ -132,11 +132,28 @@ def render():
 		'pressure': p,
 		'vorticity': v.project(GraphDomain.faces, lambda v: v.curl()),
 		'mass flux': v.project(GraphDomain.edges, lambda v: viscosity * v.laplacian() - p.grad()), 
-		'total mass flux': v.project(PointObservable, lambda v: (viscosity * v.laplacian() - p.grad()).sum()),
+		'total mass flux': v.project(PointObservable, lambda v: np.abs(viscosity * v.laplacian() - p.grad()).sum()),
 		'divergence': v.project(GraphDomain.nodes, lambda v: v.div()),
+	})
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, min_rng_size=1e-2)
+
+def render2():
+	viscosity, density = 1., 1e-2
+	p1, v1 = sq_couette_ivp(viscosity, density)
+	p2, v2 = tri_couette_ivp(viscosity, density)
+	p3, v3 = hex_couette_ivp(viscosity, density)
+
+
+	sys = gds.couple({
+		'velocity_sq': v1,
+		'velocity_tri': v2,
+		'velocity_hex': v3,
+		'flow_material_derivative_sq': v1.project(PointObservable, lambda v: np.abs(viscosity * v.laplacian() - p1.grad()).sum()),
+		'flow_material_derivative_tri': v2.project(PointObservable, lambda v: np.abs(viscosity * v.laplacian() - p2.grad()).sum()),
+		'flow_material_derivative_hex': v3.project(PointObservable, lambda v: np.abs(viscosity * v.laplacian() - p3.grad()).sum()),
 	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, min_rng_size=1e-2)
 
 
 if __name__ == '__main__':
-	render()
+	render2()

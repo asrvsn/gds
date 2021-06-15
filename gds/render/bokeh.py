@@ -162,6 +162,7 @@ class Renderer(ABC):
 						plot.renderers[0].node_renderer.glyph = Ellipse(height=self.node_size, width=self.node_size, fill_color=field('value', cmap))
 					if self.colorbars:
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='node')
+						cbar.major_label_text_font_size = "15pt"
 						plot.add_layout(cbar, 'right')
 				elif obs.Gd is GraphDomain.edges:
 					plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('edge', '@edge')]))
@@ -175,6 +176,7 @@ class Renderer(ABC):
 					plot.add_glyph(obs.arr_source, arrows)
 					if self.colorbars:
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='edge')
+						cbar.major_label_text_font_size = "15pt"
 						plot.add_layout(cbar, 'right')
 					if isinstance(obs, gds):
 						if self.edge_colors:
@@ -214,6 +216,7 @@ class Renderer(ABC):
 						plot.add_glyph(obs.face_source, arrows)
 					if self.colorbars:
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='face')
+						cbar.major_label_text_font_size = "15pt"
 						plot.add_layout(cbar, 'right')
 				else:
 					raise Exception('unknown graph domain.')
@@ -224,6 +227,8 @@ class Renderer(ABC):
 				plot.x_range.follow = 'end'
 				plot.x_range.follow_interval = 10.0
 				plot.x_range.range_padding = 0
+				plot.xaxis.major_label_text_font_size = "15pt"
+				plot.yaxis.major_label_text_font_size = "15pt"
 				if 'min_rng' in obs.render_params:
 					plot.y_range.range_padding_units = 'absolute'
 					plot.y_range.range_padding = obs.render_params['min_rng'] / 2

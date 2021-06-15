@@ -8,6 +8,7 @@ import cProfile
 import pstats
 
 import gds
+from gds.types import *
 
 def advection(G, v_field):
 	flow_diff = np.zeros(len(G.edges()))
@@ -170,7 +171,7 @@ def vector_advection_test_suite():
 	v, u = vector_advection_test(v_field, check=True)
 	u.step(1.0)
 
-def circulation_transfer():
+def self_advection():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(1,7)))
 	G.add_edges_from([
@@ -186,7 +187,7 @@ def circulation_transfer():
 			ret *= 2
 		return ret
 	u = gds.edge_gds(G)
-	u.set_evolution(dydt=lambda t, y: -u.advect(vectorized=False))
+	u.set_evolution(dydt=lambda t, y: -u.advect())
 	u.set_initial(y0=v_field)
 	return u
 
@@ -241,13 +242,18 @@ if __name__ == '__main__':
 	# ]
 	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=1.0, title='Advection of a vector field')
 
-	flow, obs = vector_advection_circle_2()
-	sys = gds.couple({'flow': flow, 'obs': obs})
-	gds.render(sys, edge_rng=(0,1.5), dynamic_ranges=True)
+	# flow, obs = vector_advection_circle_2()
+	# sys = gds.couple({'flow': flow, 'obs': obs})
+	# gds.render(sys, edge_rng=(0,1.5), dynamic_ranges=True)
 
 	# flow = vector_advection_circle()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,1.5), min_rng_size=0.05)
 
-	# flow = circulation_transfer()
-	# gds.render(flow, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
+	flow = self_advection()
+	momentum = flow.project(PointObservable, lambda v: np.abs(v).sum())
+	sys = gds.couple({
+		'flow': flow,
+		'total momentum': momentum,
+	})
+	gds.render(sys, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
 
