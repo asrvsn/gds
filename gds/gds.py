@@ -167,10 +167,15 @@ class node_gds(gds):
 			assert v_field.G is self.G, 'Incompatible domains'
 			v_field = v_field.y
 		if y is None: y=self.y
-		Bp = self.incidence@sp.diags(np.sign(v_field))
-		Bp.data[Bp.data > 0] = 0.
-		Bp.data *= -1
-		return -self.incidence@sp.diags(v_field)@Bp.T@y
+		if self.advect_kind == 1:
+			Bp = self.incidence@sp.diags(np.sign(v_field))
+			Bp.data[Bp.data > 0] = 0.
+			Bp.data *= -1
+			return -self.incidence@sp.diags(v_field)@Bp.T@y
+		elif self.advect_kind == 2:
+			return -abs(self.incidence)@sp.diags(v_field)@self.incidence.T@y
+		else:
+			raise Exception('unrecognized kind')
 
 
 class edge_gds(gds):

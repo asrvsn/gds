@@ -36,6 +36,7 @@ def advection_on_triangles(periodic=False, v=1.0):
 	G = gds.triangular_lattice(m, n*2)
 	if periodic:
 		G.add_edges_from([((n, y), (0, y)) for y in range(m+1)])
+		G.faces = [] # TODO: hacky; prevents infinite loop on face detection 
 	def v_field(e):
 		if e[0][1] == e[1][1]:
 			if e[0][0] == 0 and e[1][0] == n:
@@ -192,15 +193,32 @@ def self_advection():
 	return u
 
 
+def scalar_advection_kinds_test():
+	conc1, flow1 = advection_on_triangles(periodic=True)
+	conc1.advect_kind = 1
+	conc2, flow2 = advection_on_triangles(periodic=True)
+	conc2.advect_kind = 2
+	sys = gds.couple({
+		'conc1': conc1,
+		'flow1': flow1,
+		'div1': flow1.project(GraphDomain.nodes, lambda v: v.div()),
+		'conc2': conc2,
+		'flow2': flow2,
+		'div2': flow2.project(GraphDomain.nodes, lambda v: v.div()),
+	})
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), dynamic_ranges=True, node_size=.05, title='Advection of a Gaussian concentration')
+
 if __name__ == '__main__':
 	''' Scalar field advection ''' 
 
-	# conc, flow = advection_on_triangles(periodic=True)
+	# conc, flow = advection_on_triangles()
 	# sys = gds.couple({
 	# 	'conc': conc,
 	# 	'flow': flow,
 	# })
-	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, plot_height=600, node_size=.05, y_rng=(-1.1,0.8), title='Advection of a Gaussian concentration')
+	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, node_size=.05, title='Advection of a Gaussian concentration')
+
+	scalar_advection_kinds_test()
 
 	# conc, flow = advection_on_circle(v=1.0)
 	# sys = gds.couple({
@@ -249,11 +267,11 @@ if __name__ == '__main__':
 	# flow = vector_advection_circle()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,1.5), min_rng_size=0.05)
 
-	flow = self_advection()
-	momentum = flow.project(PointObservable, lambda v: np.abs(v).sum())
-	sys = gds.couple({
-		'flow': flow,
-		'total momentum': momentum,
-	})
-	gds.render(sys, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
+	# flow = self_advection()
+	# momentum = flow.project(PointObservable, lambda v: np.abs(v).sum())
+	# sys = gds.couple({
+	# 	'flow': flow,
+	# 	'total momentum': momentum,
+	# })
+	# gds.render(sys, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
 
