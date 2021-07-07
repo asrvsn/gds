@@ -161,21 +161,28 @@ class node_gds(gds):
 
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''
-		Transportation of a scalar field.
+		Transportation of a scalar field by a general (non-divergence-free) vector field.
 		'''
 		if isinstance(v_field, edge_gds):
 			assert v_field.G is self.G, 'Incompatible domains'
 			v_field = v_field.y
 		if y is None: y=self.y
-		if self.advect_kind == 1:
-			Bp = self.incidence@sp.diags(np.sign(v_field))
-			Bp.data[Bp.data > 0] = 0.
-			Bp.data *= -1
-			return -self.incidence@sp.diags(v_field)@Bp.T@y
-		elif self.advect_kind == 2:
-			return -abs(self.incidence)@sp.diags(v_field)@self.incidence.T@y
-		else:
-			raise Exception('unrecognized kind')
+		Bp = self.incidence@sp.diags(np.sign(v_field))
+		Bp.data[Bp.data > 0] = 0.
+		Bp.data *= -1
+		return -self.incidence@sp.diags(v_field)@Bp.T@y
+
+	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
+		'''
+		Lie advection by a divergence-free vector field 
+		'''
+		if isinstance(v_field, edge_gds):
+			assert v_field.G is self.G, 'Incompatible domains'
+			v_field = v_field.y
+		if y is None: y=self.y
+		Bp = self.incidence@sp.diags(np.sign(v_field))
+		Bp.data[Bp.data < 0] = 0.
+		return Bp@sp.diags(v_field)@self.incidence.T@y
 
 
 class edge_gds(gds):
@@ -350,6 +357,22 @@ class edge_gds(gds):
 							ret_out[i] += v_j * y_i 
 			ret = (ret_in - ret_out) * np.sign(v_field)
 			return -ret
+
+	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
+		'''
+		Lie advection by a divergence-free vector field 
+		'''
+		if y is None: y=self.y
+		if v_field is None: 
+			v_field = self.y
+		elif isinstance(v_field, edge_gds):
+			assert v_field.G is self.G, 'Incompatible domains'
+			# Since graphs are identical, orientation is implicitly respected
+			v_field = v_field.y
+			
+		U2 = self.face_curl@sp.diags(v_field)
+		Bp.data[Bp.data < 0] = 0.
+		return Bp@self.incidence.T@y
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-edge dual graph ''' 

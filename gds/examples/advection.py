@@ -10,13 +10,18 @@ import pstats
 import gds
 from gds.types import *
 
-def advection(G, v_field):
+def advection(G, v_field, kind=None):
 	flow_diff = np.zeros(len(G.edges()))
 	flow = gds.edge_gds(G)
 	flow.set_evolution(dydt=lambda t, y: flow_diff)
 	flow.set_initial(y0 = v_field)
 	conc = gds.node_gds(G)
-	conc.set_evolution(dydt=lambda t, y: -conc.advect(flow))
+	if kind == None:
+		conc.set_evolution(dydt=lambda t, y: -conc.advect(flow))
+	elif kind == 'lie':
+		conc.set_evolution(dydt=lambda t, y: -conc.lie_advect(flow))
+	else:
+		raise Exception('unrecognized kind')
 	return conc, flow
 
 def advection_on_grid():
@@ -31,7 +36,7 @@ def advection_on_grid():
 	conc.set_initial(y0 = lambda x: 1.0 if x == (0, 0) else 0.) # delta initial condition
 	return conc, flow
 
-def advection_on_triangles(periodic=False, v=1.0):
+def advection_on_triangles(periodic=False, v=1.0, **kwargs):
 	m, n = 20, 20
 	G = gds.triangular_lattice(m, n*2)
 	if periodic:
@@ -44,7 +49,7 @@ def advection_on_triangles(periodic=False, v=1.0):
 			if e[1][0] > e[0][0]:
 				return v
 		return 0.
-	conc, flow = advection(G, v_field)
+	conc, flow = advection(G, v_field, **kwargs)
 	conc.set_initial(y0 = lambda x: np.exp(-((x[0]-2)**2 + (x[1]-n/2)**2)/15)) 
 	return conc, flow
 
@@ -57,7 +62,7 @@ def advection_on_random_graph():
 	conc.set_initial(y0 = lambda x: 1.) 
 	return conc, flow
 
-def advection_on_circle(v=1.0):
+def advection_on_circle(v=1.0, **kwargs):
 	n = 10
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
@@ -66,7 +71,7 @@ def advection_on_circle(v=1.0):
 		if e == (n-1, 0) or e == (0, n-1):
 			return -v
 		return v
-	conc, flow = advection(G, v_field)
+	conc, flow = advection(G, v_field, **kwargs)
 	conc.set_initial(y0 = lambda x: 1.0 if x == 0 else 0.) # delta initial condition
 	return conc, flow
 
@@ -195,9 +200,9 @@ def self_advection():
 
 def scalar_advection_kinds_test():
 	conc1, flow1 = advection_on_triangles(periodic=True)
-	conc1.advect_kind = 1
-	conc2, flow2 = advection_on_triangles(periodic=True)
-	conc2.advect_kind = 2
+	# conc1, flow1 = advection_on_circle()
+	conc2, flow2 = advection_on_triangles(periodic=True, kind='lie')
+	# conc2, flow2 = advection_on_circle()
 	sys = gds.couple({
 		'conc1': conc1,
 		'flow1': flow1,
