@@ -193,7 +193,7 @@ def self_advection():
 			ret *= 2
 		return ret
 	u = gds.edge_gds(G)
-	u.set_evolution(dydt=lambda t, y: -u.advect())
+	u.set_evolution(dydt=lambda t, y: -u.advect(vectorized=False))
 	u.set_initial(y0=v_field)
 	return u
 
@@ -223,7 +223,7 @@ if __name__ == '__main__':
 	# })
 	# gds.render(sys, canvas=[[[[conc, flow]]]], dynamic_ranges=True, node_size=.05, title='Advection of a Gaussian concentration')
 
-	scalar_advection_kinds_test()
+	# scalar_advection_kinds_test()
 
 	# conc, flow = advection_on_circle(v=1.0)
 	# sys = gds.couple({
@@ -272,11 +272,11 @@ if __name__ == '__main__':
 	# flow = vector_advection_circle()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,1.5), min_rng_size=0.05)
 
-	# flow = self_advection()
-	# momentum = flow.project(PointObservable, lambda v: np.abs(v).sum())
-	# sys = gds.couple({
-	# 	'flow': flow,
-	# 	'total momentum': momentum,
-	# })
-	# gds.render(sys, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Advective transport on contra-rotating cycles')
+	flow = self_advection()
+	sys = gds.couple({
+		'flow': flow,
+		'total momentum': flow.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'total energy': flow.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
+	})
+	gds.render(sys, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Convection on contra-rotating cycles')
 
