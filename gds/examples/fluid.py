@@ -177,6 +177,9 @@ def fluid_test(pressure, velocity):
 		'velocity': velocity,
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -v.advect()),
+		'KE': velocity.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
+		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
 	})
 	gds.render(sys, edge_max=0.6, dynamic_ranges=True)
 
@@ -253,12 +256,46 @@ def test2():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
-	pressure, velocity = incompressible_ns_flow(G, nx.Graph(), viscosity=0.)
+	pressure, velocity = incompressible_ns_flow(G, viscosity=0.)
 	velocity.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
+	return pressure, velocity
+
+def euler1():
+	G = nx.Graph()
+	G.add_nodes_from(list(range(1,7)))
+	G.add_edges_from([
+		(1,2),(2,3),(3,4),(4,1),
+		(4,5),(5,6),(6,3),
+	])
+	negated = set([(1,4),(3,6),])
+	def v_field(e):
+		ret = 1.0
+		if e in negated:
+			ret *= -1
+		if e == (3,4):
+			ret *= 2
+		return ret
+	pressure, velocity = incompressible_ns_flow(G, viscosity=0.)
+	velocity.set_initial(y0=v_field)
+	return pressure, velocity
+
+def euler2():
+	G = nx.Graph()
+	G.add_nodes_from(list(range(1,9)))
+	v_field = {
+		(1,2): 2, (2,3): 1, (3,4): 2, (1,4): -3,
+		(5,6): 2, (6,7): 3, (7,8): 2, (5,8): -1,
+		(1,5): 1, (2,6): 1, (3,7): -1, (4,8): -1,
+	}
+	G.add_edges_from(v_field.keys())
+	negated = set([(1,4),(3,6),])
+	pressure, velocity = incompressible_ns_flow(G, viscosity=0.)
+	velocity.set_initial(y0=lambda e: v_field[e])
 	return pressure, velocity
 
 
 if __name__ == '__main__':
 	# fluid_test(*hex_couette())
-	couette_comp()
+	fluid_test(*euler2())
+	# couette_comp()
 
