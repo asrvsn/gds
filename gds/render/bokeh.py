@@ -228,10 +228,10 @@ class Renderer(ABC):
 				plot.x_range.follow_interval = 10.0
 				plot.x_range.range_padding = 0
 				plot.xaxis.major_label_text_font_size = "15pt"
+				plot.xaxis.axis_label = 'Time'
 				plot.yaxis.major_label_text_font_size = "15pt"
-				if 'min_rng' in obs.render_params:
-					plot.y_range.range_padding_units = 'absolute'
-					plot.y_range.range_padding = obs.render_params['min_rng'] / 2
+				plot.y_range.range_padding_units = 'absolute'
+				plot.y_range.range_padding = obs.render_params['min_res'] / 2
 				obs.src = ColumnDataSource({'t': [], 'value': []})
 				# TODO: handle vector plotting
 				glyph = Line(x='t', y='value')

@@ -187,6 +187,39 @@ def voronoi_lattice(n_boundary: int, n_interior: int, eps=0.05, with_boundaries=
 	else:
 		return G
 
+def flat_cube():
+	G = nx.Graph()
+	G.add_nodes_from(list(range(1,9)))
+	edges = {
+		(1,2), (2,3), (3,4), (1,4),
+		(5,6), (6,7), (7,8), (5,8),
+		(1,5), (2,6), (3,7), (4,8),
+	}
+	G.add_edges_from(edges)
+	layout = dict()
+	for v in range(1,5):
+		layout[v] = np.array([np.cos(2*np.pi*(v-1)/4), np.sin(2*np.pi*(v-1)/4)])
+	for v in range(5,9):
+		layout[v] = np.array([2*np.cos(2*np.pi*(v-1)/4), 2*np.sin(2*np.pi*(v-1)/4)])
+	nx.set_node_attributes(G, layout, 'pos')
+	return G
+
+
+def octagonal_prism():
+	edges = {
+		(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,8), (1,8),
+		(9,10), (10,11), (11,12), (12,13), (13,14), (14,15), (15,16), (9,16),
+		(1,9), (2,10), (3,11), (4,12), (5,13), (6,14), (7,15), (8,16), 
+	}
+	G.add_edges_from(edges)
+	layout = dict()
+	for v in range(1,9):
+		layout[v] = np.array([np.cos(2*np.pi*(v-1)/8), np.sin(2*np.pi*(v-1)/8)])
+	for v in range(9,17):
+		layout[v] = np.array([2*np.cos(2*np.pi*(v-1)/8), 2*np.sin(2*np.pi*(v-1)/8)])
+	nx.set_node_attributes(G, layout, 'pos')
+	return G
+
 ''' Graph helpers ''' 
 
 def get_planar_boundary(G: nx.Graph) -> (nx.Graph, nx.Graph, nx.Graph, nx.Graph, nx.Graph):

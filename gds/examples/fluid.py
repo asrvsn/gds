@@ -38,13 +38,13 @@ def incompressible_ns_flow_projected(G: nx.Graph, viscosity=1e-3, density=1.0, b
 	TODO: support inlets/outlets in Leray projection.
 	"""
 	velocity = gds.edge_gds(G, **kwargs)
-	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)
 
 	def velocity_f(t, y):
 		rhs = -velocity.advect() + velocity.laplacian() * viscosity/density
 		if body_force != None:
 			rhs += body_force(t, y)
-		return velocity.leray_project(rhs)
+		return rhs
+		# return velocity.leray_project(rhs)
 
 	velocity.set_evolution(dydt=velocity_f)
 
@@ -197,10 +197,10 @@ def fluid_test(pressure, velocity):
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -v.advect()),
-		'L2': velocity.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
 		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'L2': velocity.project(PointObservable, lambda v: np.dot(v.y, v.y)),
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 4), edge_max=0.6, dynamic_ranges=True)
 
 
 def backward_step():
@@ -299,14 +299,12 @@ def euler1():
 	return pressure, velocity
 
 def euler2():
-	G = nx.Graph()
-	G.add_nodes_from(list(range(1,9)))
 	v_field = {
 		(1,2): 2, (2,3): 1, (3,4): 2, (1,4): -3,
 		(5,6): 2, (6,7): 3, (7,8): 2, (5,8): -1,
 		(1,5): 1, (2,6): 1, (3,7): -1, (4,8): -1,
 	}
-	G.add_edges_from(v_field.keys())
+	G = gds.flat_cube()
 	pressure, velocity = incompressible_ns_flow(G, viscosity=0.)
 	velocity.set_initial(y0=lambda e: v_field[e])
 	return pressure, velocity
@@ -324,14 +322,12 @@ def euler3():
 	return pressure, velocity
 
 def leray_test():
-	G = nx.Graph()
-	G.add_nodes_from(list(range(1,9)))
 	v_field = {
 		(1,2): 2, (2,3): 1, (3,4): 2, (1,4): -3,
 		(5,6): 2, (6,7): 3, (7,8): 2, (5,8): -1,
 		(1,5): 1, (2,6): 1, (3,7): -1, (4,8): -1,
 	}
-	G.add_edges_from(v_field.keys())
+	G = gds.flat_cube()
 	velocity = incompressible_ns_flow_projected(G, viscosity=0.)
 	velocity.set_initial(y0=lambda e: v_field[e])
 
@@ -340,8 +336,28 @@ def leray_test():
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -v.advect()),
-		'L2': velocity.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
 		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'L2': velocity.project(PointObservable, lambda v: np.dot(v.y, v.y)),
+	})
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
+
+def advection_test():
+	v_field = {
+		(1,2): 2, (2,3): 1, (3,4): 2, (1,4): -3,
+		(5,6): 2, (6,7): 3, (7,8): 2, (5,8): -1,
+		(1,5): 1, (2,6): 1, (3,7): -1, (4,8): -1,
+	}
+	G = gds.flat_cube()
+	velocity = incompressible_ns_flow_projected(G, viscosity=0.)
+	velocity.set_initial(y0=lambda e: v_field[e])
+
+	sys = gds.couple({
+		'velocity': velocity,
+		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		# 'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -v.advect()),
+		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'L2': velocity.project(PointObservable, lambda v: np.dot(v.y, v.y)),
 	})
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
 

@@ -100,9 +100,10 @@ class PointObservable(Observable):
 	'''
 	Observe values on a zero-dimensional space
 	'''
-	def __init__(self, retention=600, **kwargs):
+	def __init__(self, retention=600, min_res=1e-3, **kwargs):
 		self.render_params = {
 			'retention': retention,
+			'min_res': min_res,
 			**kwargs
 		} # TODO seoarate rendering
 		super().__init__(dict())
