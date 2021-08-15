@@ -31,12 +31,20 @@ def incompressible_ns_flow(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], 
 
 	return pressure, velocity
 
-def incompressible_ns_flow_projected(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], **kwargs) -> gds.edge_gds:
+def incompressible_ns_flow_projected(G: nx.Graph, viscosity=1e-3, density=1.0, body_force=None, **kwargs) -> gds.edge_gds:
+	"""
+	N-S equations with pressure eliminated.
+
+	TODO: support inlets/outlets in Leray projection.
+	"""
 	velocity = gds.edge_gds(G, **kwargs)
 	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)
 
 	def velocity_f(t, y):
-		return velocity.leray_project(-velocity.advect() + velocity.laplacian() * viscosity/density)
+		rhs = -velocity.advect() + velocity.laplacian() * viscosity/density
+		if body_force != None:
+			rhs += body_force(t, y)
+		return velocity.leray_project(rhs)
 
 	velocity.set_evolution(dydt=velocity_f)
 
