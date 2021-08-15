@@ -332,6 +332,7 @@ class LiveRenderer(Renderer):
 					if hasattr(obs, 'plot_id') and obs.plot_id == plot_id:
 						names.append(name) # Somewhat hacky
 				plot.title.text = ','.join(names)
+				plot.title.text_font_size = '16pt'
 
 	def step(self, dt: float):
 		self.stepper.step(dt)

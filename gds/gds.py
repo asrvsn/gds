@@ -374,6 +374,14 @@ class edge_gds(gds):
 		Bp.data[Bp.data < 0] = 0.
 		return Bp@self.incidence.T@y
 
+	def leray_project(self, y: np.ndarray=None) -> np.ndarray:
+		"""
+		Project onto divergence-free subspace.
+		"""
+		if y is None: y=self.y
+		inv = sp.linalg.lsmr(-self.incidence@self.incidence.T, self.div(y))[0]
+		return y - self.incidence.T@inv
+
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-edge dual graph ''' 
 		G_ = nx.line_graph(self.G)

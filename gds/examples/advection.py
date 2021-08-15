@@ -177,7 +177,7 @@ def vector_advection_test_suite():
 	v, u = vector_advection_test(v_field, check=True)
 	u.step(1.0)
 
-def self_advection():
+def self_advection_1():
 	G = nx.Graph()
 	G.add_nodes_from(list(range(1,7)))
 	G.add_edges_from([
@@ -189,14 +189,27 @@ def self_advection():
 		ret = 1.0
 		if e in negated:
 			ret *= -1
-		if e == (5,6):
+		if e == (3,4):
 			ret *= 2
 		return ret
 	u = gds.edge_gds(G)
-	u.set_evolution(dydt=lambda t, y: -u.advect(vectorized=False))
+	u.set_evolution(dydt=lambda t, y: -u.advect())
 	u.set_initial(y0=v_field)
 	return u
 
+def self_advection_2():
+	G = nx.Graph()
+	G.add_nodes_from(list(range(1,9)))
+	v_field = {
+		(1,2): 2, (2,3): 1, (3,4): 2, (1,4): -3,
+		(5,6): 2, (6,7): 3, (7,8): 2, (5,8): -1,
+		(1,5): 1, (2,6): 1, (3,7): -1, (4,8): -1,
+	}
+	G.add_edges_from(v_field.keys())
+	u = gds.edge_gds(G)
+	u.set_evolution(dydt=lambda t, y: -u.advect())
+	u.set_initial(y0=lambda e: v_field[e])
+	return u
 
 def scalar_advection_kinds_test():
 	conc1, flow1 = advection_on_triangles(periodic=True)
@@ -272,11 +285,12 @@ if __name__ == '__main__':
 	# flow = vector_advection_circle()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,1.5), min_rng_size=0.05)
 
-	flow = self_advection()
+	flow = self_advection_2()
 	sys = gds.couple({
 		'flow': flow,
-		'total momentum': flow.project(PointObservable, lambda v: np.abs(v.y).sum()),
-		'total energy': flow.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
+		'divergence': flow.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		'L1': flow.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'KE': flow.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
 	})
-	gds.render(sys, edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05, title='Convection on contra-rotating cycles')
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
 
