@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_ns_flow
+from .fluid import *
 
 ''' Systems ''' 
 
@@ -29,6 +29,22 @@ def tri_lid_driven_cavity():
 	))
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
 	return pressure, velocity
+
+def tri_lid_driven_cavity_projected():
+	m=18
+	n=21
+	v=10.0
+	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
+	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
+	# t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
+	velocity = incompressible_ns_flow_projected(G, viscosity=10., density=1., v_free=[(0, m), (n, m)])
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		gds.const_edge_bc(t, v),
+		gds.zero_edge_bc(b),
+		gds.zero_edge_bc(l),
+		gds.zero_edge_bc(r),
+	))
+	return velocity
 
 def sq_lid_driven_cavity():
 	m=18
@@ -151,4 +167,5 @@ def dump():
 	sys.solve_to_disk(5.0, 0.01, 'lid_driven_cavity')
 
 if __name__ == '__main__':
-	render()
+	# render()
+	fluid_test(tri_lid_driven_cavity_projected())

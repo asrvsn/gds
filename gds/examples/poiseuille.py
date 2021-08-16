@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_ns_flow, incompressible_ns_flow_projected, incompressible_stokes_flow
+from .fluid import *
 
 ''' Systems ''' 
 
@@ -227,35 +227,12 @@ def sq_poiseuille_projected(viscosity, density):
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	v_free = v_free_l | v_free_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
-
-	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
-	e_free_mask = np.ones(velocity.ndim)
-	e_free_mask[e_free] = 0
-
-	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{(n[0]+1, n[1]): gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes},
-		{(n[0]-1, n[1]): -gradP/2 for n in r.nodes},
-	))
-	local_state = {'t': None, 'div': None}
-	def free_boundaries(t, e):
-		if local_state['t'] != t:
-			local_state['div'] = velocity.div(velocity.y*e_free_mask)
-		if e[0][1] == e[1][1] and e[0][0] + 1 == e[1][0]:
-			if e[0] in v_free:
-				return local_state['div'][pressure.X[e[1]]]
-			elif e[1] in v_free:
-				return -local_state['div'][pressure.X[e[0]]]
-
-	velocity = incompressible_ns_flow_projected(G, viscosity=viscosity, density=density, body_force=lambda t, y: pressure.grad()/density)
+	velocity = incompressible_ns_flow_projected(G, viscosity=viscosity, density=density, body_force=lambda t, y: gradP*np.ones_like(y), v_free=v_free)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.zero_edge_bc(t),
 		gds.zero_edge_bc(b),
-		free_boundaries
 	))
-	return pressure, velocity
+	return velocity
 
 
 ''' Testing functions ''' 
@@ -328,5 +305,6 @@ def dump():
 	sys.solve_to_disk(5.0, 0.01, 'poiseuille')
 
 if __name__ == '__main__':
-	render()
+	# render()
 	# dump()
+	fluid_test(sq_poiseuille_projected(50, 1))
