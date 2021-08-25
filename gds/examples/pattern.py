@@ -14,7 +14,8 @@ def swift_hohenberg(G: nx.graph, a: float, b: float, c: float, gam0: float, gam2
 	amplitude.set_evolution(
 		dydt=lambda t, y: -a*y - b*(y**2) - c*(y**3) + gam0*amplitude.laplacian(y) - gam2*amplitude.bilaplacian(y)
 	)
-	amplitude.set_initial(y0=lambda _: np.random.uniform())
+	# amplitude.set_initial(y0=lambda _: np.random.uniform())
+	amplitude.set_initial(y0=lambda x: x[0]+x[1])
 	return amplitude
 
 def stripes(G):

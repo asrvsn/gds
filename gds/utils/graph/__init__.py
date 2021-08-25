@@ -5,6 +5,7 @@ import pdb
 import matplotlib.pyplot as plt
 from typing import Union, Callable
 from shapely.geometry import Point, Polygon
+import warnings
 
 from .voronoi import voronoi
 
@@ -359,7 +360,8 @@ def embedded_faces(G, use_spring_default=True):
 				return faces
 		else:
 			# Try using a force-directed layout in 3 dimensions
-			raise Exception('TODO: implement faces for non-planar graphs')
+			warnings.warn('TODO: no faces for non-planar graphs')
+			return [], None
 
 def planarize(G: nx.Graph):
 	'''

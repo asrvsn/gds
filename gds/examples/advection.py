@@ -255,7 +255,7 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	# vector_advection_test_suite()
+	vector_advection_test_suite()
 
 	# cProfile.run('vector_advection_test_suite()', 'out.prof')
 	# prof = pstats.Stats('out.prof')
@@ -285,12 +285,12 @@ if __name__ == '__main__':
 	# flow = vector_advection_circle()
 	# gds.render(flow, edge_max=0.5, edge_rng=(0,1.5), min_rng_size=0.05)
 
-	flow = self_advection_2()
-	sys = gds.couple({
-		'flow': flow,
-		'divergence': flow.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		'L1': flow.project(PointObservable, lambda v: np.abs(v.y).sum()),
-		'KE': flow.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
-	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
+	# flow = self_advection_2()
+	# sys = gds.couple({
+	# 	'flow': flow,
+	# 	'divergence': flow.project(gds.GraphDomain.nodes, lambda v: v.div()),
+	# 	'L1': flow.project(PointObservable, lambda v: np.abs(v.y).sum()),
+	# 	'KE': flow.project(PointObservable, lambda v: 0.5*np.dot(v.y, v.y)),
+	# })
+	# gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
 

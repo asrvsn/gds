@@ -44,8 +44,8 @@ def incompressible_ns_flow_projected(G: nx.Graph, viscosity=1e-3, density=1.0, v
 		rhs = -velocity.advect() + velocity.laplacian() * viscosity/density
 		if body_force != None:
 			rhs += body_force(t, y)
-		# return rhs
-		return velocity.leray_project(rhs, v_free)
+		return rhs
+		# return velocity.leray_project(rhs, v_free)
 
 	velocity.set_evolution(dydt=velocity_f)
 
