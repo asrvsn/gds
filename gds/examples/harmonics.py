@@ -8,23 +8,31 @@ import pdb
 from gds.types import *
 import gds
 
-def harmonics(G, eps=1e-15):
-	L = -nx.laplacian_matrix(G).todense()
-	print('rank: ', np.linalg.matrix_rank(L))
+def show_harmonics(G, k=0):
+	def make_observable():
+		# TODO: use the simplicial decomposition here
+		return {
+			0: gds.node_gds,
+			1: gds.edge_gds,
+			2: gds.face_gds,
+		}[k](G)
+
+	obs = make_observable()
+	L = obs.laplacian(np.eye(obs.ndim))
+	print('Laplacian rank: ', np.linalg.matrix_rank(L))
 	null = sp.linalg.null_space(L).T
-	print(null.shape)
 
 	sys = dict()
 	for i, h in enumerate(null):
-		obs = gds.node_gds(G)
+		obs = make_observable()
 		obs.set_evolution(nil=True)
 		obs.set_initial(y0=lambda x: h[obs.X[x]])
 		sys[f'harmonic_{i}'] = obs
 
 	sys = gds.couple(sys)
-	gds.render(sys, n_spring_iters=1000)
+	gds.render(sys, n_spring_iters=1000, title=f'{k}-harmonics')
 
-def spherical_harmonics():
+def sphere():
 	n = 20
 	r = 1.0
 	twopi = 2*np.pi
@@ -60,14 +68,15 @@ def spherical_harmonics():
 	G = nx.Graph()
 	G.add_nodes_from(nodes)
 	G.add_edges_from(edges)
+	return G
 
-	harmonics(G)
-
-def toroidal_harmonics():
+def torus():
 	n = 20
 	G = nx.grid_2d_graph(n, n, periodic=True)
-	harmonics(G)
+	return G
 
 if __name__ == '__main__':
-	spherical_harmonics()
-	# toroidal_harmonics()
+	# G = sphere()
+	G = torus()
+
+	show_harmonics(G, k=1)
