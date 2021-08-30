@@ -13,3 +13,4 @@ cvxpy
 selenium
 pillow
 shapely
+trimesh

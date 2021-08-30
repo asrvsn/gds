@@ -274,8 +274,8 @@ class edge_gds(gds):
 		return ret
 
 	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
-		''' Vector laplacian or discrete Helmholtz operator or Hodge-1 laplacian
-		https://www.stat.uchicago.edu/~lekheng/work/psapm.pdf 
+		''' 
+		Hodge 1-Laplacian
 		TODO: neumann conditions
 		''' 
 		return self.dd_(y=y) + self.d_d(y=y)
@@ -409,4 +409,27 @@ class face_gds(gds):
 	def __init__(self, G: nx.Graph, *args, **kwargs):
 		gds.__init__(self, G, GraphDomain.faces, *args, **kwargs)
 
+		# TODO: dry
+		def geometric_curl(face, edge):
+			# TODO: proper weighting
+			if edge[0] in face and edge[1] in face:
+				c = np.sqrt(self.edge_weights[self.edges[edge]])
+				if any([edge == (face[i-1], face[i]) for i in range(1, len(face))]) or edge == (face[-1], face[0]):
+					return c
+				return -c
+			return 0
+		if len(self.faces) > 0:
+			self.curl_face = sparse_product(self.faces.keys(), self.edges.keys(), geometric_curl).tocsr() # |F| x |E| curl operator, where F is the set of faces in G; respects implicit orientation
+			# self.curl_outer_face = sparse_product([self.outer_face], self.edges.keys(), geometric_curl).tocsr() # 1 x |E| curl operator, where F is the set of faces in G; respects implicit orientation
+		else:
+			self.curl_face = sp.csr_matrix((1, len(self.edges)))
+
 		# Operators: TODO
+
+	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
+		''' 
+		Hodge 2-Laplacian
+		TODO: boundary conditions
+		''' 
+		if y is None: y=self.y
+		return -self.curl_face@self.curl_face.T@y

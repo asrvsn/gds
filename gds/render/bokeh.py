@@ -39,7 +39,7 @@ class Renderer(ABC):
 				canvas: Canvas,
 				node_palette=cc.fire, edge_palette=cc.fire, face_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
 				node_rng=(0., 1.), edge_rng=(0., 1.), face_rng=(0., 1.), edge_max=0.2, colorbars=True, 
-				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False,
+				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False, range_padding=0.,
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
 				edge_colors=False, min_rng_size=1e-6,
 				title=None, plot_titles=True,
@@ -62,6 +62,7 @@ class Renderer(ABC):
 		self.plot_width = plot_width
 		self.plot_height = plot_height
 		self.dynamic_ranges = dynamic_ranges
+		self.range_padding = range_padding
 		self.x_rng, self.y_rng = x_rng, y_rng
 		self.edge_colors = edge_colors
 		self.min_rng_size = min_rng_size
@@ -352,7 +353,7 @@ class LiveRenderer(Renderer):
 						if self.dynamic_ranges:
 							lo, hi = obs.y.min(), obs.y.max()
 							mid = (lo+hi)/2
-							lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+							lo, hi = min(lo, mid-self.min_rng_size/2) - self.range_padding, max(hi, mid+self.min_rng_size/2) + self.range_padding
 							self.node_cmaps[obs.plot_id].low = lo
 							self.node_cmaps[obs.plot_id].high = hi
 					elif obs.Gd is GraphDomain.edges:
@@ -361,7 +362,7 @@ class LiveRenderer(Renderer):
 						if self.dynamic_ranges:
 							lo, hi = obs.arr_source.data['value'].min(), obs.arr_source.data['value'].max()
 							mid = (lo+hi)/2
-							lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+							lo, hi = min(lo, mid-self.min_rng_size/2) - self.range_padding, max(hi, mid+self.min_rng_size/2) + self.range_padding
 							self.edge_cmaps[obs.plot_id].low = lo
 							self.edge_cmaps[obs.plot_id].high = hi
 					elif obs.Gd is GraphDomain.faces:
@@ -372,7 +373,7 @@ class LiveRenderer(Renderer):
 						if self.dynamic_ranges:
 							lo, hi = absy.min(), absy.max()
 							mid = (lo+hi)/2
-							lo, hi = min(lo, mid-self.min_rng_size/2), max(hi, mid+self.min_rng_size/2)
+							lo, hi = min(lo, mid-self.min_rng_size/2) - self.range_padding, max(hi, mid+self.min_rng_size/2) + self.range_padding
 							self.face_cmaps[obs.plot_id].low = lo
 							self.face_cmaps[obs.plot_id].high = hi
 						if self.face_orientations:
