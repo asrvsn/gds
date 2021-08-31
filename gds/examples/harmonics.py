@@ -66,13 +66,13 @@ if __name__ == '__main__':
 	# G = gds.icosphere()
 	# G = gds.icotorus(n=12)
 	# G = gds.torus()
-	G = gds.k_torus(4)
+	G = gds.k_torus(2)
 
-	nx.draw(G, nx.spring_layout(G, iterations=1000))
-	plt.show()
+	# nx.draw(G, nx.spring_layout(G, iterations=1000))
+	# plt.show()
 
 	# show_harmonics(G, k=0)
 	# show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
 	# show_harmonics(G, k=2, dynamic_ranges=True, face_palette=cc.bmy)
 
-	# show_L0_eigfuns(G, dynamic_ranges=True)
+	show_L0_eigfuns(G, n=8, dynamic_ranges=True)

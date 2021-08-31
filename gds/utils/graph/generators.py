@@ -281,20 +281,31 @@ def k_torus(k=2, m=10, n=15):
 	'''
 	assert k > 0
 	N = m*n
+	all_faces = dict()
 
 	def relabel_node(key, i):
 		return N*i + key[0]*m + key[1]
 	def relabel_graph(G, i):
-		return nx.relabel_nodes(G, {key: relabel_node(key, i) for key in G.nodes()})
+		nx.relabel_nodes(G, {key: relabel_node(key, i) for key in G.nodes()}, copy=False)
+		return G
+	def add_faces(fs, i):
+		for f in fs:
+			f_ = tuple(relabel_node(v, i) for v in f)
+			all_faces[frozenset(f_)] = f_
+	def remove_faces(fs, i):
+		for f in fs:
+			f_ = tuple(relabel_node(v, i) for v in f)
+			del all_faces[frozenset(f_)]
 
 	G = relabel_graph(torus(m=m, n=n), 0)
-	l_face = ((0,0), (1,0), (1,m-1), (0,m-1))
-	r_face = ((n//2,m//2), (n//2,m//2-1), (n//2+1,m//2-1), (n//2+1,m//2))
+	add_faces(G.faces, 0)
 
-	# all_faces = set()
+	l_face = ((0,0), (1,0), (1,m-1), (0,m-1))
+	r_face = ((n//2+1,m//2-1), (n//2,m//2-1), (n//2,m//2), (n//2+1,m//2))
 
 	for i in range(1, k):
 		G_ = relabel_graph(torus(m=m, n=n), i)
+		add_faces(G_.faces, i)
 		# pdb.set_trace()
 		G = nx.union(G, G_)
 		for (u, v) in zip(l_face, r_face):
@@ -302,10 +313,20 @@ def k_torus(k=2, m=10, n=15):
 			v_ = relabel_node(v, i)
 			G.add_edge(u_, v_)
 			# nx.contracted_nodes(G, u_, v_, copy=False)
+		remove_faces([l_face], i-1)
+		remove_faces([r_face], i)
 
+		for v in range(4):
+			f_ = (
+				relabel_node(l_face[v], i-1), 
+				relabel_node(r_face[v], i), 
+				relabel_node(r_face[(v+1)%4], i), 
+				relabel_node(l_face[(v+1)%4], i-1)
+			)
+			all_faces[frozenset(f_)] = f_
+
+	G.faces = list(all_faces.values())
 	return G
-
-
 
 ''' Triangulated manifolds ''' 
 

@@ -20,7 +20,14 @@ def test_orientation():
 	})
 	gds.render(sys, face_orientations=True)
 
+def k_torus_faces():
+	G = gds.k_torus(2)
+	print('faces:', len(G.faces))
+	obs = gds.face_gds(G)
+	obs.set_evolution(nil=True)
+	gds.render(obs)
 
 if __name__ == '__main__':
-	test_orientation()
+	# test_orientation()
+	k_torus_faces()
 
