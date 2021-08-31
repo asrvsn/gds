@@ -223,7 +223,7 @@ def octagonal_prism():
 	nx.set_node_attributes(G, layout, 'pos')
 	return G
 
-def latlon_sphere():
+def uv_sphere():
 	n = 20
 	r = 1.0
 	twopi = 2*np.pi
@@ -262,6 +262,10 @@ def latlon_sphere():
 	return G
 
 def torus(m=10, n=15):
+	'''
+	m (poloidal)
+	n (toroidal)
+	'''
 	G = nx.grid_2d_graph(n, m)
 	faces, outer_face = embedded_faces(G)
 	# Add periodic faces
@@ -270,6 +274,37 @@ def torus(m=10, n=15):
 	G = nx.grid_2d_graph(n, m, periodic=True)
 	G.faces = faces
 	return G
+
+def k_torus(k=2, m=10, n=15):
+	'''
+	k-hole torus
+	'''
+	assert k > 0
+	N = m*n
+
+	def relabel_node(key, i):
+		return N*i + key[0]*m + key[1]
+	def relabel_graph(G, i):
+		return nx.relabel_nodes(G, {key: relabel_node(key, i) for key in G.nodes()})
+
+	G = relabel_graph(torus(m=m, n=n), 0)
+	l_face = ((0,0), (1,0), (1,m-1), (0,m-1))
+	r_face = ((n//2,m//2), (n//2,m//2-1), (n//2+1,m//2-1), (n//2+1,m//2))
+
+	# all_faces = set()
+
+	for i in range(1, k):
+		G_ = relabel_graph(torus(m=m, n=n), i)
+		# pdb.set_trace()
+		G = nx.union(G, G_)
+		for (u, v) in zip(l_face, r_face):
+			u_ = relabel_node(u, i-1)
+			v_ = relabel_node(v, i)
+			G.add_edge(u_, v_)
+			# nx.contracted_nodes(G, u_, v_, copy=False)
+
+	return G
+
 
 
 ''' Triangulated manifolds ''' 
