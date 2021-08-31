@@ -179,12 +179,11 @@ class Renderer(ABC):
 						cbar = ColorBar(color_mapper=cmap, ticker=BasicTicker(), title='edge')
 						cbar.major_label_text_font_size = "15pt"
 						plot.add_layout(cbar, 'right')
-					if isinstance(obs, gds):
-						if self.edge_colors:
-							plot.renderers[0].edge_renderer.glyph = MultiLine(line_width=5, line_color=field('value', cmap))
-						else:
-							plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
-							plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
+					if self.edge_colors:
+						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width=5, line_color=field('value', cmap))
+					elif isinstance(obs, gds):
+						plot.renderers[0].edge_renderer.data_source.data['thickness'] = [3 if (x in obs.X_dirichlet or x in obs.X_neumann) else 1 for x in obs.X] 
+						plot.renderers[0].edge_renderer.glyph = MultiLine(line_width='thickness')
 				elif obs.Gd is GraphDomain.faces:
 					plot.add_tools(HoverTool(tooltips=[('value', '@value'), ('face', '@face')]))
 					cmap = LinearColorMapper(palette=self.face_palette, low=self.face_rng[0], high=self.face_rng[1])

@@ -65,8 +65,8 @@ def show_L0_eigfuns(G, n=12, **kwargs):
 if __name__ == '__main__':
 	# G = gds.icosphere()
 	# G = gds.icotorus(n=12)
-	# G = gds.torus()
-	G = gds.k_torus(2)
+	G = gds.torus()
+	# G = gds.k_torus(2)
 
 	# nx.draw(G, nx.spring_layout(G, iterations=1000))
 	# plt.show()
