@@ -301,7 +301,8 @@ def k_torus(k=2, m=10, n=15):
 	add_faces(G.faces, 0)
 
 	l_face = ((0,0), (1,0), (1,m-1), (0,m-1))
-	r_face = ((n//2+1,m//2-1), (n//2,m//2-1), (n//2,m//2), (n//2+1,m//2))
+	rn, rm = n//2+2, m//2
+	r_face = ((rn+1,rm-1), (rn,rm-1), (rn,rm), (rn+1,rm))
 
 	for i in range(1, k):
 		G_ = relabel_graph(torus(m=m, n=n), i)
@@ -333,7 +334,7 @@ def k_torus(k=2, m=10, n=15):
 def icosphere():
 	mesh = tm.creation.icosphere(subdivisions=2)
 	G = tm.graph.vertex_adjacency_graph(mesh)
-	G.faces = mesh.faces
+	G.faces = find_k_cliques(G, 3)
 	return G
 
 def icotorus(n=20):

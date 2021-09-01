@@ -41,8 +41,8 @@ if __name__ == '__main__':
 	# G = gds.square_lattice(10, 10)
 	# G = gds.icosphere()
 	# G = gds.icotorus(n=12)
-	# G = gds.torus()
-	G = gds.k_torus(2)
+	G = gds.torus()
+	# G = gds.k_torus(2)
 
 	# nx.draw(G, nx.spring_layout(G, iterations=1000))
 	# plt.show()

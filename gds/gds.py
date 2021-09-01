@@ -289,7 +289,7 @@ class edge_gds(gds):
 
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, check=False) -> np.ndarray:
 		'''
-		Transportation of a vector field.
+		Nearest-neighbors advective derivative of an edge flow.
 		'''
 		if y is None: y=self.y
 		if v_field is None: 
@@ -357,6 +357,54 @@ class edge_gds(gds):
 							ret_out[i] += v_j * y_i 
 			ret = (ret_in - ret_out) * np.sign(v_field)
 			return -ret
+
+	def advect2(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, interactions=[1,0,1,0], check=False) -> np.ndarray:
+		'''
+		Nearest-neighbors advective derivative of an edge flow.
+		'''
+		if y is None: y=self.y
+		if v_field is None: 
+			v_field = self.y
+		elif isinstance(v_field, edge_gds):
+			assert v_field.G is self.G, 'Incompatible domains'
+			# Since graphs are identical, orientation is implicitly respected
+			v_field = v_field.y
+
+		if vectorized:
+			pass # TODO
+		else:
+			''' Non-vectorized version, for debugging purposes ''' 
+			ret = np.zeros_like(y)
+			for i in range(ret.size):
+				for j in range(ret.size):
+					if i != j:
+						e_i, e_j = self.edges_i[i], self.edges_i[j]
+						v_i, v_j = v_field[i], v_field[j]
+						y_i, y_j = y[i], y[j]
+						if v_i < 0:
+							e_i = (e_i[1], e_i[0])
+							v_i *= -1
+							y_i *= -1
+						if v_j < 0:
+							e_j = (e_j[1], e_j[0])
+							v_j *= -1
+							y_j *= -1
+
+						if e_i[0] == e_j[1]: 
+							ret[i] += interactions[0]*v_j*(y_j - y_i)
+							# ret[i] += v_i*y_j
+						if e_i[0] == e_j[0]: 
+							ret[i] += interactions[1]*v_j*(-y_j - y_i)
+							# ret[i] += -v_i*y_j
+						if e_i[1] == e_j[0]: 
+							ret[i] += interactions[2]*v_i*(y_j - y_i)
+							# ret[i] -= v_j*y_i
+						if e_i[1] == e_j[1]: 
+							ret[i] += interactions[3]*v_i*(-y_j - y_i)
+							# ret[i] -= -v_j*y_i
+
+			ret *= -np.sign(v_field)
+			return ret
 
 	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''

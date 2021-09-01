@@ -35,44 +35,52 @@ def show_harmonics(G, k=0, n=np.inf, **kwargs):
 			sys[f'harmonic_{i}'] = obs
 
 	sys = gds.couple(sys)
-	gds.render(sys, n_spring_iters=1000, title=f'{k}-harmonics', **kwargs)
+	gds.render(sys, n_spring_iters=1000, title=f'L{k}-harmonics', **kwargs)
 
 def show_L0_eigfuns(G, n=12, **kwargs):
 	'''
 	Show eigenfunctions of 0-Laplacian
 	'''
 	obs = gds.node_gds(G)
-	L = obs.laplacian(np.eye(obs.ndim))
-	vals, vecs = sp.sparse.linalg.eigs(-L, k=n, which='SM')
+	# L = np.array(nx.laplacian_matrix(G).todense())
+	L = -obs.laplacian(np.eye(obs.ndim))
+	# vals, vecs = sp.sparse.linalg.eigs(-L, k=n, which='SM')
+	vals, vecs = np.linalg.eig(L)
+	vals, vecs = np.real(vals), np.real(vecs)
+	# pdb.set_trace()
 	sys = dict()
 	canvas = dict()
-	for i in range(n):
-		ev = np.round(vals[i], 4)
+	for i, (ev, vec) in enumerate(sorted(zip(vals, vecs.T), key=lambda x: x[0])):
+		ev = np.round(ev, 5)
 		obs = gds.node_gds(G)
 		obs.set_evolution(nil=True)
-		obs.set_initial(y0=lambda x: vecs[obs.X[x], i])
+		obs.set_initial(y0=lambda x: vec[obs.X[x]])
 		if ev in canvas:
 			sys[f'eigval_{ev} eigfun_{len(canvas[ev])}'] = obs
 			canvas[ev].append([[obs]])
 		else:
 			sys[f'eigval_{ev} eigfun_{0}'] = obs
 			canvas[ev] = [[[obs]]]
-	canvas = sorted(list(canvas.values()), key=len)
+		if i == n:
+			break
+	# canvas = sorted(list(canvas.values()), key=len)
+	canvas = list(canvas.values())
 	sys = gds.couple(sys)
-	gds.render(sys, canvas=canvas, n_spring_iters=1000, title=f'L0-eigenfunctions', **kwargs)
+	gds.render(sys, canvas=canvas, n_spring_iters=1200, title=f'L0-eigenfunctions', **kwargs)
 
 
 if __name__ == '__main__':
 	# G = gds.icosphere()
+	# G = gds.torus()
 	# G = gds.icotorus(n=12)
-	G = gds.torus()
-	# G = gds.k_torus(2)
+	G = gds.k_torus(2, m=8, n=11)
+	# G = gds.k_torus(3, m=8, n=11)
 
 	# nx.draw(G, nx.spring_layout(G, iterations=1000))
 	# plt.show()
 
 	# show_harmonics(G, k=0)
-	# show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
+	show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
 	# show_harmonics(G, k=2, dynamic_ranges=True, face_palette=cc.bmy)
 
-	show_L0_eigfuns(G, n=8, dynamic_ranges=True)
+	# show_L0_eigfuns(G, n=16, dynamic_ranges=True, node_palette=cc.bmy)

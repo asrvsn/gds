@@ -93,10 +93,10 @@ Layout
 '''
 
 root = column(
-	row([t1, t2]),
 	row([reset_button, pp_button, rec_button, speed_slider]),
+	row([t1, t2]),
 )
-root.sizing_mode = 'stretch_both'
+# root.sizing_mode = 'stretch_both'
 doc.add_root(root)
 doc.title = 'Bokeh Server'
 
