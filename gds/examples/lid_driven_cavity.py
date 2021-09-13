@@ -20,7 +20,7 @@ def tri_lid_driven_cavity():
 	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
 	t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -28,7 +28,7 @@ def tri_lid_driven_cavity():
 		gds.zero_edge_bc(r),
 	))
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
-	return pressure, velocity
+	return velocity, pressure
 
 def tri_lid_driven_cavity_projected():
 	m=18
@@ -52,7 +52,7 @@ def sq_lid_driven_cavity():
 	v=10.0
 	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	t.remove_nodes_from([(0, m-1), (1, m-1), (n-1, m-1), (n, m-1)])
-	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -60,7 +60,7 @@ def sq_lid_driven_cavity():
 		gds.zero_edge_bc(r),
 	))
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
-	return pressure, velocity
+	return velocity, pressure
 
 def hex_lid_driven_cavity():
 	m=18
@@ -68,7 +68,7 @@ def hex_lid_driven_cavity():
 	v=10.0
 	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
 	t.remove_nodes_from([(0, m*2), (1, m*2), (0, m*2+1), (1, m*2+1), (n-1, 2*m), (n, 2*m), (n-1, 2*m+1), (n, 2*m+1)])
-	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	def inlet_bc(e):
 		if e in t.edges:
 			if e[1][1] > e[0][1] and e[0][0] % 2 == 0:
@@ -82,14 +82,14 @@ def hex_lid_driven_cavity():
 		gds.zero_edge_bc(r),
 	))
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
-	return pressure, velocity
+	return velocity, pressure
 
 def sq_lid_driven_cavity_ivp():
 	m=18
 	n=21
 	v=1.0
 	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	def walls(e):
 		if e in t.edges(): return v
 		elif e in b.edges(): return -v
@@ -100,7 +100,7 @@ def sq_lid_driven_cavity_ivp():
 		return 0
 	velocity.set_initial(y0=walls)
 	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
-	return pressure, velocity
+	return velocity, pressure
 
 def tri_lid_driven_cavity_ivp():
 	m=18
@@ -108,9 +108,9 @@ def tri_lid_driven_cavity_ivp():
 	v=1.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
 	t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	pressure, velocity = incompressible_ns_flow(G, viscosity=200., density=0.1)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=200., density=0.1)
 	velocity.set_initial(y0=lambda e: v if e in t.edges else 0)
-	return pressure, velocity
+	return velocity, pressure
 
 ''' Testing functions ''' 
 
@@ -168,4 +168,4 @@ def dump():
 
 if __name__ == '__main__':
 	# render()
-	fluid_test(tri_lid_driven_cavity_projected())
+	fluid_test(*tri_lid_driven_cavity())

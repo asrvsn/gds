@@ -424,13 +424,18 @@ class edge_gds(gds):
 
 	def leray_project(self, y: np.ndarray=None) -> np.ndarray:
 		"""
-		Project onto divergence-free subspace.
-		TODO: how to handle velocity boundaries?
+		Project onto divergence-free subspace subject to boundary conditions.
 		"""
 		if y is None: y=self.y
-		div = self.div(y)
-		inv = sp.linalg.lsmr(-self.incidence@self.incidence.T, div)[0]
-		return y - self.incidence.T@inv
+		A = self.incidence@self.incidence.T
+		b = self.incidence@y
+		if self.dirichlet_indices.size == 0:
+			x = sp.linalg.lsmr(A, b)[0]
+		else:
+			A = sp.vstack([A, self.incidence.T[self.dirichlet_indices, :]])
+			b = np.concatenate((b, y[self.dirichlet_indices]))
+			x = sp.linalg.lsmr(A, b)[0]
+		return y - self.incidence.T@x
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-edge dual graph ''' 

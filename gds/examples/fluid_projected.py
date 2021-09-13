@@ -26,7 +26,7 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 	velocity = gds.edge_gds(G, **kwargs)
 	velocity.set_evolution(dydt=lambda t, u: 
 		velocity.leray_project(
-			-velocity.advect() + velocity.laplacian() * viscosity/density + body_force(t, u)
+			-velocity.advect() + body_force(t, u) + velocity.laplacian() * viscosity/density
 		) - pressure.grad() / density
 	)
 
@@ -72,17 +72,20 @@ def poiseuille():
 	))
 	return velocity, pressure
 
-if __name__ == '__main__':
-	fluid_test(*poiseuille())
+def lid_driven_cavity():
+	m=18
+	n=21
+	v=10.0
+	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
+	# t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
+	velocity, pressure = navier_stokes(G, viscosity=200.)
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		gds.const_edge_bc(t, v),
+		gds.zero_edge_bc(b),
+		gds.zero_edge_bc(l),
+		gds.zero_edge_bc(r),
+	))
+	return velocity, pressure
 
-	# m=14 
-	# n=28 
-	# gradP=6.0
-	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	# pressure = gds.node_gds(G)
-	# pressure.set_evolution(lhs=lambda t, p: pressure.laplacian(p))
-	# pressure.set_constraints(dirichlet=gds.combine_bcs(
-	# 	{n: gradP/2 for n in l.nodes},
-	# 	{n: -gradP/2 for n in r.nodes},
-	# ))
-	# gds.render(pressure, dynamic_ranges=True)
+if __name__ == '__main__':
+	fluid_test(*lid_driven_cavity())
