@@ -264,6 +264,7 @@ class fds(Observable, Steppable):
 			self._t += dt
 		else:
 			raise Exception(f'Unsupported evolution law: {self.iter_mode}')
+		# pdb.set_trace()
 
 	''' Differential stepping ''' 
 

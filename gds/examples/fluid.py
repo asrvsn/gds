@@ -197,11 +197,13 @@ def fluid_test(velocity, pressure=None):
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		# 'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'advective': velocity.project(gds.GraphDomain.edges, lambda v: -v.advect()),
+		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
 		'L2': velocity.project(PointObservable, lambda v: np.dot(v.y, v.y)),
 	}
 	if pressure != None:
 		obs['pressure'] = pressure
+		# obs['pressure_grad'] = pressure.project(gds.GraphDomain.edges, lambda p: -p.grad())
 	sys = gds.couple(obs)
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 4), edge_max=0.6, dynamic_ranges=True)
 
@@ -357,7 +359,7 @@ def advection_test():
 
 
 if __name__ == '__main__':
-	# fluid_test(*hex_couette())
+	# fluid_test(*fluid_on_grid())
 	# fluid_test(*euler3())
 	fluid_test(leray1())
 	# couette_comp()

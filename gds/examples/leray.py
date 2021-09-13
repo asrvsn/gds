@@ -15,7 +15,7 @@ def show_leray(G, v: Callable=None, **kwargs):
 	Show Leray decomposition of a vector field.
 	'''
 	if v is None:
-		v = lambda x: np.random.uniform()
+		v = lambda x: np.random.uniform(1, 2)
 	orig = gds.edge_gds(G)
 	orig.set_evolution(nil=True)
 	orig.set_initial(y0=v)

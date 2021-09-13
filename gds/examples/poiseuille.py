@@ -27,7 +27,7 @@ def tri_poiseuille(viscosity, density):
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	# v_free_r_int = set((n[0]-1, n[1]) for n in v_free_r)
 	v_free = v_free_l | v_free_r
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
 	e_free_mask[e_free] = 0
@@ -51,7 +51,7 @@ def tri_poiseuille(viscosity, density):
 		gds.zero_edge_bc(b),
 		free_boundaries
 	))
-	return pressure, velocity
+	return velocity, pressure
 
 def sq_poiseuille(viscosity, density):
 	m=14 
@@ -63,7 +63,7 @@ def sq_poiseuille(viscosity, density):
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	v_free = v_free_l | v_free_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
 
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
@@ -89,7 +89,7 @@ def sq_poiseuille(viscosity, density):
 		gds.zero_edge_bc(b),
 		free_boundaries
 	))
-	return pressure, velocity
+	return velocity, pressure
 
 def hex_poiseuille(viscosity, density):
 	m=14 
@@ -120,7 +120,7 @@ def hex_poiseuille(viscosity, density):
 		v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
 
 	e_free_mask = np.array([1 if len(set(velocity.iX[i]) - v_bd)==2 else 0 for i in range(velocity.ndim)])
 
@@ -146,7 +146,7 @@ def hex_poiseuille(viscosity, density):
 		gds.zero_edge_bc(t),
 		gds.zero_edge_bc(b),
 	))
-	return pressure, velocity
+	return velocity, pressure
 
 def voronoi_poiseuille(viscosity, density):
 	np.random.seed(401)
@@ -174,7 +174,7 @@ def voronoi_poiseuille(viscosity, density):
 	# 	v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
+	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in v_free_l | v_bd_l},
 		{n: -gradP/2 for n in v_free_r | v_bd_r},
@@ -194,7 +194,7 @@ def voronoi_poiseuille(viscosity, density):
 		gds.zero_edge_bc(t),
 		gds.zero_edge_bc(b),
 	))
-	return pressure, velocity
+	return velocity, pressure
 
 def poiseuille_flow():
 	''' API example ''' 
@@ -307,4 +307,4 @@ def dump():
 if __name__ == '__main__':
 	# render()
 	# dump()
-	fluid_test(sq_poiseuille_projected(50, 1))
+	fluid_test(*sq_poiseuille(50, 1))

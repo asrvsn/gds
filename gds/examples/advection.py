@@ -160,7 +160,6 @@ def vector_advection_test(flows=[1,1,1,1,1], **kwargs):
 	return flow, obs
 
 def self_advection_test_2(flows=[1,1,1,1,1], interactions=[1,0,1,0]):
-	gds.set_seed(1)
 	G = nx.Graph()
 	G.add_nodes_from([0, 1, 2, 3, 4, 5])
 	G.add_edges_from([(2, 0), (3, 0), (0, 1), (1, 5), (1, 4)])
@@ -171,7 +170,7 @@ def self_advection_test_2(flows=[1,1,1,1,1], interactions=[1,0,1,0]):
 			ret = -1
 		if e == (0, 3):
 			ret = -1
-		return flows[flow.edges[e]] * ret * np.random.uniform(1, 2)
+		return flows[flow.edges[e]] * ret
 	flow.set_evolution(dydt=lambda t, y: -flow.advect2(vectorized=False, interactions=interactions))
 	flow.set_initial(y0=field)
 	return flow
@@ -311,10 +310,13 @@ if __name__ == '__main__':
 	# })
 	# gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
 
+	flows = [1,-1,1,1,-1]
+	# flows = [i * np.random.uniform(1, 2)]
 	obses = {
-		'1010': self_advection_test_2(flows=[1,-1,1,1,-1], interactions=[1,0,1,0]),
-		'1011': self_advection_test_2(flows=[1,-1,1,1,-1], interactions=[1,0,1,1]),
-		'1111': self_advection_test_2(flows=[1,-1,1,1,-1], interactions=[1,1,1,1]),
+		'1010': self_advection_test_2(flows=flows, interactions=[1,0,1,0]),
+		'1110': self_advection_test_2(flows=flows, interactions=[1,1,1,0]),
+		'1011': self_advection_test_2(flows=flows, interactions=[1,0,1,1]),
+		'1111': self_advection_test_2(flows=flows, interactions=[1,1,1,1]),
 	}
 	sys = {}
 	for obs in obses:
@@ -324,6 +326,6 @@ if __name__ == '__main__':
 	for obs in obses:
 		sys[f'{obs} (L2)'] = obses[obs].project(PointObservable, lambda u: np.dot(u.y, u.y))
 	sys = gds.couple(sys)
-	canvas=gds.grid_canvas(sys.observables.values(), 3)
+	canvas=gds.grid_canvas(sys.observables.values(), 4)
 	gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=0.5, title='Advective derivatives')
 

@@ -422,14 +422,13 @@ class edge_gds(gds):
 		Bp.data[Bp.data < 0] = 0.
 		return Bp@self.incidence.T@y
 
-	def leray_project(self, y: np.ndarray=None, v_free: np.ndarray=None) -> np.ndarray:
+	def leray_project(self, y: np.ndarray=None) -> np.ndarray:
 		"""
 		Project onto divergence-free subspace.
+		TODO: how to handle velocity boundaries?
 		"""
 		if y is None: y=self.y
 		div = self.div(y)
-		if not (v_free is None):
-			div[v_free] = 0
 		inv = sp.linalg.lsmr(-self.incidence@self.incidence.T, div)[0]
 		return y - self.incidence.T@inv
 
