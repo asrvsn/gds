@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 import pdb
 import colorcet as cc
+import random
 
 from gds.types import *
 import gds
@@ -69,24 +70,44 @@ def show_L0_eigfuns(G, n=12, **kwargs):
 	gds.render(sys, canvas=canvas, n_spring_iters=1200, title=f'L0-eigenfunctions', **kwargs)
 
 
+def square_defect(G, v):
+	i, j = v
+	gds.remove_face(G, v)
+	f = ((i-1,j),(i-1,j-1),(i,j-1),(i+1,j-1),(i+1,j),(i+1,j+1),(i,j+1),(i-1,j+1))
+	G.faces.append(f)
+	G.remove_node(v)
+
 if __name__ == '__main__':
+	gds.set_seed(1)
+	
+	# Harmonics on genus-k surfaces
 	# G = gds.icosphere()
 	# G = gds.torus()
 	# G = gds.icotorus()
 	# G = gds.k_torus(2, m=8, n=11)
 	# G = gds.k_torus(3, m=8, n=11)
-	# G.remove_node(random.choice(list(G.nodes())))
 
+	# Harmonics with topological defect
 	G = gds.torus()
-	H = gds.torus()
-	n = random.choice(G)
-	
+	square_defect(G, (8,8))
+	# square_defect(G, (2,5))
+
+	# Harmonics with degenerate edge
+	# G, H = gds.torus(), gds.torus()
+	# G = nx.disjoint_union(G, H)
+	# u = random.choice(range(len(H)))
+	# v = u + len(H)
+	# G.add_edge(u, v)
+
+	u = gds.face_gds(G)
+	u.set_evolution(nil=True)
+	gds.render(u)
 
 	# nx.draw(G, nx.spring_layout(G, iterations=1000))
 	# plt.show()
 
 	# show_harmonics(G, k=0)
-	show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
+	# show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
 	# show_harmonics(G, k=2, dynamic_ranges=True, face_palette=cc.bmy)
 
 	# show_L0_eigfuns(G, n=16, dynamic_ranges=True, node_palette=cc.bmy)

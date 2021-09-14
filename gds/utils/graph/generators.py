@@ -299,14 +299,21 @@ def k_torus(k=2, m=10, n=15):
 		for f in fs:
 			f_ = tuple(relabel_node(v, i) for v in f)
 			del all_faces[frozenset(f_)]
+	def remap_face(f, mp):
+		f = list(f)
+		for i, v in enumerate(f):
+			if v in mp:
+				f[i] = mp[v]
+		return tuple(f)
 
 	G = relabel_graph(torus(m=m, n=n), 0)
 	add_faces(G.faces, 0)
 
-	l_face = ((0,0), (1,0), (1,m-1), (0,m-1))
-	rn, rm = n//2-1, m//2
-	r_face = ((rn+1,rm-1), (rn,rm-1), (rn,rm), (rn+1,rm))
+	l_face = ((0,0), (1,0), (1,1), (0,1))
+	rn, rm = n//2, m//2
+	r_face = ((rn,rm), (rn,rm+1), (rn+1,rm+1), (rn+1,rm))
 
+	contracted = dict()
 	for i in range(1, k):
 		G_ = relabel_graph(torus(m=m, n=n), i)
 		add_faces(G_.faces, i)
@@ -315,21 +322,13 @@ def k_torus(k=2, m=10, n=15):
 		for (u, v) in zip(l_face, r_face):
 			u_ = relabel_node(u, i-1)
 			v_ = relabel_node(v, i)
-			G.add_edge(u_, v_)
-			# nx.contracted_nodes(G, u_, v_, copy=False)
+			# G.add_edge(u_, v_)
+			nx.contracted_nodes(G, u_, v_, copy=False)
+			contracted[v_] = u_
 		remove_faces([l_face], i-1)
 		remove_faces([r_face], i)
 
-		for v in range(4):
-			f_ = (
-				relabel_node(l_face[v], i-1), 
-				relabel_node(r_face[v], i), 
-				relabel_node(r_face[(v+1)%4], i), 
-				relabel_node(l_face[(v+1)%4], i-1)
-			)
-			all_faces[frozenset(f_)] = f_
-
-	G.faces = list(all_faces.values())
+	G.faces = list(map(lambda f: remap_face(f, contracted), all_faces.values()))
 	return G
 
 ''' Triangulated manifolds ''' 
@@ -606,6 +605,36 @@ def find_k_cliques(G, k):
 			for mini_clique in itertools.combinations(clique, k):
 				k_cliques.add(tuple(sorted(mini_clique)))
 	return k_cliques
+
+def remove_face(G, v):
+	faces = []
+	for f in G.faces:
+		if not (v in f):
+			faces.append(f)
+	G.faces = faces
+
+def extract_face(G, v):
+	'''
+	Construct an ordered chain from neighbors of v.
+	'''
+	ns = list(G.neighbors(v))
+	print(ns)
+	face = [ns.pop()]
+	k = len(ns)
+	while len(ns) > 0:
+		print(face)
+		found = False
+		for i, n in enumerate(ns):
+			print(n, G.neighbors(n))
+			if face[-1] in G.neighbors(n):
+				face.append(n)
+				del ns[i]
+				found = True
+				break
+		assert found, 'Neighbors do not form a chain.'
+	return tuple(face)
+
+
 
 if __name__ == '__main__':
 	G = hexagonal_lattice(3, 4)
