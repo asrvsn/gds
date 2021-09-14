@@ -27,7 +27,7 @@ def tri_poiseuille(viscosity, density):
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	# v_free_r_int = set((n[0]-1, n[1]) for n in v_free_r)
 	v_free = v_free_l | v_free_r
-	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
+	velocity, pressure = navier_stokes(G, viscosity=viscosity, density=density, v_free=v_free)
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
 	e_free_mask[e_free] = 0
@@ -63,7 +63,7 @@ def sq_poiseuille(viscosity, density):
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	v_free = v_free_l | v_free_r
 
-	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_free)
+	velocity, pressure = navier_stokes(G, viscosity=viscosity, density=density, v_free=v_free)
 
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
@@ -120,7 +120,7 @@ def hex_poiseuille(viscosity, density):
 		v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
+	velocity, pressure = navier_stokes(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
 
 	e_free_mask = np.array([1 if len(set(velocity.iX[i]) - v_bd)==2 else 0 for i in range(velocity.ndim)])
 
@@ -174,7 +174,7 @@ def voronoi_poiseuille(viscosity, density):
 	# 	v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	velocity, pressure = incompressible_ns_flow(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
+	velocity, pressure = navier_stokes(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in v_free_l | v_bd_l},
 		{n: -gradP/2 for n in v_free_r | v_bd_r},
@@ -227,7 +227,7 @@ def sq_poiseuille_projected(viscosity, density):
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	v_free = v_free_l | v_free_r
 
-	velocity = incompressible_ns_flow_projected(G, viscosity=viscosity, density=density, body_force=lambda t, y: gradP*np.ones_like(y), v_free=v_free)
+	velocity = navier_stokes_projected(G, viscosity=viscosity, density=density, body_force=lambda t, y: gradP*np.ones_like(y), v_free=v_free)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.zero_edge_bc(t),
 		gds.zero_edge_bc(b),

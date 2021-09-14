@@ -87,5 +87,16 @@ def lid_driven_cavity():
 	))
 	return velocity, pressure
 
+def euler_test_1():
+	v_field = {
+		(1,2): 2, (2,3): 1, (3,4): 2, (1,4): -3,
+		(5,6): 2, (6,7): 3, (7,8): 2, (5,8): -1,
+		(1,5): 1, (2,6): 1, (3,7): -1, (4,8): -1,
+	}
+	G = gds.flat_cube()
+	velocity, pressure = navier_stokes(G, viscosity=0.)
+	velocity.set_initial(y0=lambda e: v_field[e])
+	return velocity, pressure
+
 if __name__ == '__main__':
 	fluid_test(*lid_driven_cavity())

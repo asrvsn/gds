@@ -10,7 +10,7 @@ from gds import *
 
 ''' Definitions ''' 
 
-def incompressible_ns_flow(G: nx.Graph, viscosity=1.0, density=1.0) -> (node_gds, edge_gds):
+def navier_stokes(G: nx.Graph, viscosity=1.0, density=1.0) -> (node_gds, edge_gds):
 	velocity = edge_gds(G, dydt=lambda t, self: None)
 	pressure = node_gds(G, 
 		lhs=lambda t, self: self.gradient.T@velocity.advect_self() + self.laplacian()/density
@@ -26,7 +26,7 @@ def compressible_flow(G: nx.Graph, viscosity=1.0) -> (node_gds, edge_gds):
 def poiseuille():
 	m, n = 8, 10
 	G = grid_graph(n, m)
-	pressure, velocity = incompressible_ns_flow(G)
+	pressure, velocity = navier_stokes(G)
 	def pressure_values(x):
 		if x[0] == 0: return 0.2
 		if x[0] == n-1: return -0.2

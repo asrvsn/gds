@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_ns_flow
+from .fluid import navier_stokes
 
 ''' Systems ''' 
 
@@ -26,7 +26,7 @@ def sq_couette_ivp(viscosity, density):
 	G.faces = faces + aux_faces # Hacky
 	G.rendered_faces = np.array(range(len(faces)), dtype=np.intp) # Hacky
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density)
+	pressure, velocity = navier_stokes(G, viscosity=viscosity, density=density)
 	vel = 1.0
 	def walls(e):
 		if e[0][1] == e[1][1] == m//2:
@@ -67,7 +67,7 @@ def tri_couette_ivp(viscosity, density):
 		comp.remove_edges_from(set(comp.edges() - edges))
 	G.lattice_components = lcomps 
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density)
+	pressure, velocity = navier_stokes(G, viscosity=viscosity, density=density)
 	vel = 1.0
 	def walls(e):
 		if e[0][1] == e[1][1] == m//2:
@@ -102,7 +102,7 @@ def hex_couette_ivp(viscosity, density):
 	G.faces = faces
 	G.rendered_faces = np.array(sorted(list(rendered_faces)), dtype=np.intp) # Hacky
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=viscosity, density=density)
+	pressure, velocity = navier_stokes(G, viscosity=viscosity, density=density)
 	vel = 1.0
 	def walls(e):
 		if (e[0][1] == e[1][1] == n//2) and (e[0][0] == e[1][0] - 1):

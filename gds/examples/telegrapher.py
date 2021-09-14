@@ -9,7 +9,7 @@ import colorcet as cc
 
 import gds
 from gds.types import *
-from .fluid import incompressible_ns_flow, incompressible_stokes_flow
+from .fluid import navier_stokes, incompressible_stokes_flow
 
 ''' Systems ''' 
 
@@ -27,7 +27,7 @@ def tri_poiseuille():
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	# v_free_r_int = set((n[0]-1, n[1]) for n in v_free_r)
 	v_free = v_free_l | v_free_r
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_free)
+	pressure, velocity = navier_stokes(G, viscosity=1., density=1e-2, v_free=v_free)
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
 	e_free_mask[e_free] = 0
@@ -63,13 +63,13 @@ def sq_poiseuille():
 	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
 	v_free = v_free_l | v_free_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_free)
+	pressure, velocity = navier_stokes(G, viscosity=1., density=1e-2, v_free=v_free)
 
 	e_free = np.array([velocity.X[(n, (n[0]+1, n[1]))] for n in v_free_l] + [velocity.X[((n[0]-1, n[1]), n)] for n in v_free_r], dtype=np.intp)
 	e_free_mask = np.ones(velocity.ndim)
 	e_free_mask[e_free] = 0
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_free)
+	pressure, velocity = navier_stokes(G, viscosity=1., density=1e-2, v_free=v_free)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes},
 		{(n[0]+1, n[1]): gradP/2 for n in l.nodes},
@@ -121,7 +121,7 @@ def hex_poiseuille():
 		v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_bd | v_free)
+	pressure, velocity = navier_stokes(G, viscosity=1., density=1e-2, v_free=v_bd | v_free)
 
 	e_free_mask = np.array([1 if len(set(velocity.iX[i]) - v_bd)==2 else 0 for i in range(velocity.ndim)])
 
@@ -175,7 +175,7 @@ def voronoi_poiseuille():
 	# 	v_bd_r.add(u)
 	v_bd = v_bd_l | v_bd_r
 
-	pressure, velocity = incompressible_ns_flow(G, viscosity=1., density=1e-2, v_free=v_bd | v_free)
+	pressure, velocity = navier_stokes(G, viscosity=1., density=1e-2, v_free=v_bd | v_free)
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in v_free_l | v_bd_l},
 		{n: -gradP/2 for n in v_free_r | v_bd_r},

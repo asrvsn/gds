@@ -28,6 +28,8 @@ def show_harmonics(G, k=0, n=np.inf, **kwargs):
 	null = sp.linalg.null_space(L).T
 
 	sys = dict()
+	sys['Surface'] = gds.face_gds(G)
+	sys['Surface'].set_evolution(nil=True)
 	for i, h in enumerate(null):
 		if i < n:
 			obs = make_observable()
@@ -79,7 +81,7 @@ def square_defect(G, v):
 
 if __name__ == '__main__':
 	gds.set_seed(1)
-	
+
 	# Harmonics on genus-k surfaces
 	# G = gds.icosphere()
 	# G = gds.torus()
@@ -88,26 +90,22 @@ if __name__ == '__main__':
 	# G = gds.k_torus(3, m=8, n=11)
 
 	# Harmonics with topological defect
-	G = gds.torus()
-	square_defect(G, (8,8))
+	# G = gds.torus()
+	# square_defect(G, (8,8))
 	# square_defect(G, (2,5))
 
 	# Harmonics with degenerate edge
-	# G, H = gds.torus(), gds.torus()
-	# G = nx.disjoint_union(G, H)
-	# u = random.choice(range(len(H)))
-	# v = u + len(H)
-	# G.add_edge(u, v)
+	G = gds.k_torus(3, m=8, n=11, degenerate=True)
 
-	u = gds.face_gds(G)
-	u.set_evolution(nil=True)
-	gds.render(u)
+	# u = gds.face_gds(G)
+	# u.set_evolution(nil=True)
+	# gds.render(u)
 
 	# nx.draw(G, nx.spring_layout(G, iterations=1000))
 	# plt.show()
 
 	# show_harmonics(G, k=0)
-	# show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
+	show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
 	# show_harmonics(G, k=2, dynamic_ranges=True, face_palette=cc.bmy)
 
 	# show_L0_eigfuns(G, n=16, dynamic_ranges=True, node_palette=cc.bmy)

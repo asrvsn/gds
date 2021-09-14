@@ -42,7 +42,7 @@ def von_karman():
 	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
 	G.remove_edges_from(list(nx.edge_boundary(G, r, r)))
 	G.remove_edges_from(list(nx.edge_boundary(G, [(n//2, 2*i+1) for i in range(m//2)], [(n//2, 2*i) for i in range(m//2+1)])))
-	velocity, pressure = incompressible_ns_flow(G, viscosity=1e-4, density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
+	velocity, pressure = navier_stokes(G, viscosity=1e-4, density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
 	# pressure.set_constraints(dirichlet=gds.combine_bcs(
 		# {n: gradP/2 for n in l.nodes},
 		# {n: -gradP/2 for n in r.nodes}
@@ -87,7 +87,7 @@ def von_karman_projected():
 	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
 	G.remove_edges_from(list(nx.edge_boundary(G, r, r)))
 	G.remove_edges_from(list(nx.edge_boundary(G, [(n//2, 2*i+1) for i in range(m//2)], [(n//2, 2*i) for i in range(m//2+1)])))
-	velocity = incompressible_ns_flow_projected(G, viscosity=20., density=1, body_force=lambda t, y: 20*np.ones_like(y), v_free=l.nodes | r.nodes)
+	velocity = navier_stokes_projected(G, viscosity=20., density=1, body_force=lambda t, y: 20*np.ones_like(y), v_free=l.nodes | r.nodes)
 	gradation = np.linspace(-0.5, 0.5, m+1)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		# {((0, i), (1, i)): inlet_v + gradation[i] for i in range(1, m)},

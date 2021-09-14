@@ -221,7 +221,7 @@ Here we have used `gds.render()`, which solves & renders `temperature` in real-t
 
 ### Incompressible Navier-Stokes
 ```python
-def incompressible_ns_flow(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
+def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, inlets=[], outlets=[], **kwargs) -> (gds.node_gds, gds.edge_gds):
   ''' 
   G: graph
   ''' 

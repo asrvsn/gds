@@ -275,7 +275,7 @@ def torus(m=10, n=15):
 	G.faces = faces
 	return G
 
-def k_torus(k=2, m=10, n=15):
+def k_torus(k=2, m=10, n=15, degenerate=False):
 	'''
 	k-hole torus
 	'''
@@ -319,14 +319,19 @@ def k_torus(k=2, m=10, n=15):
 		add_faces(G_.faces, i)
 		# pdb.set_trace()
 		G = nx.union(G, G_)
-		for (u, v) in zip(l_face, r_face):
-			u_ = relabel_node(u, i-1)
-			v_ = relabel_node(v, i)
-			# G.add_edge(u_, v_)
+		if degenerate:
+			u_, v_ =  relabel_node(l_face[0], i-1), relabel_node(r_face[0], i)
 			nx.contracted_nodes(G, u_, v_, copy=False)
 			contracted[v_] = u_
-		remove_faces([l_face], i-1)
-		remove_faces([r_face], i)
+		else:
+			for (u, v) in zip(l_face, r_face):
+				u_ = relabel_node(u, i-1)
+				v_ = relabel_node(v, i)
+				# G.add_edge(u_, v_)
+				nx.contracted_nodes(G, u_, v_, copy=False)
+				contracted[v_] = u_
+			remove_faces([l_face], i-1)
+			remove_faces([r_face], i)
 
 	G.faces = list(map(lambda f: remap_face(f, contracted), all_faces.values()))
 	return G
