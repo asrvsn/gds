@@ -234,6 +234,8 @@ class edge_gds(gds):
 		else:
 			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
+		self.G_ = nx.line_graph(self.G)
+
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
 
@@ -337,24 +339,25 @@ class edge_gds(gds):
 			ret = np.zeros_like(y)
 			ret_in, ret_out = np.zeros_like(y), np.zeros_like(y)
 			for i in range(ret.size):
-				for j in range(ret.size):
-					if i != j:
-						e_i, e_j = self.edges_i[i], self.edges_i[j]
-						v_i, v_j = v_field[i], v_field[j]
-						y_i, y_j = y[i], y[j]
-						if v_i < 0:
-							e_i = (e_i[1], e_i[0])
-							v_i *= -1
-							y_i *= -1
-						if v_j < 0:
-							e_j = (e_j[1], e_j[0])
-							v_j *= -1
-							y_j *= -1
+				for e_j in self.G_.neighbors(self.edges_i[i]):
+					e_i = self.edges_i[i]
+					j = self.X[e_j]
 
-						if e_j[1] == e_i[0]:
-							ret_in[i] += v_i * y_j 
-						if e_i[1] == e_j[0]:
-							ret_out[i] += v_j * y_i 
+					v_i, v_j = v_field[i], v_field[j]
+					y_i, y_j = y[i], y[j]
+					if v_i < 0:
+						e_i = (e_i[1], e_i[0])
+						v_i *= -1
+						y_i *= -1
+					if v_j < 0:
+						e_j = (e_j[1], e_j[0])
+						v_j *= -1
+						y_j *= -1
+
+					if e_j[1] == e_i[0]:
+						ret_in[i] += v_i * y_j 
+					if e_i[1] == e_j[0]:
+						ret_out[i] += v_j * y_i 
 			ret = (ret_in - ret_out) * np.sign(v_field)
 			return -ret
 
@@ -371,37 +374,38 @@ class edge_gds(gds):
 			v_field = v_field.y
 
 		if vectorized:
-			pass # TODO
+			raise Exception('not implemented') # TODO
 		else:
 			''' Non-vectorized version, for debugging purposes ''' 
 			ret = np.zeros_like(y)
 			for i in range(ret.size):
-				for j in range(ret.size):
-					if i != j:
-						e_i, e_j = self.edges_i[i], self.edges_i[j]
-						v_i, v_j = v_field[i], v_field[j]
-						y_i, y_j = y[i], y[j]
-						if v_i < 0:
-							e_i = (e_i[1], e_i[0])
-							v_i *= -1
-							y_i *= -1
-						if v_j < 0:
-							e_j = (e_j[1], e_j[0])
-							v_j *= -1
-							y_j *= -1
+				for e_j in self.G_.neighbors(self.edges_i[i]):
+					e_i = self.edges_i[i]
+					j = self.X[e_j]
+					
+					v_i, v_j = v_field[i], v_field[j]
+					y_i, y_j = y[i], y[j]
+					if v_i < 0:
+						e_i = (e_i[1], e_i[0])
+						v_i *= -1
+						y_i *= -1
+					if v_j < 0:
+						e_j = (e_j[1], e_j[0])
+						v_j *= -1
+						y_j *= -1
 
-						if e_i[0] == e_j[1]: 
-							ret[i] += interactions[0]*v_j*(y_j - y_i)
-							# ret[i] += v_i*y_j
-						if e_i[0] == e_j[0]: 
-							ret[i] += interactions[1]*v_j*(-y_j - y_i)
-							# ret[i] += -v_i*y_j
-						if e_i[1] == e_j[0]: 
-							ret[i] += interactions[2]*v_i*(y_j - y_i)
-							# ret[i] -= v_j*y_i
-						if e_i[1] == e_j[1]: 
-							ret[i] += interactions[3]*v_i*(-y_j - y_i)
-							# ret[i] -= -v_j*y_i
+					if e_i[0] == e_j[1]: 
+						ret[i] += interactions[0]*v_j*(y_j - y_i)
+						# ret[i] += v_i*y_j
+					if e_i[0] == e_j[0]: 
+						ret[i] += interactions[1]*v_j*(-y_j - y_i)
+						# ret[i] += -v_i*y_j
+					if e_i[1] == e_j[0]: 
+						ret[i] += interactions[2]*v_i*(y_j - y_i)
+						# ret[i] -= v_j*y_i
+					if e_i[1] == e_j[1]: 
+						ret[i] += interactions[3]*v_i*(-y_j - y_i)
+						# ret[i] -= -v_j*y_i
 
 			ret *= -np.sign(v_field)
 			return ret
@@ -439,8 +443,7 @@ class edge_gds(gds):
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-edge dual graph ''' 
-		G_ = nx.line_graph(self.G)
-		edge_map = np.array([self.X[e] for e in G_.nodes], dtype=np.intp)
+		edge_map = np.array([self.X[e] for e in self.G_.nodes], dtype=np.intp)
 		class DualGraphObservable(GraphObservable):
 			@property
 			def y(other):
@@ -448,7 +451,7 @@ class edge_gds(gds):
 			@property
 			def t(other):
 				return self.t
-		return DualGraphObservable(G_, GraphDomain.nodes)
+		return DualGraphObservable(self.G_, GraphDomain.nodes)
 
 
 class simplex_gds(gds):

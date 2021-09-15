@@ -271,7 +271,7 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	# vector_advection_test_suite()
+	vector_advection_test_suite()
 
 	# cProfile.run('vector_advection_test_suite()', 'out.prof')
 	# prof = pstats.Stats('out.prof')
@@ -310,22 +310,22 @@ if __name__ == '__main__':
 	# })
 	# gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 2), edge_max=0.5, edge_rng=(0,2), dynamic_ranges=True, min_rng_size=0.05)
 
-	flows = [1,-1,1,1,-1]
-	# flows = [i * np.random.uniform(1, 2)]
-	obses = {
-		'1010': self_advection_test_2(flows=flows, interactions=[1,0,1,0]),
-		'1110': self_advection_test_2(flows=flows, interactions=[1,1,1,0]),
-		'1011': self_advection_test_2(flows=flows, interactions=[1,0,1,1]),
-		'1111': self_advection_test_2(flows=flows, interactions=[1,1,1,1]),
-	}
-	sys = {}
-	for obs in obses:
-		sys[obs] = obses[obs]
-	for obs in obses:
-		sys[f'{obs} (L1)'] = obses[obs].project(PointObservable, lambda u: np.abs(u.y).sum())
-	for obs in obses:
-		sys[f'{obs} (L2)'] = obses[obs].project(PointObservable, lambda u: np.dot(u.y, u.y))
-	sys = gds.couple(sys)
-	canvas=gds.grid_canvas(sys.observables.values(), 4)
-	gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=0.5, title='Advective derivatives')
+	# flows = [1,-1,1,1,-1]
+	# # flows = [i * np.random.uniform(1, 2)]
+	# obses = {
+	# 	'1010': self_advection_test_2(flows=flows, interactions=[1,0,1,0]),
+	# 	'1110': self_advection_test_2(flows=flows, interactions=[1,1,1,0]),
+	# 	'1011': self_advection_test_2(flows=flows, interactions=[1,0,1,1]),
+	# 	'1111': self_advection_test_2(flows=flows, interactions=[1,1,1,1]),
+	# }
+	# sys = {}
+	# for obs in obses:
+	# 	sys[obs] = obses[obs]
+	# for obs in obses:
+	# 	sys[f'{obs} (L1)'] = obses[obs].project(PointObservable, lambda u: np.abs(u.y).sum())
+	# for obs in obses:
+	# 	sys[f'{obs} (L2)'] = obses[obs].project(PointObservable, lambda u: np.dot(u.y, u.y))
+	# sys = gds.couple(sys)
+	# canvas=gds.grid_canvas(sys.observables.values(), 4)
+	# gds.render(sys, canvas=canvas, dynamic_ranges=True, edge_max=0.5, title='Advective derivatives')
 

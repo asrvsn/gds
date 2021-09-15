@@ -15,9 +15,11 @@ import gds
 
 ''' Definitions ''' 
 
-def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_force=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
+def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_force=None, advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	if body_force is None:
 		body_force = lambda t, y: 0
+	if advect is None:
+		advect = lambda v: v.advect()
 
 	pressure = gds.node_gds(G, **kwargs)
 	pressure.set_evolution(lhs=lambda t, p: pressure.laplacian(p) / density)
@@ -26,11 +28,14 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 	velocity = gds.edge_gds(G, **kwargs)
 	velocity.set_evolution(dydt=lambda t, u: 
 		velocity.leray_project(
-			-velocity.advect() + body_force(t, u) + velocity.laplacian() * viscosity/density
+			-advect(velocity) + body_force(t, u) + velocity.laplacian() * viscosity/density
 		) - pressure.grad() / density
 	)
 
 	return velocity, pressure
+
+def stokes(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
+	return navier_stokes(G, advect=lambda v: 0., **kwargs)
 
 def euler(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	return navier_stokes(G, viscosity=0, **kwargs)
@@ -94,9 +99,33 @@ def euler_test_1():
 		(1,5): 1, (2,6): 1, (3,7): -1, (4,8): -1,
 	}
 	G = gds.flat_cube()
-	velocity, pressure = navier_stokes(G, viscosity=0.)
+	velocity, pressure = euler(G)
 	velocity.set_initial(y0=lambda e: v_field[e])
 	return velocity, pressure
 
+def random_euler(G, KE=1.):
+	velocity, pressure = euler(G)
+	y0 = np.random.uniform(size=len(velocity))
+	y0 = velocity.leray_project(y0)
+	y0 *= np.sqrt(KE / np.dot(y0, y0))
+	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
+	return velocity, pressure
+
+def random_euler_2(G, KE=1.):
+	assert KE >= 0
+	velocity, pressure = euler(G, advect=lambda v: v.advect2(vectorized=False, interactions=[1,1,1,1]))
+	y0 = np.random.uniform(size=len(velocity))
+	y0 = velocity.leray_project(y0)
+	y0 *= np.sqrt(KE / np.dot(y0, y0))
+	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
+	return velocity, pressure
+
+
 if __name__ == '__main__':
-	fluid_test(*lid_driven_cavity())
+	gds.set_seed(1)
+	G = gds.torus()
+	# G = nx.Graph()
+	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2)])
+
+	# fluid_test(*lid_driven_cavity())
+	fluid_test(*random_euler(G, 10))
