@@ -234,7 +234,7 @@ class edge_gds(gds):
 		else:
 			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
-		self.G_ = nx.line_graph(self.G)
+		self.G_ = nx.line_graph(G)
 
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
@@ -339,7 +339,7 @@ class edge_gds(gds):
 			ret = np.zeros_like(y)
 			ret_in, ret_out = np.zeros_like(y), np.zeros_like(y)
 			for i in range(ret.size):
-				for e_j in self.G_.neighbors(self.edges_i[i]):
+				for e_j in self.edge_neighbors(self.edges_i[i]):
 					e_i = self.edges_i[i]
 					j = self.X[e_j]
 
@@ -355,11 +355,11 @@ class edge_gds(gds):
 						y_j *= -1
 
 					if e_j[1] == e_i[0]:
-						ret_in[i] += v_i * y_j 
+						ret[i] += v_i * y_j 
 					if e_i[1] == e_j[0]:
-						ret_out[i] += v_j * y_i 
-			ret = (ret_in - ret_out) * np.sign(v_field)
-			return -ret
+						ret[i] -= v_j * y_i 
+			ret *= -np.sign(v_field)
+			return ret
 
 	def advect2(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, interactions=[1,0,1,0], check=False) -> np.ndarray:
 		'''
@@ -379,10 +379,10 @@ class edge_gds(gds):
 			''' Non-vectorized version, for debugging purposes ''' 
 			ret = np.zeros_like(y)
 			for i in range(ret.size):
-				for e_j in self.G_.neighbors(self.edges_i[i]):
+				for e_j in self.edge_neighbors(self.edges_i[i]):
 					e_i = self.edges_i[i]
 					j = self.X[e_j]
-					
+
 					v_i, v_j = v_field[i], v_field[j]
 					y_i, y_j = y[i], y[j]
 					if v_i < 0:
@@ -395,17 +395,21 @@ class edge_gds(gds):
 						y_j *= -1
 
 					if e_i[0] == e_j[1]: 
-						ret[i] += interactions[0]*v_j*(y_j - y_i)
-						# ret[i] += v_i*y_j
+						d_ij = self.G.degree[e_i[0]]
+						# ret[i] += interactions[0]*v_j*(y_j - y_i) / (d_ij - 1)
+						ret[i] += interactions[0]*v_i*y_j / (d_ij - 1)
 					if e_i[0] == e_j[0]: 
-						ret[i] += interactions[1]*v_j*(-y_j - y_i)
-						# ret[i] += -v_i*y_j
+						d_ij = self.G.degree[e_i[0]]
+						# ret[i] += interactions[1]*v_j*(-y_j - y_i) / (d_ij - 1)
+						ret[i] += interactions[1]*v_i*y_j / (d_ij - 1)
 					if e_i[1] == e_j[0]: 
-						ret[i] += interactions[2]*v_i*(y_j - y_i)
-						# ret[i] -= v_j*y_i
+						d_ij = self.G.degree[e_i[1]]
+						# ret[i] += interactions[2]*v_i*(y_j - y_i) / (d_ij - 1)
+						ret[i] -= interactions[2]*v_j*y_i / (d_ij - 1)
 					if e_i[1] == e_j[1]: 
-						ret[i] += interactions[3]*v_i*(-y_j - y_i)
-						# ret[i] -= -v_j*y_i
+						d_ij = self.G.degree[e_i[1]]
+						# ret[i] += interactions[3]*v_i*(-y_j - y_i) / (d_ij - 1)
+						ret[i] -= interactions[3]*v_j*y_i / (d_ij - 1)
 
 			ret *= -np.sign(v_field)
 			return ret
@@ -452,6 +456,10 @@ class edge_gds(gds):
 			def t(other):
 				return self.t
 		return DualGraphObservable(self.G_, GraphDomain.nodes)
+
+	def edge_neighbors(self, e):
+		if e in self.G_: return self.G_.neighbors(e)
+		else: return self.G_.neighbors((e[1], e[0]))
 
 
 class simplex_gds(gds):

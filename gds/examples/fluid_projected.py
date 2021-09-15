@@ -122,10 +122,12 @@ def random_euler_2(G, KE=1.):
 
 
 if __name__ == '__main__':
-	gds.set_seed(1)
-	G = gds.torus()
+	gds.set_seed(10)
+	# G = gds.torus()
+	G = gds.flat_prism(k=4)
+	# G = gds.icosphere()
 	# G = nx.Graph()
 	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2)])
 
 	# fluid_test(*lid_driven_cavity())
-	fluid_test(*random_euler(G, 10))
+	fluid_test(*random_euler(G, 100))
