@@ -104,8 +104,10 @@ def euler_test_1():
 	return velocity, pressure
 
 def random_euler(G, KE=1.):
-	velocity, pressure = euler(G)
-	y0 = np.random.uniform(size=len(velocity))
+	advector = lambda v: v.advect(vectorized=False, interactions=[1,0,1,0])
+	velocity, pressure = euler(G, advect=advector)
+	velocity.advector = advector # TODO: hacky
+	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
 	y0 = velocity.leray_project(y0)
 	y0 *= np.sqrt(KE / np.dot(y0, y0))
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
@@ -113,8 +115,10 @@ def random_euler(G, KE=1.):
 
 def random_euler_2(G, KE=1.):
 	assert KE >= 0
-	velocity, pressure = euler(G, advect=lambda v: v.advect2(vectorized=False, interactions=[1,1,1,1]))
-	y0 = np.random.uniform(size=len(velocity))
+	advector = lambda v: v.advect2(vectorized=False, interactions=[1,0,1,1])
+	velocity, pressure = euler(G, advect=advector)
+	velocity.advector = advector # TODO: hacky
+	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
 	y0 = velocity.leray_project(y0)
 	y0 *= np.sqrt(KE / np.dot(y0, y0))
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
@@ -122,12 +126,12 @@ def random_euler_2(G, KE=1.):
 
 
 if __name__ == '__main__':
-	gds.set_seed(10)
+	gds.set_seed(1)
 	# G = gds.torus()
-	G = gds.flat_prism(k=4)
+	# G = gds.flat_prism(k=4)
 	# G = gds.icosphere()
-	# G = nx.Graph()
-	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2)])
+	G = nx.Graph()
+	G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
 
 	# fluid_test(*lid_driven_cavity())
-	fluid_test(*random_euler(G, 100))
+	fluid_test(*random_euler(G, 10))

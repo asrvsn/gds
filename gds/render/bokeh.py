@@ -12,6 +12,7 @@ import networkx as nx
 import os.path
 import cloudpickle
 import random
+from itertools import repeat
 
 from bokeh.core.properties import field
 from bokeh.plotting import figure, from_networkx
@@ -37,9 +38,9 @@ from .base import *
 class Renderer(ABC):
 	def __init__(self, 
 				canvas: Canvas,
-				node_palette=cc.fire, edge_palette=cc.fire, face_palette=cc.fire, layout_func=None, n_spring_iters=500, dim=2, 
+				node_palette=cc.fire, edge_palette=cc.fire, face_palette=cc.fire, vec_palette=cc.bgy, layout_func=None, n_spring_iters=500, dim=2, 
 				node_rng=(0., 1.), edge_rng=(0., 1.), face_rng=(0., 1.), edge_max=0.2, colorbars=True, 
-				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=False, range_padding=0.,
+				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=True, range_padding=0.,
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),
 				edge_colors=False, min_rng_size=1e-6,
 				title=None, plot_titles=True,
@@ -53,6 +54,7 @@ class Renderer(ABC):
 		self.node_palette = node_palette
 		self.edge_palette = edge_palette
 		self.face_palette = face_palette
+		self.vec_palette = vec_palette
 		self.node_rng = node_rng
 		self.edge_rng = edge_rng
 		self.face_rng = face_rng
@@ -233,10 +235,27 @@ class Renderer(ABC):
 				plot.y_range.range_padding_units = 'absolute'
 				plot.y_range.range_padding = obs.render_params['min_res'] / 2
 				obs.src = ColumnDataSource({'t': [], 'value': []})
-				# TODO: handle vector plotting
 				glyph = Line(x='t', y='value')
 				plot.add_glyph(obs.src, glyph)
 				# plot.line('t', 'value', line_color='black', source=obs.src)
+			elif isinstance(obs, VectorObservable):
+				plot = figure(width=self.plot_width, height=self.plot_height, y_range=obs.domain)
+				plot.add_tools(HoverTool(tooltips=[('time', '@t'), ('value', '@val'), ('y', '@y')]))
+				plot.toolbar_location = None
+				plot.x_range.follow = 'end'
+				plot.x_range.follow_interval = 10.0
+				plot.x_range.range_padding = 0
+				# plot.xaxis.major_label_text_font_size = "15pt"
+				# plot.xaxis.axis_label = 'Time'
+				# plot.yaxis.major_label_text_font_size = "15pt"
+				obs.src = ColumnDataSource({'t': [], 'y': [], 'w': [], 'val': []})
+				obs.cmap = LinearColorMapper(palette=self.vec_palette, low=0, high=1)
+				obs.last_t = obs.t
+				plot.rect(x='t', y='y', width='w', height=1, source=obs.src, line_color=None, fill_color=field('val', obs.cmap))
+				if self.colorbars:
+					cbar = ColorBar(color_mapper=obs.cmap, ticker=BasicTicker(), title='value')
+					cbar.major_label_text_font_size = "15pt"
+					plot.add_layout(cbar, 'right')
 			else:
 				raise Exception('unknown observable type: ', obs)
 			return plot
@@ -378,8 +397,24 @@ class LiveRenderer(Renderer):
 						if self.face_orientations:
 							self.draw_face_orientations(obs, self.face_cmaps[obs.plot_id])
 				elif isinstance(obs, PointObservable):
-					# TODO: handle vector plotting
 					obs.src.stream({'t': [obs.t], 'value': [obs.y]}, obs.render_params['retention'])
+				elif isinstance(obs, VectorObservable):
+					strlen = obs.ndim * obs.render_params['retention']
+					obs.src.stream({
+						't': list(repeat(obs.t, obs.ndim)),
+						'y': obs.domain,
+						'w': list(repeat(obs.t - obs.last_t, obs.ndim)),
+						'val': obs.y.tolist(),
+					}, strlen)
+					obs.last_t = obs.t
+					if self.dynamic_ranges:
+						lo, hi = min(obs.src.data['val']), max(obs.src.data['val'])
+						mid = (lo+hi)/2
+						lo, hi = min(lo, mid-self.min_rng_size/2) - self.range_padding, max(hi, mid+self.min_rng_size/2) + self.range_padding
+						obs.cmap.low = lo
+						obs.cmap.high = hi
+
+
 		if self.rec_name != None:
 			self.dump_frame()
 

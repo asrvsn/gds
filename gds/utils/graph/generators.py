@@ -317,8 +317,9 @@ def k_torus(k=2, m=10, n=15, degenerate=False):
 		G = nx.union(G, G_)
 		if degenerate:
 			u_, v_ =  relabel_node(l_face[0], i-1), relabel_node(r_face[0], i)
-			nx.contracted_nodes(G, u_, v_, copy=False)
-			contracted[v_] = u_
+			G.add_edge(u_, v_)
+			# nx.contracted_nodes(G, u_, v_, copy=False)
+			# contracted[v_] = u_
 		else:
 			for (u, v) in zip(l_face, r_face):
 				u_ = relabel_node(u, i-1)
@@ -613,6 +614,7 @@ def remove_face(G, v):
 		if not (v in f):
 			faces.append(f)
 	G.faces = faces
+	G.remove_node(v)
 
 def extract_face(G, v):
 	'''

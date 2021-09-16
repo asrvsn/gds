@@ -156,14 +156,17 @@ def vortex_transfer(viscosity=1e-3):
 
 
 def fluid_test(velocity, pressure=None):
+	if hasattr(velocity, 'advector'): advector = velocity.advector # TODO: hacky
+	else: advector = lambda v: v.advect() 
 	obs = {
 		'velocity': velocity,
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -v.advect()),
+		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
 		'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
+		'power spectrum': power_spectrum(velocity),
 	}
 	if pressure != None:
 		obs['pressure'] = pressure
@@ -291,8 +294,10 @@ def euler3():
 	return velocity, pressure
 
 def random_euler(G, KE=1.):
-	velocity, pressure = euler(G)
-	y0 = np.random.uniform(size=len(velocity))
+	advector = lambda v: v.advect(vectorized=False, interactions=[1,0,1,0])
+	velocity, pressure = euler(G, advect=advector)
+	velocity.advector = advector # TODO: hacky
+	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
 	y0 = velocity.leray_project(y0)
 	y0 *= np.sqrt(KE / np.dot(y0, y0))
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
@@ -300,22 +305,40 @@ def random_euler(G, KE=1.):
 
 def random_euler_2(G, KE=1.):
 	assert KE >= 0
-	velocity, pressure = euler(G, advect=lambda v: v.advect2(vectorized=False, interactions=[1,1,1,1]))
-	y0 = np.random.uniform(size=len(velocity))
+	advector = lambda v: v.advect2(vectorized=False, interactions=[1,0,1,1])
+	velocity, pressure = euler(G, advect=advector)
+	velocity.advector = advector # TODO: hacky
+	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
 	y0 = velocity.leray_project(y0)
 	y0 *= np.sqrt(KE / np.dot(y0, y0))
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
 	return velocity, pressure
 
+def power_spectrum(velocity, res=1):
+	'''
+	Projection onto eigenspace of Hodge Laplacian.
+	'''
+	L1 = -velocity.laplacian(np.eye(velocity.ndim))
+	eigvals, eigvecs = np.linalg.eig(L1)
+	evs = sorted(zip(eigvals, eigvecs.T), key=lambda x: np.abs(x[0])) # order by lowest to highest frequency magnitude
+	freqs = np.round(np.abs(np.array([x[0] for x in evs])), 4)
+	eigspace = np.vstack(tuple(x[1] for x in evs))
+	# pdb.set_trace()
+	spectrum = velocity.project(VectorObservable, lambda v: eigspace@v.y, freqs.tolist())
+	return spectrum
+
 
 if __name__ == '__main__':
-	gds.set_seed(10)
+	gds.set_seed(1)
 	# G = gds.torus()
-	G = gds.flat_prism(k=4, n=6)
+	G = gds.flat_prism(k=6, n=6)
 	# G = gds.icosphere()
 	# G = nx.Graph()
-	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2)])
+	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2),(0,4),(4,3)])
+	# G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
+
 
 	# fluid_test(*lid_driven_cavity())
-	fluid_test(*random_euler_2(G, 100))
+	fluid_test(*random_euler(G, 10))
+
 

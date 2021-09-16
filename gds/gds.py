@@ -289,7 +289,7 @@ class edge_gds(gds):
 		''' 
 		return self.laplacian(self.laplacian(y))
 
-	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, check=False) -> np.ndarray:
+	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, interactions=[1,0,1,0], check=False) -> np.ndarray:
 		'''
 		Nearest-neighbors advective derivative of an edge flow.
 		'''
@@ -302,6 +302,10 @@ class edge_gds(gds):
 			v_field = v_field.y
 
 		if vectorized:
+			'''TODO: 
+			- update to support multiple interaction types
+			- edge-pair weights (advection check will fail now)
+			'''
 			s = np.sign(v_field)
 			S = sp.diags(s)
 
@@ -337,7 +341,6 @@ class edge_gds(gds):
 		else:
 			''' Non-vectorized version, for debugging purposes ''' 
 			ret = np.zeros_like(y)
-			ret_in, ret_out = np.zeros_like(y), np.zeros_like(y)
 			for i in range(ret.size):
 				for e_j in self.edge_neighbors(self.edges_i[i]):
 					e_i = self.edges_i[i]
@@ -354,10 +357,19 @@ class edge_gds(gds):
 						v_j *= -1
 						y_j *= -1
 
-					if e_j[1] == e_i[0]:
-						ret[i] += v_i * y_j 
-					if e_i[1] == e_j[0]:
-						ret[i] -= v_j * y_i 
+					if e_i[0] == e_j[1]: 
+						d_ij = self.G.degree[e_i[0]]
+						ret[i] += interactions[0]*v_i*y_j / (d_ij - 1)
+					if e_i[0] == e_j[0]: 
+						d_ij = self.G.degree[e_i[0]]
+						ret[i] += interactions[1]*v_i*y_j / (d_ij - 1)
+					if e_i[1] == e_j[0]: 
+						d_ij = self.G.degree[e_i[1]]
+						ret[i] -= interactions[2]*v_j*y_i / (d_ij - 1)
+					if e_i[1] == e_j[1]: 
+						d_ij = self.G.degree[e_i[1]]
+						ret[i] -= interactions[3]*v_j*y_i / (d_ij - 1)
+
 			ret *= -np.sign(v_field)
 			return ret
 
@@ -396,20 +408,16 @@ class edge_gds(gds):
 
 					if e_i[0] == e_j[1]: 
 						d_ij = self.G.degree[e_i[0]]
-						# ret[i] += interactions[0]*v_j*(y_j - y_i) / (d_ij - 1)
-						ret[i] += interactions[0]*v_i*y_j / (d_ij - 1)
+						ret[i] += interactions[0]*v_j*(y_j - y_i) / (d_ij - 1)
 					if e_i[0] == e_j[0]: 
 						d_ij = self.G.degree[e_i[0]]
-						# ret[i] += interactions[1]*v_j*(-y_j - y_i) / (d_ij - 1)
-						ret[i] += interactions[1]*v_i*y_j / (d_ij - 1)
+						ret[i] += interactions[1]*v_j*(-y_j - y_i) / (d_ij - 1)
 					if e_i[1] == e_j[0]: 
 						d_ij = self.G.degree[e_i[1]]
-						# ret[i] += interactions[2]*v_i*(y_j - y_i) / (d_ij - 1)
-						ret[i] -= interactions[2]*v_j*y_i / (d_ij - 1)
+						ret[i] += interactions[2]*v_i*(y_j - y_i) / (d_ij - 1)
 					if e_i[1] == e_j[1]: 
 						d_ij = self.G.degree[e_i[1]]
-						# ret[i] += interactions[3]*v_i*(-y_j - y_i) / (d_ij - 1)
-						ret[i] -= interactions[3]*v_j*y_i / (d_ij - 1)
+						ret[i] += interactions[3]*v_i*(-y_j - y_i) / (d_ij - 1)
 
 			ret *= -np.sign(v_field)
 			return ret

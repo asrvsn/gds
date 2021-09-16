@@ -3,6 +3,8 @@ from enum import Enum
 from abc import ABC, abstractmethod
 import numpy as np
 
+from gds.utils import disambiguate_strings
+
 ''' Graph domains ''' 
 
 Node = Any
@@ -98,7 +100,7 @@ class Observable(ABC):
 
 class PointObservable(Observable):
 	'''
-	Observe values on a zero-dimensional space
+	Observe a time-varying 0-dimensional projection.
 	'''
 	def __init__(self, retention=600, min_res=1e-3, **kwargs):
 		self.render_params = {
@@ -107,4 +109,17 @@ class PointObservable(Observable):
 			**kwargs
 		} # TODO seoarate rendering
 		super().__init__(dict())
+
+class VectorObservable(Observable):
+	'''
+	Observe a time-varying 1-dimensional projection.
+	'''
+	def __init__(self, domain: Iterable, retention=120, **kwargs):
+		self.domain = disambiguate_strings([str(x) for x in domain])
+		self.render_params = {
+			'retention': retention,
+			**kwargs
+		} # TODO seoarate rendering
+		super().__init__(dict())
+		self.ndim = len(domain)
 

@@ -89,3 +89,15 @@ def flatten(arr: List[Any]) -> List:
 
 def now():
 	return datetime.datetime.now()
+
+def disambiguate_strings(ls: List[str]):
+	ret = []
+	mp = dict()
+	for s in ls:
+		if s in mp: 
+			mp[s] += 1
+			ret.append(s + f'_{mp[s]}')
+		else:
+			mp[s] = 1
+			ret.append(s)
+	return ret

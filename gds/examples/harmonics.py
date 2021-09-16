@@ -23,7 +23,7 @@ def show_harmonics(G, k=0, n=np.inf, **kwargs):
 		}[k](G)
 
 	obs = make_observable()
-	L = obs.laplacian(np.eye(obs.ndim))
+	L = -obs.laplacian(np.eye(obs.ndim))
 	print('Laplacian rank: ', np.linalg.matrix_rank(L))
 	null = sp.linalg.null_space(L).T
 
@@ -52,8 +52,11 @@ def show_L0_eigfuns(G, n=12, **kwargs):
 	vals, vecs = np.real(vals), np.real(vecs)
 	# pdb.set_trace()
 	sys = dict()
+	sys['Surface'] = gds.face_gds(G)
+	sys['Surface'].set_evolution(nil=True)
 	canvas = dict()
-	for i, (ev, vec) in enumerate(sorted(zip(vals, vecs.T), key=lambda x: x[0])):
+	canvas['Surface'] = [[[sys['Surface']]]]
+	for i, (ev, vec) in enumerate(sorted(zip(vals, vecs.T), key=lambda x: np.abs(x[0]))):
 		ev = np.round(ev, 5)
 		obs = gds.node_gds(G)
 		obs.set_evolution(nil=True)
@@ -77,7 +80,13 @@ def square_defect(G, v):
 	gds.remove_face(G, v)
 	f = ((i-1,j),(i-1,j-1),(i,j-1),(i+1,j-1),(i+1,j),(i+1,j+1),(i,j+1),(i-1,j+1))
 	G.faces.append(f)
-	G.remove_node(v)
+
+def defective_sphere():
+	G = gds.icosphere()
+	gds.remove_face(G, 137)
+	f = (120,140,37,139,53,0)
+	G.faces.append(f)
+	return G
 
 if __name__ == '__main__':
 	gds.set_seed(1)
@@ -90,12 +99,13 @@ if __name__ == '__main__':
 	# G = gds.k_torus(3, m=8, n=11)
 
 	# Harmonics with topological defect
+	# G = defective_sphere()
 	# G = gds.torus()
 	# square_defect(G, (8,8))
 	# square_defect(G, (2,5))
 
 	# Harmonics with degenerate edge
-	G = gds.k_torus(3, m=8, n=11, degenerate=True)
+	G = gds.k_torus(2, m=8, n=11, degenerate=True)
 
 	# u = gds.face_gds(G)
 	# u.set_evolution(nil=True)
@@ -105,7 +115,7 @@ if __name__ == '__main__':
 	# plt.show()
 
 	# show_harmonics(G, k=0)
-	show_harmonics(G, k=1, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bmy)
-	# show_harmonics(G, k=2, dynamic_ranges=True, face_palette=cc.bmy)
+	show_harmonics(G, k=1, edge_colors=True, edge_palette=cc.bmy)
+	# show_harmonics(G, k=2, face_palette=cc.bmy)
 
-	# show_L0_eigfuns(G, n=16, dynamic_ranges=True, node_palette=cc.bmy)
+	# show_L0_eigfuns(G, n=16, node_palette=cc.bmy)
