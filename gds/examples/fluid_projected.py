@@ -26,10 +26,12 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 
 	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)
 	velocity = gds.edge_gds(G, **kwargs)
-	velocity.set_evolution(dydt=lambda t, u: 
-		velocity.leray_project(
-			-advect(velocity) + body_force(t, u) + velocity.laplacian() * viscosity/density
-		) - pressure.grad() / density
+	velocity.set_evolution(
+		dydt=lambda t, u: 
+			velocity.leray_project(
+				-advect(velocity) + body_force(t, u) + velocity.laplacian() * viscosity/density
+			) - pressure.grad() / density,
+		max_step=np.inf
 	)
 
 	return velocity, pressure
@@ -124,14 +126,29 @@ def random_euler_2(G, KE=1.):
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
 	return velocity, pressure
 
+def random_euler_3(G, KE=1.):
+	assert KE >= 0
+	advector = lambda v: v.advect3()
+	velocity, pressure = euler(G, advect=advector)
+	velocity.advector = advector # TODO: hacky
+	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
+	y0 = velocity.leray_project(y0)
+	y0 *= np.sqrt(KE / np.dot(y0, y0))
+	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
+
+	velocity.advect3()
+
+	return velocity, pressure
+
 
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# G = gds.torus()
 	# G = gds.flat_prism(k=4)
+	G = gds.flat_prism(k=6, n=6)
 	# G = gds.icosphere()
-	G = nx.Graph()
-	G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
+	# G = nx.Graph()
+	# G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
 
 	# fluid_test(*lid_driven_cavity())
-	fluid_test(*random_euler(G, 10))
+	fluid_test(*random_euler_3(G, 10))

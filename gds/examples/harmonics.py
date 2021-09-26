@@ -104,8 +104,13 @@ if __name__ == '__main__':
 	# square_defect(G, (8,8))
 	# square_defect(G, (2,5))
 
+	G = nx.Graph()
+	G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2),(0,4),(4,3)])
+
 	# Harmonics with degenerate edge
-	G = gds.k_torus(2, m=8, n=11, degenerate=True)
+	# G = gds.k_torus(2, m=8, n=11, degenerate=True)
+
+	G.faces = [tuple(f) for f in nx.cycle_basis(G)]
 
 	# u = gds.face_gds(G)
 	# u.set_evolution(nil=True)

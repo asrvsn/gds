@@ -167,6 +167,8 @@ def fluid_test(velocity, pressure=None):
 		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
 		'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
 		'power spectrum': power_spectrum(velocity),
+		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
+		'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
 	}
 	if pressure != None:
 		obs['pressure'] = pressure
@@ -294,7 +296,7 @@ def euler3():
 	return velocity, pressure
 
 def random_euler(G, KE=1.):
-	advector = lambda v: v.advect(vectorized=False, interactions=[1,0,1,0])
+	advector = lambda v: v.advect(vectorized=False, interactions=[1,1,1,1])
 	velocity, pressure = euler(G, advect=advector)
 	velocity.advector = advector # TODO: hacky
 	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
@@ -306,6 +308,17 @@ def random_euler(G, KE=1.):
 def random_euler_2(G, KE=1.):
 	assert KE >= 0
 	advector = lambda v: v.advect2(vectorized=False, interactions=[1,0,1,1])
+	velocity, pressure = euler(G, advect=advector)
+	velocity.advector = advector # TODO: hacky
+	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
+	y0 = velocity.leray_project(y0)
+	y0 *= np.sqrt(KE / np.dot(y0, y0))
+	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
+	return velocity, pressure
+
+def random_euler_3(G, KE=1.):
+	assert KE >= 0
+	advector = lambda v: v.advect3()
 	velocity, pressure = euler(G, advect=advector)
 	velocity.advector = advector # TODO: hacky
 	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
@@ -331,14 +344,13 @@ def power_spectrum(velocity, res=1):
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# G = gds.torus()
+	# G = gds.flat_prism(k=4)
 	G = gds.flat_prism(k=6, n=6)
 	# G = gds.icosphere()
 	# G = nx.Graph()
-	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2),(0,4),(4,3)])
 	# G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
 
-
 	# fluid_test(*lid_driven_cavity())
-	fluid_test(*random_euler(G, 10))
+	fluid_test(*random_euler_3(G, 10))
 
 

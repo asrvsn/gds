@@ -101,8 +101,8 @@ class GraphObservable(Observable):
 ''' Dynamical systems on generic graph domains ''' 
 
 class gds(fds, GraphObservable):
-	def __init__(self, G: nx.Graph, Gd: GraphDomain, **kwargs):
-		GraphObservable.__init__(self, G, Gd, **kwargs)
+	def __init__(self, G: nx.Graph, Gd: GraphDomain):
+		GraphObservable.__init__(self, G, Gd)
 		fds.__init__(self, self.X)
 
 		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.edge_weights)).tocsr() # |V| x |E| incidence
@@ -359,16 +359,16 @@ class edge_gds(gds):
 
 					if e_i[0] == e_j[1]: 
 						d_ij = self.G.degree[e_i[0]]
-						ret[i] += interactions[0]*v_i*y_j / (d_ij - 1)
+						ret[i] += interactions[0]*v_i*y_j # / (d_ij - 1)
 					if e_i[0] == e_j[0]: 
 						d_ij = self.G.degree[e_i[0]]
-						ret[i] += interactions[1]*v_i*y_j / (d_ij - 1)
+						ret[i] += interactions[1]*v_i*y_j # / (d_ij - 1)
 					if e_i[1] == e_j[0]: 
 						d_ij = self.G.degree[e_i[1]]
-						ret[i] -= interactions[2]*v_j*y_i / (d_ij - 1)
+						ret[i] -= interactions[2]*v_j*y_i # / (d_ij - 1)
 					if e_i[1] == e_j[1]: 
 						d_ij = self.G.degree[e_i[1]]
-						ret[i] -= interactions[3]*v_j*y_i / (d_ij - 1)
+						ret[i] -= interactions[3]*v_j*y_i # / (d_ij - 1)
 
 			ret *= -np.sign(v_field)
 			return ret
@@ -421,6 +421,26 @@ class edge_gds(gds):
 
 			ret *= -np.sign(v_field)
 			return ret
+
+	def advect3(self, y: np.ndarray=None) -> np.ndarray:
+		if y is None: y=self.y
+
+		s = np.sign(y)
+		S = sp.diags(s)
+		Y = sp.diags(np.abs(y))
+
+		A = S@self.edge_adj@S
+		A.data[A.data < 0] = 0
+		A.eliminate_zeros()
+		ix, jx = A.nonzero()
+		B = self.incidence@S
+		Bi, Bj = B[:, ix], B[:, jx]
+		c = Bi.multiply(Bi.multiply(Bj)).sum(0)
+		A[ix, jx] = c
+		A.eliminate_zeros()
+		T = Y@A + A@Y
+
+		return -T@y
 
 	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''

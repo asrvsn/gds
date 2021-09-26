@@ -421,6 +421,7 @@ class coupled_fds(Steppable):
 			self.dydt_solver_args = merge_dicts([sys.solver_args for sys in dydt_systems])
 			self.dydt_y0 = np.concatenate([sys.y0 for sys in self.systems[IterationMode.dydt]])
 			try:
+				raise Exception
 				self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
 			except:
 				print('Failed to use LSODA, falling back to DOP853')
