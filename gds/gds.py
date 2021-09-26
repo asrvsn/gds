@@ -105,7 +105,7 @@ class gds(fds, GraphObservable):
 		GraphObservable.__init__(self, G, Gd)
 		fds.__init__(self, self.X)
 
-		self.incidence = nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.edge_weights)).tocsr() # |V| x |E| incidence
+		self.incidence = (nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.edge_weights))).tocsr() # |V| x |E| incidence
 
 
 	def set_constraints(self, *args, **kwargs):
@@ -235,6 +235,7 @@ class edge_gds(gds):
 			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
 		self.G_ = nx.line_graph(G)
+		self.leray_projector = np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@self.incidence
 
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
@@ -463,15 +464,15 @@ class edge_gds(gds):
 		Project onto divergence-free subspace subject to boundary conditions.
 		"""
 		if y is None: y=self.y
-		A = self.incidence@self.incidence.T
-		b = self.incidence@y
 		if self.dirichlet_indices.size == 0:
-			x = sp.linalg.lsmr(A, b)[0]
+			return self.leray_projector@y
 		else:
+			A = self.incidence@self.incidence.T
+			b = self.incidence@y
 			A = sp.vstack([A, self.incidence.T[self.dirichlet_indices, :]])
 			b = np.concatenate((b, y[self.dirichlet_indices]))
 			x = sp.linalg.lsmr(A, b)[0]
-		return y - self.incidence.T@x
+			return y - self.incidence.T@x
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-edge dual graph ''' 

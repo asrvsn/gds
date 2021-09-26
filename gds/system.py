@@ -26,7 +26,7 @@ class System:
 	def observables(self) -> Dict[str, Observable]:
 		return self._observables
 
-	def step(dt: float):
+	def step(self, dt: float):
 		self._stepper.step(dt)
 
 	def arrange(self, ncols: int=np.inf) -> Canvas:
@@ -104,3 +104,7 @@ class System:
 			attach_dyn_props(obs, {'y': lambda self: self.history[stepper.i], 't': lambda _: stepper.t})
 
 		return System(stepper, sys.observables)
+
+	@property
+	def t(self):
+		return self._stepper.t

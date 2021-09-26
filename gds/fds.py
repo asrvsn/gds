@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
-from scipy.integrate import DOP853, LSODA
+from scipy.integrate import DOP853, LSODA, RK45
 from abc import ABC, abstractmethod
 import pdb
 from enum import Enum
@@ -28,7 +28,7 @@ class fds(Observable, Steppable):
 
 	def set_evolution(self,
 			dydt: Callable[[Time, np.ndarray], np.ndarray]=None, order: int=1, max_step: float=1e-3, solver_args: Dict={},
-			lhs: Callable[[Time, np.ndarray], np.ndarray]=None, cost: Callable[[Time, np.ndarray], float]=None, 
+			lhs: Callable[[Time, np.ndarray], np.ndarray]=None, cost: Callable[[Time, np.ndarray], float]=None, refresh_cvx: float=True,
 			map_fun: Callable[[Time, np.ndarray], np.ndarray]=None, dt: float=1.0,
 			traj_t: Iterable[Time]=None, traj_y: Iterable[np.ndarray]=None,
 			nil: bool=False,
@@ -52,6 +52,8 @@ class fds(Observable, Steppable):
 				RHS of a disciplined-convex cost function (either array-like or scalar)
 			solver_args: Dict
 				[optional] Additional arguments to be passed to the solver
+			refresh_cvx: bool (TODO)
+				whether the problem is time-dependent.
 
 		Option 3: As a recurrence relation
 			map_fun: Callable[time]
@@ -89,6 +91,8 @@ class fds(Observable, Steppable):
 			self.iter_mode = IterationMode.cvx
 			self.cost_fun = cost
 			self.solver_args = solver_args
+			self.refresh_cvx = refresh_cvx
+			self.initialized = False
 			self.y0 = np.zeros(self.ndim)
 			self._t = self.t0
 			self._y = self.y0.copy()
@@ -304,13 +308,15 @@ class fds(Observable, Steppable):
 	def step_cvx(self, dt: float):
 		# Update boundary conditions
 		self._t += dt
-		self._t_prb.value = self.t
-		self.update_constraints(self.t)
-		self.rebuild_cvx() # TODO: see if there are other ways to pass time-varying parameters explicitly...
-		self._prb.solve(warm_start=True, **self.solver_args)
-		assert self._prb.status == 'optimal', f'CVXPY solve unsuccessful, status is: {self._prb.status}'
-		self._y = self._y_prb.value
-		self.apply_constraints()
+		if (not self.initialized) or self.refresh_cvx: 
+			self._t_prb.value = self.t
+			self.update_constraints(self.t)
+			self.rebuild_cvx() # TODO: see if there are other ways to pass time-varying parameters explicitly...
+			self._prb.solve(warm_start=True, **self.solver_args)
+			assert self._prb.status == 'optimal', f'CVXPY solve unsuccessful, status is: {self._prb.status}'
+			self._y = self._y_prb.value
+			self.apply_constraints()
+			self.initialized = True
 
 	''' Discrete stepping ''' 
 
@@ -421,8 +427,9 @@ class coupled_fds(Steppable):
 			self.dydt_solver_args = merge_dicts([sys.solver_args for sys in dydt_systems])
 			self.dydt_y0 = np.concatenate([sys.y0 for sys in self.systems[IterationMode.dydt]])
 			try:
-				# raise Exception
+				raise Exception
 				self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+				# self.integrator = RK45(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
 			except:
 				print('Failed to use LSODA, falling back to DOP853')
 				self.integrator = DOP853(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)

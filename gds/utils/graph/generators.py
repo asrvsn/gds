@@ -119,6 +119,26 @@ def triangular_lattice(m, n, with_boundaries=False, with_lattice_components=Fals
 		else:
 			return G
 
+def triangular_cylinder(m, n) -> nx.Graph:
+	'''
+	Y-periodic triangular lattice
+	'''
+	G = nx.triangular_lattice_graph(m, n)
+	N = (n + 1) // 2  # number of nodes in row
+	cols = range(N + 1)
+	for i in cols:
+		G = nx.contracted_nodes(G, (i, 0), (i, m))
+	nx.set_node_attributes(G, None, 'contraction')
+	G.l_boundary = G.subgraph([(0, i) for i in range(m)])
+	r_nodes = [(n//2, 2*i+1) for i in range(m//2+1)]
+	if n % 2 == 1:
+		r_nodes += [(n//2+1, i) for i in range(m+1)]
+	else:
+		r_nodes += [(n//2, 2*i) for i in range(m//2+1)]
+	G.r_boundary = G.subgraph([x for x in r_nodes if x in G.nodes])
+	G.faces = find_k_cliques(G, 3)
+	return G
+
 def hexagonal_lattice(m, n, with_boundaries=False, with_lattice_components=False, **kwargs) -> nx.Graph:
 	''' Sanitize networkx properties for Bokeh consumption ''' 
 	if 'periodic' in kwargs:
