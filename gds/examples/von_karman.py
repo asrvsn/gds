@@ -20,8 +20,6 @@ def von_karman():
 	inlet_v = 5.0
 	outlet_p = 0.0
 	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	weight = 1.0
-	nx.set_edge_attributes(G, weight, name='w')
 	j, k = 8, m//2
 	# Introduce occlusion
 	obstacle = [ 
@@ -42,7 +40,7 @@ def von_karman():
 	G.remove_edges_from(list(nx.edge_boundary(G, [(0, 2*i+1) for i in range(m//2)], [(1, 2*i) for i in range(m//2+1)])))
 	G.remove_edges_from(list(nx.edge_boundary(G, r, r)))
 	G.remove_edges_from(list(nx.edge_boundary(G, [(n//2, 2*i+1) for i in range(m//2)], [(n//2, 2*i) for i in range(m//2+1)])))
-	velocity, pressure = navier_stokes(G, viscosity=1e-4, density=1, inlets=l.nodes, outlets=r.nodes, w_key='w')
+	velocity, pressure = navier_stokes(G, viscosity=1e-4, v_free=(l.nodes | r.nodes))
 	# pressure.set_constraints(dirichlet=gds.combine_bcs(
 		# {n: gradP/2 for n in l.nodes},
 		# {n: -gradP/2 for n in r.nodes}
@@ -109,4 +107,4 @@ def dump():
 	pass
 
 if __name__ == '__main__':
-	fluid_test(von_karman_projected())
+	fluid_test(*von_karman())

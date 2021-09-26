@@ -19,7 +19,7 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 	if body_force is None:
 		body_force = lambda t, y: 0
 	if advect is None:
-		advect = lambda v: v.advect()
+		advect = lambda v: v.advect3()
 
 	pressure = gds.node_gds(G, **kwargs)
 	pressure.set_evolution(lhs=lambda t, p: pressure.laplacian(p) / density)

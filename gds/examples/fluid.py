@@ -12,7 +12,7 @@ import gds
 
 def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	if advect is None:
-		advect = lambda v: v.advect()
+		advect = lambda v: v.advect3()
 
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
@@ -161,12 +161,12 @@ def fluid_test(velocity, pressure=None):
 	obs = {
 		'velocity': velocity,
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
+		# 'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		# 'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
 		'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
-		'power spectrum': power_spectrum(velocity),
+		# 'power spectrum': power_spectrum(velocity),
 		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
 		'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
 	}
