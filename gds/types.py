@@ -114,7 +114,7 @@ class VectorObservable(Observable):
 	'''
 	Observe a time-varying 1-dimensional projection.
 	'''
-	def __init__(self, domain: Iterable, retention=120, **kwargs):
+	def __init__(self, domain: Iterable, retention=240, **kwargs):
 		self.domain = disambiguate_strings([str(x) for x in domain])
 		self.render_params = {
 			'retention': retention,

@@ -4,6 +4,7 @@ import pdb
 from itertools import count
 import colorcet as cc
 import random
+import scipy.sparse as sp
 
 from gds.types import *
 import gds
@@ -12,7 +13,7 @@ import gds
 
 def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	if advect is None:
-		advect = lambda v: v.advect3()
+		advect = lambda v: v.advect()
 
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
@@ -161,20 +162,23 @@ def fluid_test(velocity, pressure=None):
 	obs = {
 		'velocity': velocity,
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
-		# 'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		# 'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
+		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
-		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
-		'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
-		# 'power spectrum': power_spectrum(velocity),
-		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
-		'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
+		# 'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
+		'power spectrum (faceless)': power_spectrum(velocity, GFT='faceless'),
+		'power spectrum (dual)': power_spectrum(velocity, GFT='dual'),
+		# 'GFT L2': GFT_L2(velocity),
+		# 'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
+		'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
+		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
 	}
-	if pressure != None:
-		obs['pressure'] = pressure
+	# if pressure != None:
+	# 	obs['pressure'] = pressure
 		# obs['pressure_grad'] = pressure.project(gds.GraphDomain.edges, lambda p: -p.grad())
 	sys = gds.couple(obs)
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, edge_colors=True)
 
 
 def backward_step():
@@ -318,7 +322,7 @@ def random_euler_2(G, KE=1.):
 
 def random_euler_3(G, KE=1.):
 	assert KE >= 0
-	advector = lambda v: v.advect3()
+	advector = lambda v: v.advect()
 	velocity, pressure = euler(G, advect=advector)
 	velocity.advector = advector # TODO: hacky
 	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
@@ -327,17 +331,51 @@ def random_euler_3(G, KE=1.):
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
 	return velocity, pressure
 
-def power_spectrum(velocity, res=1):
+def power_spectrum(velocity, GFT='hodge'):
 	'''
 	Projection onto eigenspace of Hodge Laplacian.
 	'''
-	L1 = -velocity.laplacian(np.eye(velocity.ndim))
-	eigvals, eigvecs = np.linalg.eig(L1)
+	if GFT == 'hodge':
+		L1 = -velocity.laplacian(np.eye(velocity.ndim))
+	elif GFT == 'faceless':
+		L1 = (velocity.incidence.T@velocity.incidence).todense()
+	elif GFT == 'dual':
+		Gu = nx.line_graph(velocity.G)
+		L1 = nx.laplacian_matrix(Gu).todense()
+
+	L1 = np.asarray(L1)
+	eigvals, eigvecs = np.linalg.eigh(L1) # Important to use eigh() rather than eig() -- otherwise non-unitary eigenvectors
+	eigvecs = np.asarray(eigvecs)
+
+	# Unitary check
+	assert (np.round(eigvecs@eigvecs.T, 6) == np.eye(velocity.ndim)).all(), f'VV^T != I: {GFT}'
+	assert (np.round(eigvecs.T@eigvecs, 6) == np.eye(velocity.ndim)).all(), f'V^TV != I: {GFT}'
+
 	evs = sorted(zip(eigvals, eigvecs.T), key=lambda x: np.abs(x[0])) # order by lowest to highest frequency magnitude
 	freqs = np.round(np.abs(np.array([x[0] for x in evs])), 4)
-	eigspace = np.vstack(tuple(x[1] for x in evs))
-	# pdb.set_trace()
-	spectrum = velocity.project(VectorObservable, lambda v: eigspace@v.y, freqs.tolist())
+	freqs_ = np.unique(freqs)
+	A = np.zeros((freqs_.size, freqs.size))
+	for i in range(freqs_.size):
+		for j in range(freqs.size):
+			if freqs_[i] == freqs[j]:
+				A[i,j] = 1
+	A = sp.csr_matrix(A)
+	eigspace = np.asarray(np.vstack(tuple(x[1] for x in evs)))
+	spectrum = velocity.project(VectorObservable, lambda v: A@np.abs(eigspace@v.y)**2, freqs_.tolist())
+	return spectrum
+
+def GFT_L2(velocity):
+	'''
+	Track L2 norm of the graph Fourier transform.
+	'''
+	# L1 = -velocity.laplacian(np.eye(velocity.ndim))
+	L1 = (velocity.incidence.T@velocity.incidence).todense()
+	# Gu = nx.line_graph(velocity.G)
+	# L1 = nx.laplacian_matrix(Gu).todense()
+
+	eigvals, eigvecs = np.linalg.eigh(L1) # Important to use eigh() rather than eig() -- otherwise non-unitary eigenvectors
+	eigvecs = np.asarray(eigvecs)
+	spectrum = velocity.project(PointObservable, lambda v: np.sqrt((np.abs(eigvecs.T@v.y)**2).sum()))
 	return spectrum
 
 

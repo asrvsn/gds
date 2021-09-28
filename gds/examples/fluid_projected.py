@@ -19,13 +19,13 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 	if body_force is None:
 		body_force = lambda t, y: 0
 	if advect is None:
-		advect = lambda v: v.advect3()
+		advect = lambda v: v.advect()
 
 	pressure = gds.node_gds(G, **kwargs)
 	pressure.set_evolution(lhs=lambda t, p: pressure.laplacian(p) / density, refresh_cvx=False)
 
 	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)
-	velocity = gds.edge_gds(G, **kwargs)
+	velocity = gds.edge_gds(G, v_free=v_free, **kwargs)
 	velocity.set_evolution(
 		dydt=lambda t, u: 
 			velocity.leray_project(
@@ -106,37 +106,14 @@ def euler_test_1():
 	return velocity, pressure
 
 def random_euler(G, KE=1.):
-	advector = lambda v: v.advect(vectorized=False, interactions=[1,0,1,0])
-	velocity, pressure = euler(G, advect=advector)
-	velocity.advector = advector # TODO: hacky
-	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
-	y0 = velocity.leray_project(y0)
-	y0 *= np.sqrt(KE / np.dot(y0, y0))
-	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
-	return velocity, pressure
-
-def random_euler_2(G, KE=1.):
 	assert KE >= 0
-	advector = lambda v: v.advect2(vectorized=False, interactions=[1,0,1,1])
+	advector = lambda v: v.advect()
 	velocity, pressure = euler(G, advect=advector)
 	velocity.advector = advector # TODO: hacky
 	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
 	y0 = velocity.leray_project(y0)
 	y0 *= np.sqrt(KE / np.dot(y0, y0))
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
-	return velocity, pressure
-
-def random_euler_3(G, KE=1.):
-	assert KE >= 0
-	advector = lambda v: v.advect3()
-	velocity, pressure = euler(G, advect=advector)
-	velocity.advector = advector # TODO: hacky
-	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
-	y0 = velocity.leray_project(y0)
-	y0 *= np.sqrt(KE / np.dot(y0, y0))
-	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
-
-	velocity.advect3()
 
 	return velocity, pressure
 
@@ -145,10 +122,15 @@ if __name__ == '__main__':
 	gds.set_seed(1)
 	# G = gds.torus()
 	# G = gds.flat_prism(k=4)
-	G = gds.flat_prism(k=6, n=6)
+	G = gds.flat_prism(k=6, n=8)
 	# G = gds.icosphere()
 	# G = nx.Graph()
 	# G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
+	# G = gds.triangular_lattice(m=2, n=12)
+	# G = nx.random_geometric_graph(40, 0.5)
+	# G = gds.voronoi_lattice(10, 100, eps=0.07)
+
+	# G.faces = [tuple(f) for f in nx.cycle_basis(G)]
 
 	# fluid_test(*lid_driven_cavity())
-	fluid_test(*random_euler_3(G, 10))
+	fluid_test(*random_euler(G, 10))

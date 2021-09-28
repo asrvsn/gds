@@ -57,6 +57,21 @@ def square_lattice(m: int, n: int, diagonals=False, with_boundaries=False, with_
 	else:
 		return G
 
+def square_cylinder(m, n) -> nx.Graph:
+	'''
+	Y-periodic triangular lattice
+	'''
+	G = nx.grid_2d_graph(n, m)
+	set_grid_graph_layout(G)
+	G.l_boundary = G.subgraph([(0, i) for i in range(m)])
+	G.r_boundary = G.subgraph([(n-1, i) for i in range(m)])
+	# G.faces, _ = embedded_faces(G)
+	# for j in range(n):
+	# 	G.add_edge((j, m-1), (j, 0))
+		# if j < n-1:
+		# 	G.faces.append((((j, m-1), (j, 0), (j+1, 0), (j+1, m-1))))
+	return G
+
 def diagonal_lattice(m: int, n: int) -> nx.Graph:
 	''' Creates 45-degree rotated square lattice; make n odd for symmetric boundaries '''
 	G = nx.Graph()

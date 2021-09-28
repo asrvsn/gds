@@ -187,7 +187,7 @@ class node_gds(gds):
 
 class edge_gds(gds):
 	''' Dynamical system defined on the edges of a graph ''' 
-	def __init__(self, G: nx.Graph, *args, **kwargs):
+	def __init__(self, G: nx.Graph, v_free=None, *args, **kwargs):
 		gds.__init__(self, G, GraphDomain.edges, *args, **kwargs)
 
 		self.edge_laplacian = -self.incidence.T@self.incidence # |E| x |E| laplacian operator
@@ -235,7 +235,14 @@ class edge_gds(gds):
 			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
 		self.G_ = nx.line_graph(G)
-		self.leray_projector = np.asarray(np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@self.incidence)
+
+		if v_free is None:
+			B = self.incidence
+		else:
+			B = self.incidence.copy()
+			for v in v_free:
+				B.data[B.indptr[v]:B.indptr[v+1]] = 0
+		self.leray_projector = np.asarray(np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@B)
 
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
@@ -290,141 +297,15 @@ class edge_gds(gds):
 		''' 
 		return self.laplacian(self.laplacian(y))
 
-	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, interactions=[1,0,1,0], check=False) -> np.ndarray:
+	def advect(self, y: np.ndarray=None, stiff=200) -> np.ndarray:
 		'''
 		Nearest-neighbors advective derivative of an edge flow.
 		'''
 		if y is None: y=self.y
-		if v_field is None: 
-			v_field = self.y
-		elif isinstance(v_field, edge_gds):
-			assert v_field.G is self.G, 'Incompatible domains'
-			# Since graphs are identical, orientation is implicitly respected
-			v_field = v_field.y
-
-		if vectorized:
-			'''TODO: 
-			- update to support multiple interaction types
-			- edge-pair weights (advection check will fail now)
-			'''
-			s = np.sign(v_field)
-			S = sp.diags(s)
-
-			A = S@self.edge_adj@S
-			A.data[A.data < 0] = 0
-			A.eliminate_zeros()
-			# A_ = sp.tril(A).tocsr()
-			ix, jx = A.nonzero()
-			B = self.incidence@S
-			Bi, Bj = B[:, ix], B[:, jx]
-			c = Bi.multiply(Bi.multiply(Bj)).sum(0)
-			c[c<0] = 0
-			A[ix, jx] = c
-			A.eliminate_zeros()
-
-			V = sp.diags(v_field*s)
-			Y = sp.diags(y*s)
-
-			F = V@A@Y
-
-			ret = np.asarray(F.sum(1) - F.T.sum(1)).ravel()
-			ret *= -s
-			ret[self.dirichlet_indices] = 0
-
-			if check:
-				ret_ = self.advect(v_field=v_field, y=y, vectorized=False)
-				try:
-					assert (ret_ == ret).all()
-				except:
-					print('Advection check failed')
-					pdb.set_trace()
-			return ret
+		if stiff == np.inf:
+			sat = lambda x: np.sign(x)
 		else:
-			''' Non-vectorized version, for debugging purposes ''' 
-			ret = np.zeros_like(y)
-			for i in range(ret.size):
-				for e_j in self.edge_neighbors(self.edges_i[i]):
-					e_i = self.edges_i[i]
-					j = self.X[e_j]
-
-					v_i, v_j = v_field[i], v_field[j]
-					y_i, y_j = y[i], y[j]
-					if v_i < 0:
-						e_i = (e_i[1], e_i[0])
-						v_i *= -1
-						y_i *= -1
-					if v_j < 0:
-						e_j = (e_j[1], e_j[0])
-						v_j *= -1
-						y_j *= -1
-
-					if e_i[0] == e_j[1]: 
-						d_ij = self.G.degree[e_i[0]]
-						ret[i] += interactions[0]*v_i*y_j # / (d_ij - 1)
-					if e_i[0] == e_j[0]: 
-						d_ij = self.G.degree[e_i[0]]
-						ret[i] += interactions[1]*v_i*y_j # / (d_ij - 1)
-					if e_i[1] == e_j[0]: 
-						d_ij = self.G.degree[e_i[1]]
-						ret[i] -= interactions[2]*v_j*y_i # / (d_ij - 1)
-					if e_i[1] == e_j[1]: 
-						d_ij = self.G.degree[e_i[1]]
-						ret[i] -= interactions[3]*v_j*y_i # / (d_ij - 1)
-
-			ret *= -np.sign(v_field)
-			return ret
-
-	def advect2(self, v_field: Union[Callable[[Edge], float], np.ndarray] = None, y: np.ndarray=None, vectorized=True, interactions=[1,0,1,0], check=False) -> np.ndarray:
-		'''
-		Nearest-neighbors advective derivative of an edge flow.
-		'''
-		if y is None: y=self.y
-		if v_field is None: 
-			v_field = self.y
-		elif isinstance(v_field, edge_gds):
-			assert v_field.G is self.G, 'Incompatible domains'
-			# Since graphs are identical, orientation is implicitly respected
-			v_field = v_field.y
-
-		if vectorized:
-			raise Exception('not implemented') # TODO
-		else:
-			''' Non-vectorized version, for debugging purposes ''' 
-			ret = np.zeros_like(y)
-			for i in range(ret.size):
-				for e_j in self.edge_neighbors(self.edges_i[i]):
-					e_i = self.edges_i[i]
-					j = self.X[e_j]
-
-					v_i, v_j = v_field[i], v_field[j]
-					y_i, y_j = y[i], y[j]
-					if v_i < 0:
-						e_i = (e_i[1], e_i[0])
-						v_i *= -1
-						y_i *= -1
-					if v_j < 0:
-						e_j = (e_j[1], e_j[0])
-						v_j *= -1
-						y_j *= -1
-
-					if e_i[0] == e_j[1]: 
-						d_ij = self.G.degree[e_i[0]]
-						ret[i] += interactions[0]*v_j*(y_j - y_i) / (d_ij - 1)
-					if e_i[0] == e_j[0]: 
-						d_ij = self.G.degree[e_i[0]]
-						ret[i] += interactions[1]*v_j*(-y_j - y_i) / (d_ij - 1)
-					if e_i[1] == e_j[0]: 
-						d_ij = self.G.degree[e_i[1]]
-						ret[i] += interactions[2]*v_i*(y_j - y_i) / (d_ij - 1)
-					if e_i[1] == e_j[1]: 
-						d_ij = self.G.degree[e_i[1]]
-						ret[i] += interactions[3]*v_i*(-y_j - y_i) / (d_ij - 1)
-
-			ret *= -np.sign(v_field)
-			return ret
-
-	def advect3(self, y: np.ndarray=None) -> np.ndarray:
-		if y is None: y=self.y
+			sat = lambda x: np.tanh(stiff*x)
 
 		S = sp.diags(np.sign(y))
 		Y = sp.diags(y)
@@ -436,10 +317,10 @@ class edge_gds(gds):
 		Bm.data[Bm.data < 0] = 0
 		Bp.data[Bp.data < 0] = 0
 		S = Bm.T@Bm - Bp.T@Bp
-		F = Bm.T@Bp - Bp.T@Bm + (Y_@S - S@Y_).sign()
-		A = Y@F + F@Y
-
-		pdb.set_trace()
+		M = (Y_@S - S@Y_)
+		M.data = sat(M.data)
+		F = Bm.T@Bp - Bp.T@Bm + M
+		A = Y_@F + F@Y_
 
 		return -A@y
 

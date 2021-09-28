@@ -10,6 +10,7 @@ import colorcet as cc
 import gds
 from gds.types import *
 from .fluid import *
+import gds.examples.fluid_projected as projected
 
 ''' Systems ''' 
 
@@ -19,8 +20,8 @@ def tri_lid_driven_cavity():
 	v=10.0
 	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
 	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
-	t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	velocity, pressure = navier_stokes(G, viscosity=200., density=0.1)
+	# t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
+	velocity, pressure = navier_stokes(G, viscosity=200.,)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
@@ -35,16 +36,20 @@ def tri_lid_driven_cavity_projected():
 	n=21
 	v=10.0
 	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
+	G = gds.triangular_lattice(m, n*2)
 	# t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	velocity = navier_stokes_projected(G, viscosity=10., density=1., v_free=[(0, m), (n, m)])
-	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		gds.const_edge_bc(t, v),
-		gds.zero_edge_bc(b),
-		gds.zero_edge_bc(l),
-		gds.zero_edge_bc(r),
-	))
-	return velocity
+	velocity, pressure = projected.navier_stokes(G, viscosity=10., density=1., v_free=[(0, m), (n, m)])
+	# velocity.set_constraints(dirichlet=gds.combine_bcs(
+	# 	gds.const_edge_bc(t, v),
+	# 	gds.zero_edge_bc(b),
+	# 	gds.zero_edge_bc(l),
+	# 	gds.zero_edge_bc(r),
+	# ))
+	pressure.set_constraints(dirichlet={
+		(0, m): 10,
+		(n, m): -10
+	})
+	return velocity, pressure
 
 def sq_lid_driven_cavity():
 	m=18
