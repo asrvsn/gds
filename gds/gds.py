@@ -235,7 +235,7 @@ class edge_gds(gds):
 			self.curl_face = sp.csr_matrix((1, len(self.edges)))
 
 		self.G_ = nx.line_graph(G)
-		self.leray_projector = np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@self.incidence
+		self.leray_projector = np.asarray(np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@self.incidence)
 
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
@@ -426,22 +426,22 @@ class edge_gds(gds):
 	def advect3(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
 
-		s = np.sign(y)
-		S = sp.diags(s)
-		Y = sp.diags(np.abs(y))
+		S = sp.diags(np.sign(y))
+		Y = sp.diags(y)
+		Y_ = sp.diags(np.abs(y))
 
-		A = S@self.edge_adj@S
-		A.data[A.data < 0] = 0
-		A.eliminate_zeros()
-		ix, jx = A.nonzero()
 		B = self.incidence@S
-		Bi, Bj = B[:, ix], B[:, jx]
-		c = Bi.multiply(Bi.multiply(Bj)).sum(0)
-		A[ix, jx] = c
-		A.eliminate_zeros()
-		T = Y@A + A@Y
+		Bm = -B.copy()
+		Bp = B.copy()
+		Bm.data[Bm.data < 0] = 0
+		Bp.data[Bp.data < 0] = 0
+		S = Bm.T@Bm - Bp.T@Bp
+		F = Bm.T@Bp - Bp.T@Bm + (Y_@S - S@Y_).sign()
+		A = Y@F + F@Y
 
-		return -T@y
+		pdb.set_trace()
+
+		return -A@y
 
 	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''

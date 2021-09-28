@@ -61,15 +61,15 @@ def von_karman():
 	return velocity, pressure
 
 def von_karman_projected():
-	m=24 
+	m=27 
 	n=113 
 	gradP=100.0
 	inlet_v = 5.0
 	outlet_p = 0.0
 
-	# G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
-	G = gds.triangular_cylinder(m, n)
-	l, r = G.l_boundary, G.r_boundary
+	G, (l, r, t, b) = gds.triangular_lattice(m, n, with_boundaries=True)
+	# G = gds.triangular_cylinder(m, n)
+	# l, r = G.l_boundary, G.r_boundary
 
 	j, k = 8, m//2
 	# Introduce occlusion
@@ -78,16 +78,13 @@ def von_karman_projected():
 		(j+1, k),
 		(j, k+1), 
 		(j, k-1),
-		(j-1, k+1), 
-		# (j+1, k+1), 
-		# (j+1, k-1),
-		(j, k+2), 
-		# (j, k-2), 
+		# (j-1, k+1), 
+		# (j, k+2), 
 	]
 	obstacle_boundary = gds.utils.flatten([G.neighbors(n) for n in obstacle])
 	obstacle_boundary = list(nx.edge_boundary(G, obstacle_boundary, obstacle_boundary))
 	G.remove_nodes_from(obstacle)
-	velocity, pressure = fluid_projected.navier_stokes(G, viscosity=0.1, density=1, v_free=(l.nodes | r.nodes))
+	velocity, pressure = fluid_projected.navier_stokes(G, viscosity=0.001, density=1, v_free=(l.nodes | r.nodes))
 
 	pressure.set_constraints(dirichlet=gds.combine_bcs(
 		{n: gradP/2 for n in l.nodes},
