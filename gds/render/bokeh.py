@@ -38,7 +38,7 @@ from .base import *
 class Renderer(ABC):
 	def __init__(self, 
 				canvas: Canvas,
-				node_palette=cc.fire, edge_palette=cc.bgy, face_palette=cc.fire, vec_palette=cc.bgy, layout_func=None, n_spring_iters=500, dim=2, 
+				node_palette=cc.fire, edge_palette=cc.fire, face_palette=cc.fire, vec_palette=cc.bgy, layout_func=None, n_spring_iters=500, dim=2, 
 				node_rng=(0., 1.), edge_rng=(0., 1.), face_rng=(0., 1.), edge_max=0.2, colorbars=True, 
 				node_size=0.06, plot_width=700, plot_height=750, dynamic_ranges=True, range_padding=0.,
 				x_rng=(-1.1,1.1), y_rng=(-1.1,1.1),

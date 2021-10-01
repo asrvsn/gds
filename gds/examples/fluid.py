@@ -41,11 +41,12 @@ def stokes(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
 def euler(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	return navier_stokes(G, viscosity=0, **kwargs)
 
-def lagrangian_tracer(velocity: gds.edge_gds, inlets: List[Node], alpha=1.0) -> gds.node_gds:
+def lagrangian_tracer(velocity: gds.edge_gds, alpha=1.0) -> gds.node_gds:
 	''' Passive tracer ''' 
 	tracer = gds.node_gds(velocity.G)
 	tracer.set_evolution(dydt=lambda t, y: -alpha*tracer.advect(velocity))
-	tracer.set_constraints(dirichlet={i: 1.0 for i in inlets})
+	start_x = random.choice(list(velocity.G.nodes()))
+	tracer.set_initial(y0=lambda x: 1. if x == start_x else 0.)
 	return tracer
 
 ''' Systems ''' 
@@ -161,16 +162,17 @@ def fluid_test(velocity, pressure=None):
 	else: advector = lambda v: v.advect() 
 	obs = {
 		'velocity': velocity,
-		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		# 'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
+		'tracer': lagrangian_tracer(velocity),
+		# 'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		# 'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
 		'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
-		'power spectrum (faceless)': power_spectrum(velocity, GFT='faceless'),
+		# 'power spectrum (faceless)': power_spectrum(velocity, GFT='faceless'),
 		'power spectrum (dual)': power_spectrum(velocity, GFT='dual'),
 		# 'GFT L2': GFT_L2(velocity),
-		# 'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
+		'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
 		'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
 		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
 	}
@@ -178,7 +180,7 @@ def fluid_test(velocity, pressure=None):
 	# 	obs['pressure'] = pressure
 		# obs['pressure_grad'] = pressure.project(gds.GraphDomain.edges, lambda p: -p.grad())
 	sys = gds.couple(obs)
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, edge_colors=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
 
 
 def backward_step():

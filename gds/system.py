@@ -29,8 +29,32 @@ class System:
 	def step(self, dt: float):
 		self._stepper.step(dt)
 
+	def reset(self):
+		self._stepper.reset()
+
 	def arrange(self, ncols: int=np.inf) -> Canvas:
 		return grid_canvas(list(self._observables.values()), ncols=ncols)
+
+	def solve(self, T: float, dt: float): 
+		obs_items = self.observables.items()
+		data = {k: [v.y.copy()] for k, v in obs_items}
+		time = [0.]
+		t = 0.
+		try:
+			with tqdm(total=int(T / dt), desc='Solving') as pbar:
+				while t < T:
+					self.stepper.step(dt)
+					for name, obs in obs_items:
+						data[name].append(obs.y.copy())
+					t += dt
+					time.append(t)
+					pbar.update(1)
+		except KeyboardInterrupt:
+			print('Solving stopped.')
+		for name in data:
+			data[name] = np.array(data[name])
+			time = np.array(time)
+			return time, data
 
 	def solve_to_disk(self, T: float, dt: float, folder: str, parent='runs'): 
 		assert os.path.isdir(parent), f'Parent directory "{parent}" does not exist'
