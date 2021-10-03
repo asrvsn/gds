@@ -126,7 +126,7 @@ if __name__ == '__main__':
 	# G = gds.icosphere()
 	# G = nx.Graph()
 	# G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
-	G = gds.triangular_lattice(m=1, n=2)
+	G = gds.triangular_lattice(m=1, n=3)
 	# G = nx.random_geometric_graph(40, 0.5)
 	# G = gds.voronoi_lattice(10, 100, eps=0.07)
 

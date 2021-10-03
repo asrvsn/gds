@@ -7,7 +7,7 @@ import itertools
 from .types import *
 from .fds import *
 from .utils import *
-from .utils.graph import embedded_faces, get_edge_weights, get_planar_mesh
+from .utils.graph import embedded_faces, get_edge_weights, get_planar_mesh, degree_matrix
 
 ''' Observables on graph domains ''' 
 
@@ -244,6 +244,18 @@ class edge_gds(gds):
 				B.data[B.indptr[v]:B.indptr[v+1]] = 0
 		self.leray_projector = np.asarray(np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@B)
 
+		# Dual weights
+		Dinv = degree_matrix(G)
+		data = Dinv.data
+		data = 1/(data-1)
+		data[data == np.inf] = 0
+		Dinv.data = data
+		B = abs(self.incidence)
+		self.dual_weights = B.T@Dinv@B
+		self.dual_weights.setdiag(0)
+		self.dual_weights.eliminate_zeros()
+		self.dual_weights = self.dual_weights.tocsr()
+
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
 
@@ -297,7 +309,7 @@ class edge_gds(gds):
 		''' 
 		return self.laplacian(self.laplacian(y))
 
-	def advect(self, y: np.ndarray=None, stiff=200) -> np.ndarray:
+	def advect(self, y: np.ndarray=None, stiff=200, weighted=True) -> np.ndarray:
 		'''
 		Nearest-neighbors advective derivative of an edge flow.
 		'''
@@ -320,6 +332,8 @@ class edge_gds(gds):
 		M = (Y_@S - S@Y_)
 		M.data = sat(M.data)
 		F = Bm.T@Bp - Bp.T@Bm + M
+		if weighted: 
+			F = F.multiply(self.dual_weights)
 		A = Y_@F + F@Y_
 
 		return -A@y
