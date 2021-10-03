@@ -9,6 +9,7 @@ from itertools import count
 import colorcet as cc
 import random
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import pdist, squareform
 
 import gds
 from gds.types import *
@@ -50,11 +51,12 @@ def poincare_section():
 	plt.show()
 
 def recurrence_plot():
-	eps = 1e-2
-	n_triangles = list(range(2, 6))
+	eps = 1e-4
+	steps = 10
+	n_triangles = list(range(2, 7))
 	energies = np.logspace(-1, 2, 5)
 
-	fig, axs = plt.subplots(nrows=len(n_triangles), ncols=len(energies), figsize=(len(energies)*5, len(n_triangles)*5))
+	fig, axs = plt.subplots(nrows=len(n_triangles), ncols=len(energies), figsize=(len(energies)*3, len(n_triangles)*3))
 
 	for fig_i, N in enumerate(n_triangles):
 		G = gds.triangular_lattice(m=1, n=N)
@@ -67,13 +69,11 @@ def recurrence_plot():
 			V.set_initial(y0=lambda e: y0_[V.X[e]])
 			sys = gds.couple({'V': V, 'P': P})
 			time, data = sys.solve(10, 0.01)
-			points = []
-			for r in range(time.size):
-				for c in range(time.size):
-					if np.linalg.norm(data['V'][r] - data['V'][c]) <= eps:
-						points.append([time[r], time[c]])
-			points = np.array(points)
-			axs[fig_i][fig_j].scatter(points[:,0], points[:,1], s=1)
+			dists = pdist(data['V'])
+			dists = np.floor(dists/(eps*np.sqrt(y0_.size)))
+			dists[dists>steps] = steps
+			points = squareform(dists)
+			axs[fig_i][fig_j].imshow(points, origin='lower')
 			if fig_i == 0:
 				axs[fig_i][fig_j].set_title(f'KE: {KE}')
 			if fig_j == 0:
