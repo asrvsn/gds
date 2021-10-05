@@ -56,7 +56,7 @@ def recurrence_plot():
 	n_triangles = list(range(2, 7))
 	energies = np.logspace(-1, 2, 5)
 
-	fig, axs = plt.subplots(nrows=len(n_triangles), ncols=len(energies), figsize=(len(energies)*3, len(n_triangles)*3))
+	fig, axs = plt.subplots(nrows=len(n_triangles), ncols=len(energies), figsize=(len(energies)*2, len(n_triangles)*2))
 
 	for fig_i, N in enumerate(n_triangles):
 		G = gds.triangular_lattice(m=1, n=N)
@@ -82,8 +82,72 @@ def recurrence_plot():
 	plt.tight_layout()
 	plt.show()
 
+def stationarity():
+	eps = 1e-4
+	steps = 10
+	n_triangles = list(range(2, 7))
+	energies = np.logspace(-1, 2, 5)
+
+	fig, axs = plt.subplots(nrows=len(n_triangles), ncols=len(energies), figsize=(len(energies)*2, len(n_triangles)*2))
+
+	for fig_i, N in enumerate(n_triangles):
+		G = gds.triangular_lattice(m=1, n=N)
+		N_e = len(G.edges())
+		y0 = np.random.uniform(low=1, high=2, size=N_e)
+		for fig_j, KE in enumerate(energies):
+			V, P = euler(G)
+			y0_ = V.leray_project(y0)
+			y0_ *= np.sqrt(KE / np.dot(y0_, y0_))
+			V.set_initial(y0=lambda e: y0_[V.X[e]])
+			sys = gds.couple({'V': V, 'P': P})
+			time, data = sys.solve(20, 0.01)
+			avg = np.cumsum(data['V'], axis=0) / np.arange(1, data['V'].shape[0]+1)[:,None]
+			dist = np.linalg.norm(data['V'] - avg, axis=1)
+			axs[fig_i][fig_j].plot(time, dist)
+			if fig_i == 0:
+				axs[fig_i][fig_j].set_title(f'KE: {KE}')
+			if fig_j == 0:
+				axs[fig_i][fig_j].set_ylabel(f'N: {N}')
+
+	plt.tight_layout()
+	plt.show()
+
+def velocity():
+	eps = 1e-4
+	steps = 10
+	n_triangles = list(range(2, 7))
+	energies = np.logspace(-1, 2, 5)
+
+	fig, axs = plt.subplots(nrows=len(n_triangles), ncols=len(energies), figsize=(len(energies)*2, len(n_triangles)*2))
+
+	for fig_i, N in enumerate(n_triangles):
+		G = gds.triangular_lattice(m=1, n=N)
+		N_e = len(G.edges())
+		y0 = np.random.uniform(low=1, high=2, size=N_e)
+		for fig_j, KE in enumerate(energies):
+			V, P = euler(G)
+			y0_ = V.leray_project(y0)
+			y0_ *= np.sqrt(KE / np.dot(y0_, y0_))
+			V.set_initial(y0=lambda e: y0_[V.X[e]])
+			sys = gds.couple({'V': V, 'P': P})
+			time, data = sys.solve(10, 0.01)
+			heat = np.abs(data['V'][400:])
+			heat -= heat.min(axis=0 , keepdims=True)
+			heat /= heat.max(axis=0 , keepdims=True)
+			# pdb.set_trace()
+			axs[fig_i][fig_j].imshow(heat.T, aspect='auto')
+			if fig_i == 0:
+				axs[fig_i][fig_j].set_title(f'KE: {KE}')
+			if fig_j == 0:
+				axs[fig_i][fig_j].set_ylabel(f'N: {N}')
+
+	plt.tight_layout()
+	plt.show()
+
 
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# poincare_section()
-	recurrence_plot()
+	# recurrence_plot()
+	# stationarity()
+	velocity()
