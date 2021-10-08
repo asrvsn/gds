@@ -314,10 +314,6 @@ class edge_gds(gds):
 		Nearest-neighbors advective derivative of an edge flow.
 		'''
 		if y is None: y=self.y
-		if stiff == np.inf:
-			sat = lambda x: np.sign(x)
-		else:
-			sat = lambda x: np.tanh(stiff*x)
 
 		S = sp.diags(np.sign(y))
 		Y = sp.diags(y)
@@ -330,7 +326,7 @@ class edge_gds(gds):
 		Bp.data[Bp.data < 0] = 0
 		S = Bm.T@Bm - Bp.T@Bp
 		M = (Y_@S - S@Y_)
-		M.data = sat(M.data)
+		M.data = np.tanh(stiff * M.data)
 		F = Bm.T@Bp - Bp.T@Bm + M
 		if weighted: 
 			F = F.multiply(self.dual_weights)
