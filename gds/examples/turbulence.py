@@ -9,17 +9,20 @@ from itertools import count
 import colorcet as cc
 import random
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm, Normalize
+import seaborn as sns
 from scipy.spatial.distance import pdist, squareform
+from scipy.signal import stft
+from scipy.fft import rfftn
+import statsmodels.api as sm
 
 import gds
 from gds.types import *
 from .fluid_projected import *
 
-def run_experiment(foreach: Callable):
-	eps = 1e-4
-	steps = 10
-	n_triangles = list(range(2, 7))
-	energies = np.logspace(-1, 2, 5)
+def run_experiment(foreach: Callable, T=10, dt=0.01):
+	n_triangles = list(range(2, 6))
+	energies = np.logspace(-1, 1.5, 5)
 
 	fig, axs = plt.subplots(nrows=len(n_triangles), ncols=len(energies), figsize=(len(energies)*2, len(n_triangles)*2))
 
@@ -33,7 +36,7 @@ def run_experiment(foreach: Callable):
 			y0_ *= np.sqrt(N_e * KE / np.dot(y0_, y0_))
 			V.set_initial(y0=lambda e: y0_[V.X[e]])
 			sys = gds.couple({'V': V, 'P': P})
-			time, data = sys.solve(10, 0.01)
+			time, data = sys.solve(T, dt)
 			foreach(time, data['V'], axs[fig_i][fig_j])
 			if fig_i == 0:
 				axs[fig_i][fig_j].set_title(f'{round(KE, 4)}')
@@ -80,7 +83,7 @@ def poincare_section():
 	plt.tight_layout()
 	plt.show()
 
-def recurrence_plot():
+def recurrence():
 	eps = 1e-4
 	steps = 10
 
@@ -109,18 +112,47 @@ def velocity():
 	def foreach(time, data, ax):
 		N_e = data.shape[1]
 		heat = data[400:]
-		heatmin, heatmax = heat.min(axis=0 , keepdims=True), heat.max(axis=0 , keepdims=True)
-		heatmax += (eps*steps) / np.sqrt(N_e)
-		heat -= heatmin
-		heat /= heatmax
-		ax.imshow(heat.T, aspect='auto')
+		# heatmin, heatmax = heat.min(axis=0 , keepdims=True), heat.max(axis=0 , keepdims=True)
+		# heatmax += (eps*steps) / np.sqrt(N_e)
+		# heat -= heatmin
+		# heat /= heatmax
+		sns.heatmap(heat.T, ax=ax, norm=LogNorm())
 
 	run_experiment(foreach)
 
+def temporal_fourier_transform():
+
+	def foreach(time, data, ax):
+		fs = np.abs(rfftn(data[400:].T))
+		sns.heatmap(fs, ax=ax, norm=LogNorm())
+
+	run_experiment(foreach)
+
+def spatial_fourier_transform():
+
+	def foreach(time, data, ax):
+		fs = np.abs(rfftn(data[400:].T))
+		sns.heatmap(fs, ax=ax, cbar=False)
+
+	run_experiment(foreach)
+
+def autocorrelation():
+
+	def foreach(time, data, ax):
+		data = data[400:].T
+		corr = []
+		for series in data:
+			corr.append(sm.tsa.acf(series, nlags=100, fft=True))
+		corr = np.array(corr)
+		sns.heatmap(corr, ax=ax)
+
+	run_experiment(foreach)
 
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# poincare_section()
-	recurrence_plot()
+	recurrence()
 	# stationarity()
 	# velocity()
+	# temporal_fourier_transform()
+	# autocorrelation()

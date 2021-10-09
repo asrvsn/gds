@@ -14,3 +14,5 @@ selenium
 pillow
 shapely
 trimesh
+statsmodels
+seaborn

@@ -334,7 +334,7 @@ class edge_gds(gds):
 		F = Bm.T@Bp - Bp.T@Bm + M
 		if weighted: 
 			F = F.multiply(self.dual_weights)
-		A = Y_@F + F@Y_
+		A = Y@F + F@Y
 
 		return -A@y
 
