@@ -159,7 +159,7 @@ def vortex_transfer(viscosity=1e-3):
 	return velocity, pressure
 
 
-def fluid_test(velocity, pressure=None):
+def fluid_test(velocity, pressure=None, columns=3, **kwargs):
 	if hasattr(velocity, 'advector'): advector = velocity.advector # TODO: hacky
 	else: advector = lambda v: v.advect() 
 	obs = {
@@ -168,7 +168,7 @@ def fluid_test(velocity, pressure=None):
 		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
 		# 'diffusion': velocity.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
 		# 'tracer': lagrangian_tracer(velocity),
-		# 'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
+		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		# 'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
 		# 'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
@@ -183,7 +183,7 @@ def fluid_test(velocity, pressure=None):
 		obs['pressure'] = pressure
 		# obs['pressure_grad'] = pressure.project(gds.GraphDomain.edges, lambda p: -p.grad())
 	sys = gds.couple(obs)
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), columns), edge_max=0.6, dynamic_ranges=True, **kwargs)
 
 
 def backward_step():

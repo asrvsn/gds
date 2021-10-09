@@ -14,21 +14,18 @@ import gds.examples.fluid_projected as projected
 
 ''' Systems ''' 
 
-def tri_lid_driven_cavity():
-	m=18
-	n=21
-	v=10.0
-	# G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
-	# t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	velocity, pressure = navier_stokes(G, viscosity=200.,)
+def lid_driven_cavity(G, dG, v=10, viscosity=10):
+	(l, r, t, b) = dG
+	v_free = (set(l.nodes()) & set(t.nodes())) | (set(r.nodes()) & set(t.nodes()))
+	print('v_free:', v_free)
+	velocity, pressure = navier_stokes(G, viscosity=viscosity, v_free=v_free)
 	velocity.set_constraints(dirichlet=gds.combine_bcs(
 		gds.const_edge_bc(t, v),
 		gds.zero_edge_bc(b),
 		gds.zero_edge_bc(l),
 		gds.zero_edge_bc(r),
 	))
-	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
+	# pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
 	return velocity, pressure
 
 def tri_lid_driven_cavity_projected():
@@ -49,44 +46,6 @@ def tri_lid_driven_cavity_projected():
 		(0, m): 10,
 		(n, m): -10
 	})
-	return velocity, pressure
-
-def sq_lid_driven_cavity():
-	m=18
-	n=21
-	v=10.0
-	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	t.remove_nodes_from([(0, m-1), (1, m-1), (n-1, m-1), (n, m-1)])
-	velocity, pressure = navier_stokes(G, viscosity=200., density=0.1)
-	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		gds.const_edge_bc(t, v),
-		gds.zero_edge_bc(b),
-		gds.zero_edge_bc(l),
-		gds.zero_edge_bc(r),
-	))
-	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
-	return velocity, pressure
-
-def hex_lid_driven_cavity():
-	m=18
-	n=21
-	v=10.0
-	G, (l, r, t, b) = gds.hexagonal_lattice(m, n, with_boundaries=True)
-	t.remove_nodes_from([(0, m*2), (1, m*2), (0, m*2+1), (1, m*2+1), (n-1, 2*m), (n, 2*m), (n-1, 2*m+1), (n, 2*m+1)])
-	velocity, pressure = navier_stokes(G, viscosity=200., density=0.1)
-	def inlet_bc(e):
-		if e in t.edges:
-			if e[1][1] > e[0][1] and e[0][0] % 2 == 0:
-				# Hack to fix hexagonal bcs
-				return -v
-			return v
-	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		inlet_bc,
-		gds.zero_edge_bc(b),
-		gds.zero_edge_bc(l),
-		gds.zero_edge_bc(r),
-	))
-	pressure.set_constraints(dirichlet={(0, 0): 0.}) # Pressure reference
 	return velocity, pressure
 
 def sq_lid_driven_cavity_ivp():
@@ -173,4 +132,11 @@ def dump():
 
 if __name__ == '__main__':
 	# render()
-	fluid_test(*tri_lid_driven_cavity())
+
+	# G, dG = gds.triangular_lattice(18, 42, with_boundaries=True)
+	G, dG = gds.square_lattice(16, 30, with_boundaries=True)
+	# G, dG = gds.hexagonal_lattice(18, 21, with_boundaries=True)
+
+	v, p = lid_driven_cavity(G, dG, viscosity=200)
+	fluid_test(v, p, columns=3, edge_palette=cc.bgy)
+
