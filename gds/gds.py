@@ -283,11 +283,11 @@ class edge_gds(gds):
 		if y is None: y=self.y
 		return self.curl_face@y
 
-	def dd_(self, y: np.ndarray=None, free: np.ndarray=None) -> np.ndarray:
+	def dd_(self, y: np.ndarray=None, normal: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
 		ret = -self.incidence.T@self.incidence@y
 		ret[self.dirichlet_indices] = 0
-		if not (free is None): ret[free] = 0
+		if not (normal is None): ret[normal] = 0
 		return ret
 
 	def d_d(self, y: np.ndarray=None) -> np.ndarray:
@@ -296,12 +296,15 @@ class edge_gds(gds):
 		ret[self.dirichlet_indices] = 0
 		return ret
 
-	def laplacian(self, y: np.ndarray=None, free: np.ndarray=None) -> np.ndarray:
+	def laplacian(self, y: np.ndarray=None, free: np.ndarray=None, normal: np.ndarray=None) -> np.ndarray:
 		''' 
 		Hodge 1-Laplacian
 		TODO: neumann conditions
 		''' 
-		return self.dd_(y=y, free=free) + self.d_d(y=y)
+		ret = self.dd_(y=y, normal=normal) + self.d_d(y=y)
+		if not (free is None):
+			ret[free] = 0
+		return ret
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' 

@@ -11,25 +11,26 @@ import gds
 
 ''' Definitions ''' 
 
-def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], e_free=[], advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
+def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], e_free=[], e_normal=[], advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	if advect is None:
 		advect = lambda v: v.advect()
 
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
-	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)
-	e_free = np.array([velocity.X[x] for x in set(e_free)], dtype=np.intp)
+	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)		# Inlet/outlet nodes (typically, pressure boundaries)
+	e_free = np.array([velocity.X[x] for x in set(e_free)], dtype=np.intp) 		# Free-slip surface
+	e_normal = np.array([velocity.X[x] for x in set(e_normal)], dtype=np.intp) 	# Inlets/outlet edges normal to surface
 	min_step = 1e-3
 
 	def pressure_f(t, y):
 		dt = max(min_step, velocity.dt)
-		lhs = velocity.div(velocity.y/dt - advect(velocity) + velocity.laplacian(free=e_free) * viscosity/density)
+		lhs = velocity.div(velocity.y/dt - advect(velocity) + velocity.laplacian(free=e_free, normal=e_normal) * viscosity/density)
 		lhs[v_free] = 0.
 		lhs -= pressure.laplacian(y)/density 
 		return lhs
 
 	def velocity_f(t, y):
-		return -advect(velocity) - pressure.grad()/density + velocity.laplacian(free=e_free) * viscosity/density
+		return -advect(velocity) - pressure.grad()/density + velocity.laplacian(free=e_free, normal=e_normal) * viscosity/density
 
 	pressure.set_evolution(lhs=pressure_f)
 	velocity.set_evolution(dydt=velocity_f)

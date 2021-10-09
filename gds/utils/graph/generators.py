@@ -697,6 +697,12 @@ def remove_pos(G):
 			del G.nodes[n]['pos']
 	return G
 
+def edge_domain(G, nodes):
+	nodes = set(nodes)
+	for (u, v) in G.edges():
+		if u in nodes and v in nodes: 
+			yield (u, v)
+
 if __name__ == '__main__':
 	G = hexagonal_lattice(3, 4)
 	faces = embedded_faces(G)
