@@ -121,6 +121,6 @@ def velocity():
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# poincare_section()
-	# recurrence_plot()
+	recurrence_plot()
 	# stationarity()
-	velocity()
+	# velocity()

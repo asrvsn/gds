@@ -154,7 +154,7 @@ def triangular_cylinder(m, n) -> nx.Graph:
 	G.faces = find_k_cliques(G, 3)
 	return G
 
-def hexagonal_lattice(m, n, with_boundaries=False, with_lattice_components=False, **kwargs) -> nx.Graph:
+def hexagonal_lattice(m, n, with_boundaries=False, with_lattice_components=False, with_faces=True, **kwargs) -> nx.Graph:
 	''' Sanitize networkx properties for Bokeh consumption ''' 
 	if 'periodic' in kwargs:
 		kwargs['with_positions'] = False
@@ -163,6 +163,8 @@ def hexagonal_lattice(m, n, with_boundaries=False, with_lattice_components=False
 		return G
 	else:
 		G = nx.hexagonal_lattice_graph(m, n, **kwargs)
+		if with_faces:
+			G.faces, _ = embedded_faces(G)
 		if with_lattice_components:
 			horiz = nx.Graph()
 			for i in range(m+1):
@@ -672,7 +674,28 @@ def extract_face(G, v):
 		assert found, 'Neighbors do not form a chain.'
 	return tuple(face)
 
+def contract_pairs(G, pairs):
+	'''
+	Contract nodes with updates to faces & sanitize output.
+	'''
+	faces = G.faces if hasattr(G, 'faces') else None
+	contracted = dict()
+	for (u, v) in pairs:
+		nx.contracted_nodes(G, u, v, copy=False)
+		contracted[v] = u
+	nx.set_node_attributes(G, None, 'contraction')
+	if faces != None:
+		faces_ = []
+		for f in faces:
+			faces_.append(tuple((contracted[v] if v in contracted else v) for v in f))
+		G.faces = faces_
+	return G
 
+def remove_pos(G):
+	if len(nx.get_node_attributes(G, 'pos')) > 0:
+		for n in G.nodes():
+			del G.nodes[n]['pos']
+	return G
 
 if __name__ == '__main__':
 	G = hexagonal_lattice(3, 4)

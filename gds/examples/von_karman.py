@@ -122,6 +122,55 @@ def von_karman_projected():
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bgy)
 
 
+def euler_vortex_street():
+	'''
+	Vortex street translation in the inviscid model.
+	x-periodic hexagonal lattice.
+	'''
+	# m, n = 4, 20
+	# G = gds.hexagonal_lattice(m, n)
+	# speed = 1
+	# # G = gds.contract_pairs(G, [((0, j), (n, j)) for j in range(1, 2*m)])
+	# # G = gds.remove_pos(G)
+
+	# velocity, pressure = fluid_projected.euler(G)
+	# y0 = np.zeros(velocity.ndim)
+	# for j in range(n-1):
+	# 	if j == 5:
+	# 		e = ((j, m), (j, m+1))
+	# 		y_e = np.zeros(velocity.ndim)
+	# 		y_e[velocity.X[e]] = 1
+	# 		y_f = speed * velocity.curl_face@y_e
+	# 		y_e = velocity.curl_face.T@y_f
+	# 		y0 += y_e
+
+	m, n = 9, 20
+	G = gds.square_lattice(m, n)
+	speed = 1
+
+	velocity, pressure = fluid_projected.euler(G)
+	y0 = np.zeros(velocity.ndim)
+
+	for j in [m//2, m//2+1]:
+		i = 5
+		e = ((i, j), (i+1, j))
+		y_e = np.zeros(velocity.ndim)
+		y_e[velocity.X[e]] = 1
+		y_f = speed * velocity.curl_face@y_e
+		y0 += velocity.curl_face.T@y_f
+
+	velocity.set_initial(y0=lambda x: y0[velocity.X[x]])
+
+	sys = gds.couple({
+		'velocity': velocity,
+		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
+		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -v.advect()),
+		'pressure': pressure,
+		# 'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
+	})
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True, edge_colors=True, edge_palette=cc.bgy, n_spring_iters=2000)
+
+
 ''' Testing functions ''' 
 
 def render():
@@ -131,5 +180,6 @@ def dump():
 	pass
 
 if __name__ == '__main__':
-	von_karman()
+	# von_karman()
 	# von_karman_projected()
+	euler_vortex_street()

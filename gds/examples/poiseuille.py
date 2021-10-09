@@ -13,6 +13,24 @@ from .fluid import *
 
 ''' Systems ''' 
 
+def poiseuille(G, dG, viscosity=50, density=1, gradP=10):
+	(l, r, t, b) = dG
+	tb = set(t.nodes()) | set(b.nodes())
+	lr = set(l.nodes()) | set(r.nodes())
+	v_free = lr - tb
+	e_free = set(nx.edge_boundary(G, lr))
+
+	velocity, pressure = navier_stokes(G, viscosity=viscosity, density=density, v_free=v_free, e_free=e_free)
+	pressure.set_constraints(dirichlet=gds.combine_bcs(
+		{n: gradP/2 for n in l.nodes},
+		{n: -gradP/2 for n in r.nodes},
+	))
+	velocity.set_constraints(dirichlet=gds.combine_bcs(
+		gds.zero_edge_bc(t),
+		gds.zero_edge_bc(b),
+	))
+	return velocity, pressure
+
 def tri_poiseuille(viscosity, density):
 	m=14 
 	n=58 
@@ -148,74 +166,26 @@ def hex_poiseuille(viscosity, density):
 	))
 	return velocity, pressure
 
-def voronoi_poiseuille(viscosity, density):
-	np.random.seed(401)
-	gradP=1.0
-	n_boundary = 10
-	n_interior = 100
+# def poiseuille_flow():
+# 	''' API example ''' 
+# 	G, (G_L, G_R, G_T, G_B) = gds.square_lattice(m, n, with_boundaries=True)
 
-	G, (l, r, t, b) = gds.voronoi_lattice(n_boundary, n_interior, with_boundaries=True, eps=0.07)
-	# tb = set(t.nodes()) | set(b.nodes())
-	v_free_l, v_free_r = set(l.nodes()), set(r.nodes())
-	v_free = v_free_l | v_free_r
-	v_bd_l = set()
-	# for v in v_free_l:
-	# 	u = v - 1j
-	# 	G.add_node(u)
-	# 	G.add_edge(u, v)
-	# 	G.nodes[u]['pos'] = (G.nodes[v]['pos'][0] - 0.1, G.nodes[v]['pos'][1])
-	# 	v_bd_l.add(u)
-	v_bd_r = set()
-	# for v in v_free_r:
-	# 	u = v - 1j
-	# 	G.add_node(u)
-	# 	G.add_edge(v, u)
-	# 	G.nodes[u]['pos'] = (G.nodes[v]['pos'][0] + 0.1, G.nodes[v]['pos'][1])
-	# 	v_bd_r.add(u)
-	v_bd = v_bd_l | v_bd_r
+# 	velocity = Field(GraphDomain.Edges, G)
+# 	velocity.set_dirichlet_boundary(set(G_T.edges()) | set(G_B.edges()), 0.)
+# 	velocity.set_free_boundary(set(G_L.edges()) | set(G_R.edges()))
 
-	velocity, pressure = navier_stokes(G, viscosity=viscosity, density=density, v_free=v_bd | v_free)
-	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in v_free_l | v_bd_l},
-		{n: -gradP/2 for n in v_free_r | v_bd_r},
-	))
-	# e_free_mask = np.array([1 if len(set(velocity.iX[i]) - v_bd)==2 else 0 for i in range(velocity.ndim)])
-	# local_state = {'t': None, 'div': None}
-	# def free_boundaries(t, e):
-	# 	if local_state['t'] != t:
-	# 		local_state['div'] = velocity.div(velocity.y*e_free_mask)
-	# 		local_state['t'] = t
-	# 	if e[1] in v_bd_l:
-	# 		return -np.clip(local_state['div'][pressure.X[e[0]]], 0, None)
-	# 	elif e[1] in v_bd_r:
-	# 		return -np.clip(local_state['div'][pressure.X[e[0]]], None, 0)
-	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		# free_boundaries,
-		gds.zero_edge_bc(t),
-		gds.zero_edge_bc(b),
-	))
-	return velocity, pressure
+# 	pressure = Field(GraphDomain.Nodes, G)
+# 	pressure.set_dirichlet_boundary(set(G_L.edges()), 1.)
+# 	pressure.set_dirichlet_boundary(set(G_R.edges()), -1.)
+# 	pressure.set_free_boundary(set(G_T.edges()) | set(G_B.edges()))
 
-def poiseuille_flow():
-	''' API example ''' 
-	G, (G_L, G_R, G_T, G_B) = gds.square_lattice(m, n, with_boundaries=True)
-
-	velocity = Field(GraphDomain.Edges, G)
-	velocity.set_dirichlet_boundary(set(G_T.edges()) | set(G_B.edges()), 0.)
-	velocity.set_free_boundary(set(G_L.edges()) | set(G_R.edges()))
-
-	pressure = Field(GraphDomain.Nodes, G)
-	pressure.set_dirichlet_boundary(set(G_L.edges()), 1.)
-	pressure.set_dirichlet_boundary(set(G_R.edges()), -1.)
-	pressure.set_free_boundary(set(G_T.edges()) | set(G_B.edges()))
-
-	dt = 1e-3
-	velocity.set_evolution(
-		dydt = -advect(velocity, velocity) - grad(pressure) / density + laplacian(velocity) * viscosity / density
-	)
-	pressure.set_evolution(
-		lhs = div(velocity / dt - advect(velocity, velocity)) - laplacian(pressure) / density + laplacian(div(velocity)) * viscosity / density
-	)
+# 	dt = 1e-3
+# 	velocity.set_evolution(
+# 		dydt = -advect(velocity, velocity) - grad(pressure) / density + laplacian(velocity) * viscosity / density
+# 	)
+# 	pressure.set_evolution(
+# 		lhs = div(velocity / dt - advect(velocity, velocity)) - laplacian(pressure) / density + laplacian(div(velocity)) * viscosity / density
+# 	)
 
 def sq_poiseuille_projected(viscosity, density):
 	m=14 
@@ -241,9 +211,9 @@ def render():
 	viscosity, density = 1., 1e-2
 	# p, v = voronoi_poiseuille()
 	# p, v = sq_poiseuille()
-	p1, v1 = sq_poiseuille(viscosity, density)
-	p2, v2 = tri_poiseuille(viscosity, density)
-	p3, v3 = hex_poiseuille(viscosity, density)
+	v1, p1 = sq_poiseuille(viscosity, density)
+	v2, p2 = tri_poiseuille(viscosity, density)
+	v3, p3 = hex_poiseuille(viscosity, density)
 
 	# v = v3
 	sys = gds.couple({
@@ -307,4 +277,13 @@ def dump():
 if __name__ == '__main__':
 	# render()
 	# dump()
-	fluid_test(*sq_poiseuille(50, 1))
+	# fluid_test(*tri_poiseuille(50, 1))
+
+	# G, dG = gds.triangular_lattice(14, 58, with_boundaries=True)
+	# G, dG = gds.square_lattice(14, 28, with_boundaries=True)
+	# G, dG = gds.hexagonal_lattice(14, 29, with_boundaries=True)
+	G, dG = gds.voronoi_lattice(10, 100, with_boundaries=True, eps=0.07)
+	p, v = poiseuille(G, dG)
+	fluid_test(p, v)
+
+

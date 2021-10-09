@@ -11,24 +11,25 @@ import gds
 
 ''' Definitions ''' 
 
-def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
+def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], e_free=[], advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	if advect is None:
 		advect = lambda v: v.advect()
 
 	pressure = gds.node_gds(G, **kwargs)
 	velocity = gds.edge_gds(G, **kwargs)
 	v_free = np.array([pressure.X[x] for x in set(v_free)], dtype=np.intp)
+	e_free = np.array([velocity.X[x] for x in set(e_free)], dtype=np.intp)
 	min_step = 1e-3
 
 	def pressure_f(t, y):
 		dt = max(min_step, velocity.dt)
-		lhs = velocity.div(velocity.y/dt - advect(velocity)) + pressure.laplacian(velocity.div()) * viscosity/density
+		lhs = velocity.div(velocity.y/dt - advect(velocity) + velocity.laplacian(free=e_free) * viscosity/density)
 		lhs[v_free] = 0.
 		lhs -= pressure.laplacian(y)/density 
 		return lhs
 
 	def velocity_f(t, y):
-		return -advect(velocity) - pressure.grad()/density + velocity.laplacian() * viscosity/density
+		return -advect(velocity) - pressure.grad()/density + velocity.laplacian(free=e_free) * viscosity/density
 
 	pressure.set_evolution(lhs=pressure_f)
 	velocity.set_evolution(dydt=velocity_f)
@@ -162,22 +163,23 @@ def fluid_test(velocity, pressure=None):
 	else: advector = lambda v: v.advect() 
 	obs = {
 		'velocity': velocity,
-		# 'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
+		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
 		'vorticity': velocity.project(gds.GraphDomain.faces, lambda v: v.curl()),
-		'tracer': lagrangian_tracer(velocity),
+		# 'diffusion': velocity.project(gds.GraphDomain.edges, lambda v: v.laplacian()),
+		# 'tracer': lagrangian_tracer(velocity),
 		# 'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		# 'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
-		'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
+		# 'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
 		# 'power spectrum (faceless)': power_spectrum(velocity, GFT='faceless'),
-		'power spectrum (dual)': power_spectrum(velocity, GFT='dual'),
+		# 'power spectrum (dual)': power_spectrum(velocity, GFT='dual'),
 		# 'GFT L2': GFT_L2(velocity),
-		'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
-		'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
+		# 'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
+		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
 		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
 	}
-	# if pressure != None:
-	# 	obs['pressure'] = pressure
+	if pressure != None:
+		obs['pressure'] = pressure
 		# obs['pressure_grad'] = pressure.project(gds.GraphDomain.edges, lambda p: -p.grad())
 	sys = gds.couple(obs)
 	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=0.6, dynamic_ranges=True)
