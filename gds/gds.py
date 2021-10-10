@@ -328,13 +328,14 @@ class edge_gds(gds):
 		Bp = B.copy()
 		Bm.data[Bm.data < 0] = 0
 		Bp.data[Bp.data < 0] = 0
-		S = Bm.T@Bm - Bp.T@Bp
-		M = (Y_@S - S@Y_)
+		P = Bm.T@Bm - Bp.T@Bp
+		M = (Y_@P - P@Y_)
 		M.data = np.tanh(stiff * M.data)
 		F = Bm.T@Bp - Bp.T@Bm + M
 		if weighted: 
 			F = F.multiply(self.dual_weights)
-		A = Y@F + F@Y
+		A = Y@F@S + S@F@Y
+		# A = Y@F@Y
 
 		return -A@y
 

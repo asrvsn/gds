@@ -103,21 +103,25 @@ def test():
 	pdb.set_trace()
 	return conc, flow
 
-def vector_advection_circle():
+def self_advection_circle():
 	n = 10
 	G = nx.Graph()
 	G.add_nodes_from(list(range(n)))
 	G.add_edges_from(list(zip(range(n), [n-1] + list(range(n-1)))))
 	flow = gds.edge_gds(G)
-	flow.set_evolution(dydt=lambda t, y: -flow.advect(vectorized=False))
+	flow.set_evolution(dydt=lambda t, y: -flow.advect())
 	# flow.set_initial(y0=dict_fun({(2,3): 1.0, (3,4): 1.0}, def_val=0.))
 	def init_flow(e):
 		if e == (2,3): return 1.5
 		elif e == (0,n-1): return -1.0
 		return 1.0
 	flow.set_initial(y0=init_flow)
-	# flow.set_constraints(dirichlet=dict_fun({(2,3): 1.0}))
-	return flow
+	flow.advect()
+	sys = gds.couple({
+		'flow': flow,
+		'advective': flow.project(gds.GraphDomain.edges, lambda y: -y.advect()),
+	})
+	gds.render(sys, edge_max=0.5)
 
 def vector_advection_circle_2():
 	n = 10
@@ -271,7 +275,7 @@ if __name__ == '__main__':
 
 	''' Vector field advection ''' 
 
-	vector_advection_test_suite()
+	# vector_advection_test_suite()
 
 	# cProfile.run('vector_advection_test_suite()', 'out.prof')
 	# prof = pstats.Stats('out.prof')
@@ -298,8 +302,7 @@ if __name__ == '__main__':
 	# sys = gds.couple({'flow': flow, 'obs': obs})
 	# gds.render(sys, edge_rng=(0,1.5), dynamic_ranges=True)
 
-	# flow = vector_advection_circle()
-	# gds.render(flow, edge_max=0.5, edge_rng=(0,1.5), min_rng_size=0.05)
+	self_advection_circle()
 
 	# flow = self_advection_2()
 	# sys = gds.couple({

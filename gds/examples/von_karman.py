@@ -151,7 +151,7 @@ def euler_vortex_street():
 	velocity, pressure = fluid_projected.euler(G)
 	y0 = np.zeros(velocity.ndim)
 
-	for j in [m//2, m//2+1]:
+	for j in [m//2]:
 		i = 5
 		e = ((i, j), (i+1, j))
 		y_e = np.zeros(velocity.ndim)
@@ -160,6 +160,7 @@ def euler_vortex_street():
 		y0 += velocity.curl_face.T@y_f
 
 	velocity.set_initial(y0=lambda x: y0[velocity.X[x]])
+	velocity.advect()
 
 	sys = gds.couple({
 		'velocity': velocity,

@@ -5,3 +5,4 @@ __pyache__/
 recordings/
 .DS_Store
 *.pyc
+runs/

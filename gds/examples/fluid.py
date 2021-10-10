@@ -171,12 +171,12 @@ def fluid_test(velocity, pressure=None, columns=3, **kwargs):
 		'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		# 'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
-		# 'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
+		'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
 		# 'power spectrum (faceless)': power_spectrum(velocity, GFT='faceless'),
 		# 'power spectrum (dual)': power_spectrum(velocity, GFT='dual'),
 		# 'GFT L2': GFT_L2(velocity),
 		# 'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
-		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, v.leray_project(-advector(v)))),
+		'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(v))),
 		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
 	}
 	if pressure != None:
