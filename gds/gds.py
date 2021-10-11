@@ -335,9 +335,40 @@ class edge_gds(gds):
 		if weighted: 
 			F = F.multiply(self.dual_weights)
 		A = Y@F@S + S@F@Y
-		# A = Y@F@Y
 
 		return -A@y
+
+	def advection_tensor(self, y: np.ndarray=None, stiff=200, weighted=True) -> np.ndarray:
+		'''
+		Advective interaction 3-tensor 
+		'''
+		if y is None: y=self.y
+
+		S = sp.diags(np.sign(y))
+		Y = sp.diags(y)
+		Y_ = sp.diags(np.abs(y))
+
+		B = self.incidence@S
+		Bm = -B.copy()
+		Bp = B.copy()
+		Bm.data[Bm.data < 0] = 0
+		Bp.data[Bp.data < 0] = 0
+		P = Bm.T@Bm - Bp.T@Bp
+		M = (Y_@P - P@Y_)
+		M.data = np.tanh(stiff * M.data)
+		F = Bm.T@Bp - Bp.T@Bm + M
+		if weighted: 
+			F = F.multiply(self.dual_weights)
+		F = S@F@S
+		T = []
+		for i in range(y.size):
+			selector = np.zeros(y.size)
+			selector[i] = 1
+			selector = sp.diags(selector)
+			T.append((selector@F + F@selector).todense())
+		T = np.array(T)
+		return T
+
 
 	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''

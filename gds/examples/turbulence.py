@@ -111,11 +111,11 @@ def poincare_section():
 	plt.show()
 
 def recurrence():
-	eps = 1e-4
+	eps = 1e-3
 	steps = 10
 
 	def foreach(data, ax):
-		dists = pdist(data)
+		dists = pdist(data[1000:2000])
 		dists = np.floor(dists/(eps*np.sqrt(data.shape[1])))
 		dists[dists>steps] = steps
 		points = squareform(dists)
@@ -177,9 +177,9 @@ def autocorrelation():
 
 if __name__ == '__main__':
 	gds.set_seed(1)
-	solve()
+	# solve()
 	# poincare_section()
-	# recurrence()
+	recurrence()
 	# stationarity()
 	# velocity()
 	# temporal_fourier_transform()
