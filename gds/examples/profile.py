@@ -29,19 +29,23 @@ def poiseuille():
 	velocity.set_constraints(dirichlet=no_slip)
 	return velocity, pressure
 
-# v, p = poiseuille()
-v, p = von_karman_projected()
-sys = gds.couple({'v': v, 'p': p})
+if __name__ == '__main__':
+	gds.set_seed(1)
+	# v, p = poiseuille()
+	# v, p = von_karman_projected()
+	G = gds.triangular_lattice(m=1, n=3)
+	v, p = fluid_projected.random_euler(G, 10)
+	sys = gds.couple({'v': v, 'p': p})
 
-def run():
-	global sys
-	try:
-		while True:
-			sys.step(1e-2)
-			print(sys.t)
-	except KeyboardInterrupt:
-		return
+	def run():
+		global sys
+		try:
+			while True:
+				sys.step(1e-2)
+				print(sys.t)
+		except KeyboardInterrupt:
+			return
 
-cProfile.run('run()', 'out.prof')
-prof = pstats.Stats('out.prof')
-prof.sort_stats('time').print_stats(40)
+	cProfile.run('run()', 'out.prof')
+	prof = pstats.Stats('out.prof')
+	prof.sort_stats('time').print_stats(40)

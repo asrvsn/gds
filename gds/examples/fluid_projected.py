@@ -29,9 +29,9 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 	velocity.set_evolution(
 		dydt=lambda t, u: 
 			velocity.leray_project(
-				-advect(velocity) + body_force(t, u) + velocity.laplacian() * viscosity/density
+				-advect(velocity) + body_force(t, u) + (0 if viscosity == 0 else velocity.laplacian() * viscosity/density)
 			) - pressure.grad() / density,
-		max_step=np.inf,
+		# max_step=np.inf,
 		integrator=integrator,
 	)
 

@@ -41,7 +41,8 @@ def stokes(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	return navier_stokes(G, advect=lambda v: 0., **kwargs)
 
 def euler(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
-	return navier_stokes(G, viscosity=0, **kwargs)
+	# Use L2 norm-conserving symmetric integrator
+	return navier_stokes(G, viscosity=0, integrator=Integrators.implicit_midpoint, **kwargs)
 
 def lagrangian_tracer(velocity: gds.edge_gds, alpha=1.0) -> gds.node_gds:
 	''' Passive tracer ''' 

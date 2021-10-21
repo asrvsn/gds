@@ -105,7 +105,7 @@ class gds(fds, GraphObservable):
 		GraphObservable.__init__(self, G, Gd)
 		fds.__init__(self, self.X)
 
-		self.incidence = (nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.edge_weights))).tocsr() # |V| x |E| incidence
+		self.incidence = (nx.incidence_matrix(G, oriented=True)@sp.diags(np.sqrt(self.edge_weights))).tocsr() # |V| x |E| incidence 
 
 
 	def set_constraints(self, *args, **kwargs):
@@ -139,6 +139,9 @@ class node_gds(gds):
 		self.vertex_laplacian = -self.incidence@self.incidence.T # |V| x |V| laplacian operator
 		self.dirichlet_laplacian = self.vertex_laplacian
 		self.neumann_correction = np.zeros(self.ndim)	
+
+		#Dense
+		self.incidence = np.asarray(self.incidence.todense())
 
 	''' Differential operators: all of the following are CVXPY-compatible '''
 
@@ -242,7 +245,7 @@ class edge_gds(gds):
 			B = self.incidence.copy()
 			for v in v_free:
 				B.data[B.indptr[v]:B.indptr[v+1]] = 0
-		self.leray_projector = np.asarray(np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@B)
+		self.leray_projector = np.asarray(np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@self.incidence)
 		# self.leray_projector = (self.leray_projector + self.leray_projector.T) / 2 # Symmetrize
 
 		# Dual weights
@@ -256,6 +259,10 @@ class edge_gds(gds):
 		self.dual_weights.setdiag(0)
 		self.dual_weights.eliminate_zeros()
 		self.dual_weights = self.dual_weights.tocsr()
+
+		#Dense
+		self.incidence = np.asarray(self.incidence.todense())
+		self.dual_weights = np.asarray(self.dual_weights.todense())
 
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
@@ -320,24 +327,20 @@ class edge_gds(gds):
 		'''
 		if y is None: y=self.y
 
-		S = sp.diags(np.sign(y))
-		Y = sp.diags(y)
-		Y_ = sp.diags(np.abs(y))
+		s = np.sign(y)
+		y_ = np.abs(y)
 
-		B = self.incidence@S
-		Bm = -B.copy()
-		Bp = B.copy()
-		Bm.data[Bm.data < 0] = 0
-		Bp.data[Bp.data < 0] = 0
-		P = Bm.T@Bm - Bp.T@Bp
-		M = (Y_@P - P@Y_)
-		M.data = np.tanh(stiff * M.data)
-		F = Bm.T@Bp - Bp.T@Bm # + M
-		if weighted: 
-			F = F.multiply(self.dual_weights)
-		A = Y@F@S + S@F@Y
+		B = np.multiply(self.incidence, s)
+		Bm = np.clip(-B, 0, None)
+		Bp = np.clip(B, 0, None)
+		# P = Bm.T @ Bm - Bp.T @ Bp
+		# M = np.tanh(P * y_[:, np.newaxis] - P * y_)
+		F = Bm.T @ Bp - Bp.T @ Bm # + M
+		if weighted:
+			F = np.multiply(F, self.dual_weights)
+		A = np.multiply(np.multiply(F.T, y).T, s) + np.multiply(np.multiply(F.T, s).T, y)
 
-		return -A@y
+		return -A @ y
 
 	def advection_tensor(self, y: np.ndarray=None, stiff=200, weighted=True) -> np.ndarray:
 		'''

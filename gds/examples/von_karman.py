@@ -188,6 +188,6 @@ def dump():
 	pass
 
 if __name__ == '__main__':
-	# von_karman()
+	von_karman()
 	# von_karman_projected()
-	euler_vortex_street()
+	# euler_vortex_street()

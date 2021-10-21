@@ -24,17 +24,17 @@ import gds
 from gds.types import *
 from .fluid_projected import *
 
-folder = 'runs/turbulence_longer'
+folder = 'runs/turbulence'
 
 def solve(T=20, dt=0.01):
 	if os.path.isdir(folder):
 		shutil.rmtree(folder)
 	os.mkdir(folder)
 
-	# n_triangles = list(range(2, 7))
-	n_triangles = list(range(2, 4))
+	n_triangles = list(range(2, 7))
+	# n_triangles = list(range(2, 4))
 	# energies = np.logspace(-1, 1.5, 5)
-	energies = np.logspace(-1, 3, 10)
+	energies = np.logspace(-1, 2, 10)
 
 	for N in n_triangles:
 		os.mkdir(f'{folder}/{N}')
@@ -224,13 +224,13 @@ def dKdt():
 
 if __name__ == '__main__':
 	gds.set_seed(1)
-	# solve()
+	solve()
 	# poincare_section()
 	# recurrence()
 	# stationarity()
 	# raw_data()
 	# temporal_fourier_transform()
-	hodge_spectrum()
+	# hodge_spectrum()
 	# autocorrelation()
 	# energy_drift()
 	# dKdt()
