@@ -15,7 +15,7 @@ import gds
 
 ''' Definitions ''' 
 
-def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_force=None, advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
+def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_force=None, advect=None, integrator=Integrators.lsoda, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	if body_force is None:
 		body_force = lambda t, y: 0
 	if advect is None:
@@ -31,7 +31,8 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 			velocity.leray_project(
 				-advect(velocity) + body_force(t, u) + velocity.laplacian() * viscosity/density
 			) - pressure.grad() / density,
-		max_step=np.inf
+		max_step=np.inf,
+		integrator=integrator,
 	)
 
 	return velocity, pressure
@@ -40,7 +41,8 @@ def stokes(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	return navier_stokes(G, advect=lambda v: 0., **kwargs)
 
 def euler(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
-	return navier_stokes(G, viscosity=0, **kwargs)
+	# Use L2 norm-conserving symmetric integrator
+	return navier_stokes(G, viscosity=0, integrator=Integrators.implicit_midpoint, **kwargs)
 
 
 ''' Systems ''' 

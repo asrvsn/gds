@@ -80,18 +80,19 @@ class fds(Observable, Steppable):
 			self.solver_args = solver_args
 			self.y0 = np.zeros(self.ndim*order)
 
-			if integrator == Integrators.lsoda:
+			self.integrator_type = integrator
+			if self.integrator_type == Integrators.lsoda:
 				self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
-			elif integrator == Integrators.dop853:
+			elif self.integrator_type == Integrators.dop853:
 				self.integrator = DOP853(lambda t, y: self.y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 				self.integrator.fun = self.dydt
-			elif integrator == Integrators.rk45:
+			elif self.integrator_type == Integrators.rk45:
 				self.integrator = RK45(lambda t, y: self.y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 				self.integrator.fun = self.dydt
-			elif integrator == Integrators.implicit_midpoint:
-				self.integrator = ImplicitMidpoint(self.dydt, self.t0, self.y0, np.inf, step=max_step, **solver_args)
+			elif self.integrator_type == Integrators.implicit_midpoint:
+				self.integrator = ImplicitMidpoint(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 			else:
-				raise ValueError(f'Unsupported integrator type: {integrator}')
+				raise ValueError(f'Unsupported integrator type: {self.integrator_type}')
 
 		elif lhs != None or cost != None:
 			if lhs != None:
@@ -429,24 +430,27 @@ class coupled_fds(Steppable):
 
 		# Common state for continuous systems
 		self.has_integrator = len(self.systems[IterationMode.dydt]) > 0
+		self.integrator_type = self.systems[IterationMode.dydt][0].integrator_type
+		assert all([sys.integrator_type is self.integrator_type for sys in self.systems[IterationMode.dydt]]), 'All continuous dynamics must use the same integrator.'
 		if self.has_integrator:
 			dydt_systems = self.systems[IterationMode.dydt]
 			self.dydt_max_step = min([sys.max_step for sys in dydt_systems])
 			self.dydt_solver_args = merge_dicts([sys.solver_args for sys in dydt_systems])
 			self.dydt_y0 = np.concatenate([sys.y0 for sys in self.systems[IterationMode.dydt]])
 
-			if integrator == Integrators.lsoda:
+			if self.integrator_type == Integrators.lsoda:
 				self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
-			elif integrator == Integrators.dop853:
+			elif self.integrator_type == Integrators.dop853:
 				self.integrator = DOP853(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
 				self.integrator.fun = self.dydt
-			elif integrator == Integrators.rk45:
+			elif self.integrator_type == Integrators.rk45:
 				self.integrator = RK45(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
 				self.integrator.fun = self.dydt
-			elif integrator == Integrators.implicit_midpoint:
-				self.integrator = ImplicitMidpoint(self.dydt, self.t0, self.dydt_y0, np.inf, step=self.dydt_max_step, **self.dydt_solver_args)
+			elif self.integrator_type == Integrators.implicit_midpoint:
+				self.integrator = ImplicitMidpoint(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
 			else:
-				raise ValueError(f'Unsupported integrator type: {integrator}')
+				raise ValueError(f'Unsupported integrator type: {self.integrator_type}')
+
 
 		# Attach views to state
 		last_index = 0
@@ -504,7 +508,18 @@ class coupled_fds(Steppable):
 
 	def reset(self):
 		if self.has_integrator:
-			self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+			if self.integrator_type == Integrators.lsoda:
+				self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+			elif self.integrator_type == Integrators.dop853:
+				self.integrator = DOP853(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+				self.integrator.fun = self.dydt
+			elif self.integrator_type == Integrators.rk45:
+				self.integrator = RK45(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+				self.integrator.fun = self.dydt
+			elif self.integrator_type == Integrators.implicit_midpoint:
+				self.integrator = ImplicitMidpoint(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+			else:
+				raise ValueError(f'Unsupported integrator type: {self.integrator_type}')
 		for sys in self.systems[IterationMode.cvx] + self.systems[IterationMode.map]:
 			sys.reset()
 			self.discrete_y[sys.uuid] = sys._y.copy()

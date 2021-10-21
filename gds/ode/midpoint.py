@@ -8,13 +8,14 @@ from scipy.optimize import fsolve
 import numpy as np
 
 class ImplicitMidpoint:
-  def __init__(self, fun: Callable, t0: float, t_bound: float, y0: np.ndarray, step: float=1e-3):
+  def __init__(self, fun: Callable, t0: float, y0: np.ndarray, t_bound: float, max_step: float=1e-3):
     self.t = t0
     self.y = y0
     self.fun = fun
     self.t_bound = t_bound
     self.status = 'running' if t0 < t_bound else 'finished'
-    self.step = step
+    self.max_step = max_step
+    self.n = y0.size
 
   def step(self):
     if self.status != 'running':
@@ -22,13 +23,13 @@ class ImplicitMidpoint:
     if self.n == 0 or self.t == self.t_bound:
       self.status = 'finished'
     else:
-      dt = min(self.step, self.t_bound - self.t)
+      dt = min(self.max_step, self.t_bound - self.t)
       th = self.t + 0.5 * dt
-      yh = self.y + 0.5 * dt * f (self.t, self.y)
-      yh = fsolve(midpoint_residual, yh, args=(f, self.t, self.y, th))
+      yh = self.y + 0.5 * dt * self.fun(self.t, self.y)
+      yh = fsolve(midpoint_residual, yh, args=(self.fun, self.t, self.y, th))
 
       self.t += dt
-      self.y -= 2.0 * yh
+      self.y = 2.0 * yh - self.y
 
 
 def midpoint ( f, tspan, y0, n ):
