@@ -150,17 +150,17 @@ class node_gds(gds):
 
 	def grad(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
-		return self.incidence.T@y
+		return self.incidence.T @ y
 
 	def laplacian(self, y: np.ndarray=None) -> np.ndarray:
 		''' Dirichlet-Neumann Laplacian. TODO: should minimize error from laplacian on interior? ''' 
 		if y is None: y=self.y
-		return self.dirichlet_laplacian@y + self.neumann_correction
+		return self.dirichlet_laplacian @ y + self.neumann_correction
 
 	def bilaplacian(self, y: np.ndarray=None) -> np.ndarray:
 		# TODO correct way to handle Neumann in this case? (Gradient constraint only specifies one neighbor beyond)
 		if y is None: y=self.y
-		return self.dirichlet_laplacian@self.laplacian(y)
+		return self.dirichlet_laplacian @ self.laplacian(y)
 
 	def advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''
@@ -170,10 +170,10 @@ class node_gds(gds):
 			assert v_field.G is self.G, 'Incompatible domains'
 			v_field = v_field.y
 		if y is None: y=self.y
-		Bp = self.incidence@sp.diags(np.sign(v_field))
-		Bp.data[Bp.data > 0] = 0.
-		Bp.data *= -1
-		return -self.incidence@sp.diags(v_field)@Bp.T@y
+		Bp = np.multiply(self.incidence, np.sign(v_field))
+		Bp = relu(-Bp)
+		C = np.multiply(self.incidence, v_field)
+		return -C @ Bp.T @ y
 
 	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''
@@ -183,9 +183,9 @@ class node_gds(gds):
 			assert v_field.G is self.G, 'Incompatible domains'
 			v_field = v_field.y
 		if y is None: y=self.y
-		Bp = self.incidence@sp.diags(np.sign(v_field))
-		Bp.data[Bp.data < 0] = 0.
-		return Bp@sp.diags(v_field)@self.incidence.T@y
+		Bp = np.multiply(self.incidence, np.sign(v_field))
+		Bp = np.multiply(relu(Bp), v_field)
+		return Bp @ self.incidence.T @ y
 
 
 class edge_gds(gds):
@@ -262,6 +262,7 @@ class edge_gds(gds):
 
 		#Dense
 		self.incidence = np.asarray(self.incidence.todense())
+		self.curl_face = np.asarray(self.curl_face.todense())
 		self.dual_weights = np.asarray(self.dual_weights.todense())
 
 	def __call__(self, x: Edge):
@@ -271,36 +272,32 @@ class edge_gds(gds):
 
 	def div(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
-		return -self.incidence@y
+		return -self.incidence @ y
 
 	def influx(self, y: np.ndarray=None) -> np.ndarray:
 		''' In-flux through nodes ''' 
 		if y is None: y=self.y
-		f = self.incidence.multiply(y)
-		f.data[f.data < 0] = 0.
-		return f.sum(axis=1)
+		return relu(np.multiply(self.incidence, y)).sum(axis=1)
 
 	def outflux(self, y: np.ndarray=None) -> np.ndarray:
 		''' Out-flux through nodes ''' 
 		if y is None: y=self.y
-		f = -self.incidence.multiply(y)
-		f.data[f.data < 0] = 0.
-		return f.sum(axis=1)
+		return relu(-np.multiply(self.incidence, y)).sum(axis=1)
 
 	def curl(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
-		return self.curl_face@y
+		return self.curl_face @ y
 
 	def dd_(self, y: np.ndarray=None, normal: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
-		ret = -self.incidence.T@self.incidence@y
+		ret = -self.incidence.T @ self.incidence @ y
 		ret[self.dirichlet_indices] = 0
 		if not (normal is None): ret[normal] = 0
 		return ret
 
 	def d_d(self, y: np.ndarray=None) -> np.ndarray:
 		if y is None: y=self.y
-		ret = -self.curl_face.T@self.curl_face@y
+		ret = -self.curl_face.T @ self.curl_face @ y
 		ret[self.dirichlet_indices] = 0
 		return ret
 
@@ -331,8 +328,8 @@ class edge_gds(gds):
 		y_ = np.abs(y)
 
 		B = np.multiply(self.incidence, s)
-		Bm = np.clip(-B, 0, None)
-		Bp = np.clip(B, 0, None)
+		Bm = relu(-B)
+		Bp = relu(B)
 		# P = Bm.T @ Bm - Bp.T @ Bp
 		# M = np.tanh(P * y_[:, np.newaxis] - P * y_)
 		F = Bm.T @ Bp - Bp.T @ Bm # + M
@@ -348,35 +345,32 @@ class edge_gds(gds):
 		'''
 		if y is None: y=self.y
 
-		S = sp.diags(np.sign(y))
-		Y = sp.diags(y)
-		Y_ = sp.diags(np.abs(y))
+		s = np.sign(y)
+		y_ = np.abs(y)
 
-		B = self.incidence@S
-		Bm = -B.copy()
-		Bp = B.copy()
-		Bm.data[Bm.data < 0] = 0
-		Bp.data[Bp.data < 0] = 0
-		P = Bm.T@Bm - Bp.T@Bp
-		M = (Y_@P - P@Y_)
-		M.data = np.tanh(stiff * M.data)
-		F = Bm.T@Bp - Bp.T@Bm + M
-		if weighted: 
-			F = F.multiply(self.dual_weights)
-		F = S@F@S
+		B = np.multiply(self.incidence, s)
+		Bm = relu(-B)
+		Bp = relu(B)
+		# P = Bm.T @ Bm - Bp.T @ Bp
+		# M = np.tanh(P * y_[:, np.newaxis] - P * y_)
+		F = Bm.T @ Bp - Bp.T @ Bm # + M
+		if weighted:
+			F = np.multiply(F, self.dual_weights)
+		F = S @ F @ S
+
 		T = []
 		for i in range(y.size):
 			selector = np.zeros(y.size)
 			selector[i] = 1
-			selector = sp.diags(selector)
-			T.append((selector@F + F@selector).todense())
-		T = np.array(T)
-		return T
+			selector = np.diag(selector)
+			T.append(selector@F + F@selector)
+		return np.array(T)
 
 
 	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''
 		Lie advection by a divergence-free vector field 
+		TODO: fix
 		'''
 		if y is None: y=self.y
 		if v_field is None: 
@@ -396,14 +390,14 @@ class edge_gds(gds):
 		"""
 		if y is None: y=self.y
 		if self.dirichlet_indices.size == 0:
-			return self.leray_projector@y
+			return self.leray_projector @ y
 		else:
-			A = self.incidence@self.incidence.T
-			b = self.incidence@y
-			A = sp.vstack([A, self.incidence.T[self.dirichlet_indices, :]])
+			A = self.incidence @ self.incidence.T
+			b = self.incidence @ y
+			A = np.vstack([A, self.incidence.T[self.dirichlet_indices, :]])
 			b = np.concatenate((b, y[self.dirichlet_indices]))
-			x = sp.linalg.lsmr(A, b)[0]
-			return y - self.incidence.T@x
+			x = np.linalg.solve(A, b)
+			return y - self.incidence.T @ x
 
 	def vertex_dual(self) -> GraphObservable:
 		''' View the vertex-edge dual graph ''' 
@@ -455,4 +449,4 @@ class face_gds(gds):
 		TODO: boundary conditions
 		''' 
 		if y is None: y=self.y
-		return -self.curl_face@self.curl_face.T@y
+		return -self.curl_face @ self.curl_face.T @ y

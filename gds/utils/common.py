@@ -101,3 +101,7 @@ def disambiguate_strings(ls: List[str]):
 			mp[s] = 1
 			ret.append(s)
 	return ret
+
+def relu(arr: np.ndarray) -> np.ndarray:
+	# Fast ReLU
+	return np.core.umath.maximum(arr, 0)

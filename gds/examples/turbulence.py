@@ -224,7 +224,7 @@ def dKdt():
 
 if __name__ == '__main__':
 	gds.set_seed(1)
-	solve()
+	# solve()
 	# poincare_section()
 	# recurrence()
 	# stationarity()
@@ -232,5 +232,5 @@ if __name__ == '__main__':
 	# temporal_fourier_transform()
 	# hodge_spectrum()
 	# autocorrelation()
-	# energy_drift()
+	energy_drift()
 	# dKdt()
