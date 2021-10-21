@@ -99,7 +99,7 @@ if __name__ == '__main__':
 	# G = gds.k_torus(3, m=8, n=11)
 
 	# Harmonics with topological defect
-	G = defective_sphere()
+	# G = defective_sphere()
 	# G = gds.torus()
 	# square_defect(G, (8,8))
 	# square_defect(G, (2,5))
@@ -108,7 +108,7 @@ if __name__ == '__main__':
 	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2),(0,4),(4,3)])
 
 	# Harmonics with degenerate edge
-	# G = gds.k_torus(2, m=8, n=11, degenerate=True)
+	G = gds.k_torus(3, m=8, n=11, degenerate=True)
 
 	# G.faces = [tuple(f) for f in nx.cycle_basis(G)]
 
@@ -120,7 +120,7 @@ if __name__ == '__main__':
 	# plt.show()
 
 	# show_harmonics(G, k=0)
-	# show_harmonics(G, k=1, edge_colors=True, edge_palette=cc.bmy)
+	show_harmonics(G, k=1, edge_colors=True, edge_palette=cc.bmy)
 	# show_harmonics(G, k=2, face_palette=cc.bmy)
 
-	show_L0_eigfuns(G, n=16, node_palette=cc.bmy)
+	# show_L0_eigfuns(G, n=16, node_palette=cc.bmy)

@@ -44,6 +44,12 @@ class IterationMode(Enum):
 	traj = 4 # Recorded trajectory
 	nil = 5 # Nil iteration
 
+class Integrators(Enum):
+	rk45 = 0
+	lsoda = 1
+	dop853 = 2
+	implicit_midpoint = 3
+
 class Steppable(ABC):
 	''' An object which can be stepped through time ''' 
 	def __init__(self, iter_mode: IterationMode):

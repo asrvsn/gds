@@ -16,21 +16,25 @@ import seaborn as sns
 from scipy.spatial.distance import pdist, squareform
 from scipy.signal import stft
 from scipy.fft import rfftn
+from scipy.sparse import csr_matrix
 import statsmodels.api as sm
+from pyunicorn.timeseries import RecurrencePlot
 
 import gds
 from gds.types import *
 from .fluid_projected import *
 
-folder = 'runs/turbulence'
+folder = 'runs/turbulence_longer'
 
 def solve(T=20, dt=0.01):
 	if os.path.isdir(folder):
 		shutil.rmtree(folder)
 	os.mkdir(folder)
 
-	n_triangles = list(range(2, 7))
-	energies = np.logspace(-1, 1.5, 5)
+	# n_triangles = list(range(2, 7))
+	n_triangles = list(range(2, 4))
+	# energies = np.logspace(-1, 1.5, 5)
+	energies = np.logspace(-1, 3, 10)
 
 	for N in n_triangles:
 		os.mkdir(f'{folder}/{N}')
@@ -62,9 +66,11 @@ def analyze(foreach: Callable):
 
 	for fig_i, N in enumerate(sorted(n_triangles)):
 		for fig_j, KE in enumerate(sorted(energies)):
+			print((fig_i, fig_j))
+			G = gds.triangular_lattice(m=1, n=N)
 			with open(f'{folder}/{N}/{KE}.npy', 'rb') as f:
 				data = np.load(f)
-				foreach(data, axs[fig_i][fig_j])
+				foreach(G, data, axs[fig_i][fig_j], fig_i, fig_j)
 				if fig_i == 0:
 					axs[fig_i][fig_j].set_title(f'{round(KE, 4)}')
 				if fig_j == 0:
@@ -76,55 +82,44 @@ def analyze(foreach: Callable):
 	plt.show()
 
 def poincare_section():
-	# Define system
-	G = gds.triangular_lattice(m=1, n=2)
-	N_e = len(G.edges())
-	y0 = np.random.uniform(low=1, high=2, size=N_e)
+	indices = dict()
+	def foreach(G, data, ax, fig_i, fig_j):
+		# Define transverse hyperplane
+		M = data.shape[1]
+		if not M in indices:
+			i = random.randint(0, M)
+			j, k = i, i
+			while j == i or k == i:
+				j, k = random.randint(0, M-1), random.randint(0, M-1)
+			indices[M] = (i, j, k)
+		(i, j, k) = indices[M]
+		a = np.zeros(M)
+		a[i] = 1
+		b = data[-1, i]
+		section = data[np.abs(data@a - b) <= 5e-1]
+		ax.scatter(section[:, j], section[:, k], s=1)
 
-	# Energies
-	KE = np.linspace(1, 10, 10)
-	fig, axs = plt.subplots(nrows=1, ncols=len(KE), figsize=(len(KE)*5, 5))
+	analyze(foreach)
 
-	# Define transverse hyperplane
-	i = random.randint(0, N_e)
-	a = np.zeros(N_e)
-	a[i] = 1
-	j, k = random.randint(0, N_e), random.randint(0, N_e)
-	while j == i or k == i:
-		j, k = random.randint(0, N_e), random.randint(0, N_e)
-
-	# Solve systems & Plot SOS
-	for fig_idx, ke in enumerate(KE):
-		print(ke)
-		V, P = euler(G)
-		y0_ = V.leray_project(y0)
-		y0_ *= np.sqrt(ke / np.dot(y0_, y0_))
-		V.set_initial(y0=lambda e: y0_[V.X[e]])
-		sys = gds.couple({'V': V, 'P': P})
-		time, data = sys.solve(20, 0.01)
-		b = V.y[i]
-		section = data['V'][np.round(data['V'] @ a, 2) == np.round(b, 2)]  
-		axs[fig_idx].scatter(section[:, j], section[:, k], s=5)
-		axs[fig_idx].set_title(f'KE: {ke}')
-
-	plt.tight_layout()
-	plt.show()
 
 def recurrence():
-	eps = 1e-3
+	eps = 1e-4
 	steps = 10
 
-	def foreach(data, ax):
-		dists = pdist(data[1000:2000])
-		dists = np.floor(dists/(eps*np.sqrt(data.shape[1])))
-		dists[dists>steps] = steps
-		points = squareform(dists)
-		ax.imshow(points, origin='lower')
+	def foreach(G, data, ax, fig_i, fig_j):
+		idx = -3
+		rp = RecurrencePlot(data[:,idx], threshold=0.3, metric='supremum', normalize=True)
+		mat = rp.recurrence_matrix()
+		ax.imshow(mat, origin='lower')
+		if fig_i != 4:
+			ax.axes.xaxis.set_visible(False)
+		if fig_j != 0:
+			ax.axes.yaxis.set_visible(False)
 
 	analyze(foreach)
 
 def stationarity():
-	def foreach(data, ax):
+	def foreach(G, data, ax, fig_i, fig_j):
 		avg = np.cumsum(data, axis=0) / np.arange(1, data.shape[0]+1)[:,None]
 		dist = np.linalg.norm(data - avg, axis=1)
 		ax.plot(dist)
@@ -132,41 +127,74 @@ def stationarity():
 	analyze(foreach)
 
 
-def velocity():
-	eps = 1e-4
-	steps = 10
+def raw_data():
 
-	def foreach(data, ax):
-		N_e = data.shape[1]
-		heat = data[400:]
-		# heatmin, heatmax = heat.min(axis=0 , keepdims=True), heat.max(axis=0 , keepdims=True)
+	def foreach(G, data, ax, fig_i, fig_j):
+		# N_e = data.shape[1]
+		heat = data
+		heatmin, heatmax = heat.min(axis=0 , keepdims=True), heat.max(axis=0 , keepdims=True)
 		# heatmax += (eps*steps) / np.sqrt(N_e)
-		# heat -= heatmin
-		# heat /= heatmax
-		sns.heatmap(heat.T, ax=ax, norm=LogNorm())
+		heat -= heatmin
+		# pdb.set_trace()
+		delta = heatmax - heatmin
+		delta[delta == 0] = 1
+		heat /= delta
+		sns.heatmap(heat.T, ax=ax, cbar=False, yticklabels=('auto' if fig_j==0 else False), xticklabels=('auto' if fig_i == 4 else False))
+		ax.invert_yaxis() # (reversed order for sns)
 
 	analyze(foreach)
 
 def temporal_fourier_transform():
 
-	def foreach(data, ax):
+	def foreach(G, data, ax, fig_i, fig_j):
 		fs = np.abs(rfftn(data[400:].T))
 		sns.heatmap(fs, ax=ax, norm=LogNorm())
 
 	analyze(foreach)
 
-def spatial_fourier_transform():
+def hodge_spectrum(gft='hodge_faces'):
 
-	def foreach(data, ax):
-		fs = np.abs(rfftn(data[400:].T))
-		sns.heatmap(fs, ax=ax, cbar=False)
+	def foreach(G, data, ax, fig_i, fig_j):
+
+		# Hodge laplacians with varying 2-form definitions
+		if gft == 'hodge_faces': # 2-forms defined on planar faces (default)
+			pass
+		elif gft == 'hodge_cycles': # 2-forms defined on cycle basis
+			G.faces = [tuple(f) for f in nx.cycle_basis(G)]
+		else:
+			raise ValueError(f'gft {gft} undefined')
+
+		v = gds.edge_gds(G)
+		L1 = -v.laplacian(np.eye(v.ndim))
+		L1 = np.asarray(L1)
+		eigvals, eigvecs = np.linalg.eigh(L1) # Important to use eigh() rather than eig() -- otherwise non-unitary eigenvectors
+		eigvecs = np.asarray(eigvecs)
+
+		# Unitary check
+		assert (np.round(eigvecs@eigvecs.T, 6) == np.eye(v.ndim)).all(), 'VV^T != I'
+		assert (np.round(eigvecs.T@eigvecs, 6) == np.eye(v.ndim)).all(), 'V^TV != I'
+
+		evs = sorted(zip(eigvals, eigvecs.T), key=lambda x: np.abs(x[0])) # order by lowest to highest frequency magnitude
+		freqs = np.round(np.abs(np.array([x[0] for x in evs])), 4)
+		freqs_ = np.unique(freqs)
+		A = np.zeros((freqs_.size, freqs.size))
+		for i in range(freqs_.size):
+			for j in range(freqs.size):
+				if freqs_[i] == freqs[j]:
+					A[i,j] = 1
+		A = csr_matrix(A)
+		eigspace = np.asarray(np.vstack(tuple(x[1] for x in evs)))
+
+		spectrum = A @ (np.abs(eigspace @ data.T) ** 2)
+		sns.heatmap(spectrum, ax=ax, cbar=False, yticklabels=(freqs_ if fig_j==0 else False), xticklabels=('auto' if fig_i == 4 else False)) 
+		ax.invert_yaxis() # (reversed order for sns)
 
 	analyze(foreach)
 
 def autocorrelation():
 
-	def foreach(data, ax):
-		data = data[400:].T
+	def foreach(G, data, ax, fig_i, fig_j):
+		data = data.T
 		corr = []
 		for series in data:
 			corr.append(sm.tsa.acf(series, nlags=100, fft=True))
@@ -175,12 +203,34 @@ def autocorrelation():
 
 	analyze(foreach)
 
+def energy_drift():
+
+	def foreach(G, data, ax, fig_i, fig_j):
+		data = np.linalg.norm(data, axis=1)
+		ax.plot(data)
+
+	analyze(foreach)
+
+def dKdt():
+
+	def foreach(G, data, ax, fig_i, fig_j):
+		v = gds.edge_gds(G)
+		values = []
+		for row in data:
+			values.append(np.dot(row, v.leray_project(-v.advect(row))))
+		ax.plot(values)
+
+	analyze(foreach)
+
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# solve()
 	# poincare_section()
-	recurrence()
+	# recurrence()
 	# stationarity()
-	# velocity()
+	# raw_data()
 	# temporal_fourier_transform()
+	# hodge_spectrum()
 	# autocorrelation()
+	# energy_drift()
+	dKdt()

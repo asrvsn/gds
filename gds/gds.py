@@ -243,6 +243,7 @@ class edge_gds(gds):
 			for v in v_free:
 				B.data[B.indptr[v]:B.indptr[v+1]] = 0
 		self.leray_projector = np.asarray(np.eye(self.ndim) - self.incidence.T@np.linalg.pinv((self.incidence@self.incidence.T).todense(), hermitian=True)@B)
+		# self.leray_projector = (self.leray_projector + self.leray_projector.T) / 2 # Symmetrize
 
 		# Dual weights
 		Dinv = degree_matrix(G)
@@ -331,7 +332,7 @@ class edge_gds(gds):
 		P = Bm.T@Bm - Bp.T@Bp
 		M = (Y_@P - P@Y_)
 		M.data = np.tanh(stiff * M.data)
-		F = Bm.T@Bp - Bp.T@Bm + M
+		F = Bm.T@Bp - Bp.T@Bm # + M
 		if weighted: 
 			F = F.multiply(self.dual_weights)
 		A = Y@F@S + S@F@Y

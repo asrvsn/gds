@@ -9,6 +9,7 @@ import cvxpy as cp
 from .types import *
 from .utils import *
 from .system import *
+from .ode.midpoint import ImplicitMidpoint
 
 ''' Base class: dynamical system on arbitrary finite domain ''' 
 
@@ -27,7 +28,7 @@ class fds(Observable, Steppable):
 	''' Dynamics ''' 
 
 	def set_evolution(self,
-			dydt: Callable[[Time, np.ndarray], np.ndarray]=None, order: int=1, max_step: float=1e-3, solver_args: Dict={},
+			dydt: Callable[[Time, np.ndarray], np.ndarray]=None, order: int=1, max_step: float=1e-3, integrator=Integrators.lsoda, solver_args: Dict={},
 			lhs: Callable[[Time, np.ndarray], np.ndarray]=None, cost: Callable[[Time, np.ndarray], float]=None, refresh_cvx: float=True,
 			map_fun: Callable[[Time, np.ndarray], np.ndarray]=None, dt: float=1.0,
 			traj_t: Iterable[Time]=None, traj_y: Iterable[np.ndarray]=None,
@@ -78,12 +79,19 @@ class fds(Observable, Steppable):
 			self.order = order
 			self.solver_args = solver_args
 			self.y0 = np.zeros(self.ndim*order)
-			try:
+
+			if integrator == Integrators.lsoda:
 				self.integrator = LSODA(self.dydt, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
-			except:
-				print('Failed to use LSODA, falling back to DOP853')
+			elif integrator == Integrators.dop853:
 				self.integrator = DOP853(lambda t, y: self.y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
 				self.integrator.fun = self.dydt
+			elif integrator == Integrators.rk45:
+				self.integrator = RK45(lambda t, y: self.y0, self.t0, self.y0, np.inf, max_step=max_step, **solver_args)
+				self.integrator.fun = self.dydt
+			elif integrator == Integrators.implicit_midpoint:
+				self.integrator = ImplicitMidpoint(self.dydt, self.t0, self.y0, np.inf, step=max_step, **solver_args)
+			else:
+				raise ValueError(f'Unsupported integrator type: {integrator}')
 
 		elif lhs != None or cost != None:
 			if lhs != None:
@@ -426,14 +434,19 @@ class coupled_fds(Steppable):
 			self.dydt_max_step = min([sys.max_step for sys in dydt_systems])
 			self.dydt_solver_args = merge_dicts([sys.solver_args for sys in dydt_systems])
 			self.dydt_y0 = np.concatenate([sys.y0 for sys in self.systems[IterationMode.dydt]])
-			try:
-				raise Exception
+
+			if integrator == Integrators.lsoda:
 				self.integrator = LSODA(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
-			except:
-				print('Failed to use LSODA, falling back to DOP853')
-				# self.integrator = RK45(self.dydt, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
-				self.integrator = DOP853(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, atol=1e-3, max_step=self.dydt_max_step, **self.dydt_solver_args)
+			elif integrator == Integrators.dop853:
+				self.integrator = DOP853(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
 				self.integrator.fun = self.dydt
+			elif integrator == Integrators.rk45:
+				self.integrator = RK45(lambda t, y: self.dydt_y0, self.t0, self.dydt_y0, np.inf, max_step=self.dydt_max_step, **self.dydt_solver_args)
+				self.integrator.fun = self.dydt
+			elif integrator == Integrators.implicit_midpoint:
+				self.integrator = ImplicitMidpoint(self.dydt, self.t0, self.dydt_y0, np.inf, step=self.dydt_max_step, **self.dydt_solver_args)
+			else:
+				raise ValueError(f'Unsupported integrator type: {integrator}')
 
 		# Attach views to state
 		last_index = 0

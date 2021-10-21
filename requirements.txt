@@ -16,3 +16,4 @@ shapely
 trimesh
 statsmodels
 seaborn
+pyunicorn
