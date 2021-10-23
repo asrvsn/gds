@@ -16,37 +16,40 @@ import seaborn as sns
 from scipy.spatial.distance import pdist, squareform
 from scipy.signal import stft
 from scipy.fft import rfftn
-from scipy.sparse import csr_matrix
 import statsmodels.api as sm
 from pyunicorn.timeseries import RecurrencePlot
 
 import gds
 from gds.types import *
+from gds.utils import rolling_mean_2d
+from .fluid import initial_flow, edge_power_spectrum
 from .fluid_projected import *
 
-folder = 'runs/turbulence'
+folder = 'runs/turbulence_flat_energy'
+n_triangles = list(range(2, 7))
+energies = np.logspace(-1, 2, 10)
+# n_triangles = list(range(2, 4))
+# energies = np.logspace(-1, 1.5, 5)
+fig_N, fig_M = len(n_triangles), len(energies)
+T = 80
+dt = 0.01
+scale_distribution = lambda x: 1.0 # Uniform energy distribution across length scales
 
-def solve(T=20, dt=0.01):
+def solve():
 	if os.path.isdir(folder):
 		shutil.rmtree(folder)
 	os.mkdir(folder)
-
-	n_triangles = list(range(2, 7))
-	# n_triangles = list(range(2, 4))
-	# energies = np.logspace(-1, 1.5, 5)
-	energies = np.logspace(-1, 2, 10)
 
 	for N in n_triangles:
 		os.mkdir(f'{folder}/{N}')
 
 		G = gds.triangular_lattice(m=1, n=N)
 		N_e = len(G.edges())
-		y0 = np.random.uniform(low=1, high=2, size=N_e)
+		y0 = initial_flow(G, scale_distribution=scale_distribution)
 
 		for KE in energies:
 			V, P = euler(G)
-			y0_ = V.leray_project(y0)
-			y0_ *= np.sqrt(N_e * KE / np.dot(y0_, y0_))
+			y0_ = y0 * np.sqrt(N_e * KE / np.dot(y0, y0))
 			V.set_initial(y0=lambda e: y0_[V.X[e]])
 			sys = gds.couple({'V': V, 'P': P})
 			time, data = sys.solve(T, dt)
@@ -107,11 +110,11 @@ def recurrence():
 	steps = 10
 
 	def foreach(G, data, ax, fig_i, fig_j):
-		idx = -3
+		idx = 0
 		rp = RecurrencePlot(data[:,idx], threshold=0.3, metric='supremum', normalize=True)
 		mat = rp.recurrence_matrix()
 		ax.imshow(mat, origin='lower')
-		if fig_i != 4:
+		if fig_i != fig_M-1:
 			ax.axes.xaxis.set_visible(False)
 		if fig_j != 0:
 			ax.axes.yaxis.set_visible(False)
@@ -123,6 +126,18 @@ def stationarity():
 		avg = np.cumsum(data, axis=0) / np.arange(1, data.shape[0]+1)[:,None]
 		dist = np.linalg.norm(data - avg, axis=1)
 		ax.plot(dist)
+
+	analyze(foreach)
+
+
+def turbulence_kinetic_energy():
+	def foreach(G, data, ax, fig_i, fig_j):
+		avg = rolling_mean_2d(data)
+		fluct = data - avg
+		fluct_var = rolling_mean_2d(fluct ** 2)
+		tke = fluct_var.sum(axis=1) / data.shape[1]
+		tke = np.round(tke, 15) # Truncate to machine precision (1e-15)
+		ax.plot(tke)
 
 	analyze(foreach)
 
@@ -147,46 +162,18 @@ def raw_data():
 def temporal_fourier_transform():
 
 	def foreach(G, data, ax, fig_i, fig_j):
-		fs = np.abs(rfftn(data[400:].T))
+		fs = np.abs(rfftn(data.T))
 		sns.heatmap(fs, ax=ax, norm=LogNorm())
 
 	analyze(foreach)
 
-def hodge_spectrum(gft='hodge_faces'):
+def hodge_spectrum():
 
 	def foreach(G, data, ax, fig_i, fig_j):
-
-		# Hodge laplacians with varying 2-form definitions
-		if gft == 'hodge_faces': # 2-forms defined on planar faces (default)
-			pass
-		elif gft == 'hodge_cycles': # 2-forms defined on cycle basis
-			G.faces = [tuple(f) for f in nx.cycle_basis(G)]
-		else:
-			raise ValueError(f'gft {gft} undefined')
-
-		v = gds.edge_gds(G)
-		L1 = -v.laplacian(np.eye(v.ndim))
-		L1 = np.asarray(L1)
-		eigvals, eigvecs = np.linalg.eigh(L1) # Important to use eigh() rather than eig() -- otherwise non-unitary eigenvectors
-		eigvecs = np.asarray(eigvecs)
-
-		# Unitary check
-		assert (np.round(eigvecs@eigvecs.T, 6) == np.eye(v.ndim)).all(), 'VV^T != I'
-		assert (np.round(eigvecs.T@eigvecs, 6) == np.eye(v.ndim)).all(), 'V^TV != I'
-
-		evs = sorted(zip(eigvals, eigvecs.T), key=lambda x: np.abs(x[0])) # order by lowest to highest frequency magnitude
-		freqs = np.round(np.abs(np.array([x[0] for x in evs])), 4)
-		freqs_ = np.unique(freqs)
-		A = np.zeros((freqs_.size, freqs.size))
-		for i in range(freqs_.size):
-			for j in range(freqs.size):
-				if freqs_[i] == freqs[j]:
-					A[i,j] = 1
-		A = csr_matrix(A)
-		eigspace = np.asarray(np.vstack(tuple(x[1] for x in evs)))
-
-		spectrum = A @ (np.abs(eigspace @ data.T) ** 2)
-		sns.heatmap(spectrum, ax=ax, cbar=False, yticklabels=(freqs_ if fig_j==0 else False), xticklabels=('auto' if fig_i == 4 else False)) 
+		freqs, spec_fun = edge_power_spectrum(G)
+		spectrum = spec_fun(data.T)
+		# spectrum = (freqs_ ** (-5/3))[:,np.newaxis] # Theoretical energy distribution
+		sns.heatmap(spectrum, ax=ax, cbar=False, yticklabels=(freqs if fig_j==0 else False), xticklabels=('auto' if fig_i == 4 else False)) 
 		ax.invert_yaxis() # (reversed order for sns)
 
 	analyze(foreach)
@@ -224,13 +211,14 @@ def dKdt():
 
 if __name__ == '__main__':
 	gds.set_seed(1)
-	# solve()
+	solve()
 	# poincare_section()
 	# recurrence()
+	# turbulence_kinetic_energy()
 	# stationarity()
 	# raw_data()
 	# temporal_fourier_transform()
 	# hodge_spectrum()
 	# autocorrelation()
-	energy_drift()
+	# energy_drift()
 	# dKdt()

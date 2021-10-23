@@ -105,3 +105,7 @@ def disambiguate_strings(ls: List[str]):
 def relu(arr: np.ndarray) -> np.ndarray:
 	# Fast ReLU
 	return np.core.umath.maximum(arr, 0)
+
+def rolling_mean_2d(arr: np.ndarray) -> np.ndarray:
+	''' Rolling average along first dimension ''' 
+	return np.cumsum(arr, axis=0) / np.arange(1, arr.shape[0]+1)[:,None]

@@ -10,7 +10,7 @@ import colorcet as cc
 import random
 
 from gds.types import *
-from .fluid import fluid_test
+from .fluid import fluid_test, initial_flow
 import gds
 
 ''' Definitions ''' 
@@ -31,7 +31,7 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], body_forc
 			velocity.leray_project(
 				-advect(velocity) + body_force(t, u) + (0 if viscosity == 0 else velocity.laplacian() * viscosity/density)
 			) - pressure.grad() / density,
-		# max_step=np.inf,
+		max_step=1e-3,
 		integrator=integrator,
 	)
 
@@ -107,18 +107,11 @@ def euler_test_1():
 	velocity.set_initial(y0=lambda e: v_field[e])
 	return velocity, pressure
 
-def random_euler(G, KE=1.):
-	assert KE >= 0
-	advector = lambda v: v.advect()
-	velocity, pressure = euler(G, advect=advector)
-	velocity.advector = advector # TODO: hacky
-	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
-	y0 = velocity.leray_project(y0)
-	y0 *= np.sqrt(KE / np.dot(y0, y0))
+def random_euler(G, **kwargs):
+	velocity, pressure = euler(G)
+	y0 = initial_flow(G, **kwargs)
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
-
 	return velocity, pressure
-
 
 if __name__ == '__main__':
 	gds.set_seed(1)
@@ -134,7 +127,7 @@ if __name__ == '__main__':
 
 	# G.faces = [tuple(f) for f in nx.cycle_basis(G)]
 
-	v, p = random_euler(G, 10)
+	v, p = random_euler(G, KE=10)
 	# T = v.advection_tensor()
 	# pdb.set_trace()
 

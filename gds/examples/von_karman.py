@@ -16,7 +16,7 @@ import gds.examples.fluid_projected as fluid_projected
 
 def von_karman():
 	m=20
-	n=100
+	n=50
 	gradP=80.0
 	inlet_v = 20.0
 	outlet_p = 0.0
@@ -188,6 +188,6 @@ def dump():
 	pass
 
 if __name__ == '__main__':
-	von_karman()
-	# von_karman_projected()
+	# von_karman()
+	von_karman_projected()
 	# euler_vortex_street()

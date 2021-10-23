@@ -5,13 +5,14 @@ from itertools import count
 import colorcet as cc
 import random
 import scipy.sparse as sp
+from scipy.optimize import minimize
 
 from gds.types import *
 import gds
 
 ''' Definitions ''' 
 
-def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], e_free=[], e_normal=[], advect=None, **kwargs) -> (gds.node_gds, gds.edge_gds):
+def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], e_free=[], e_normal=[], advect=None, integrator=Integrators.lsoda, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	if advect is None:
 		advect = lambda v: v.advect()
 
@@ -33,7 +34,7 @@ def navier_stokes(G: nx.Graph, viscosity=1e-3, density=1.0, v_free=[], e_free=[]
 		return -advect(velocity) - pressure.grad()/density + velocity.laplacian(free=e_free, normal=e_normal) * viscosity/density
 
 	pressure.set_evolution(lhs=pressure_f)
-	velocity.set_evolution(dydt=velocity_f)
+	velocity.set_evolution(dydt=velocity_f, integrator=integrator)
 
 	return velocity, pressure
 
@@ -163,6 +164,7 @@ def vortex_transfer(viscosity=1e-3):
 def fluid_test(velocity, pressure=None, columns=3, **kwargs):
 	if hasattr(velocity, 'advector'): advector = velocity.advector # TODO: hacky
 	else: advector = lambda v: v.advect() 
+	freqs, spec_fun = edge_power_spectrum(velocity.G)
 	obs = {
 		'velocity': velocity,
 		'divergence': velocity.project(gds.GraphDomain.nodes, lambda v: v.div()),
@@ -172,10 +174,8 @@ def fluid_test(velocity, pressure=None, columns=3, **kwargs):
 		# 'advective': velocity.project(gds.GraphDomain.edges, lambda v: -advector(v)),
 		# 'leray projection': velocity.project(gds.GraphDomain.edges, lambda v: v.leray_project()),
 		# 'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
-		# 'power spectrum (Hodge)': power_spectrum(velocity, GFT='hodge'),
-		# 'power spectrum (faceless)': power_spectrum(velocity, GFT='faceless'),
-		# 'power spectrum (dual)': power_spectrum(velocity, GFT='dual'),
-		# 'GFT L2': GFT_L2(velocity),
+		'power spectrum': velocity.project(VectorObservable, lambda v: spec_fun(v.y), freqs.tolist()),
+		'power L2': velocity.project(PointObservable, lambda v: np.sqrt(spec_fun(v.y).sum())),
 		'L2': velocity.project(PointObservable, lambda v: np.sqrt(np.dot(v.y, v.y))),
 		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(v))),
 		# 'dK/dt': velocity.project(PointObservable, lambda v: np.dot(v.y, -advector(velocity) - pressure.grad())),
@@ -305,58 +305,64 @@ def euler3():
 	velocity.set_initial(y0=lambda e: v_field[e])
 	return velocity, pressure
 
-def random_euler(G, KE=1.):
-	advector = lambda v: v.advect(vectorized=False, interactions=[1,1,1,1])
-	velocity, pressure = euler(G, advect=advector)
-	velocity.advector = advector # TODO: hacky
-	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
-	y0 = velocity.leray_project(y0)
-	y0 *= np.sqrt(KE / np.dot(y0, y0))
+def random_euler(G, **kwargs):
+	velocity, pressure = euler(G)
+	y0 = initial_flow(G, **kwargs)
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
 	return velocity, pressure
 
-def random_euler_2(G, KE=1.):
-	assert KE >= 0
-	advector = lambda v: v.advect2(vectorized=False, interactions=[1,0,1,1])
-	velocity, pressure = euler(G, advect=advector)
-	velocity.advector = advector # TODO: hacky
-	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
-	y0 = velocity.leray_project(y0)
-	y0 *= np.sqrt(KE / np.dot(y0, y0))
-	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
-	return velocity, pressure
-
-def random_euler_3(G, KE=1.):
-	assert KE >= 0
-	advector = lambda v: v.advect()
-	velocity, pressure = euler(G, advect=advector)
-	velocity.advector = advector # TODO: hacky
-	y0 = np.random.uniform(low=1, high=2, size=len(velocity))
-	y0 = velocity.leray_project(y0)
-	y0 *= np.sqrt(KE / np.dot(y0, y0))
-	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
-	return velocity, pressure
-
-def power_spectrum(velocity, GFT='hodge'):
+def initial_flow(G: nx.Graph, KE: float=1., scale_distribution: Callable=None):
 	'''
-	Projection onto eigenspace of Hodge Laplacian.
-	'''
-	if GFT == 'hodge':
-		L1 = -velocity.laplacian(np.eye(velocity.ndim))
-	elif GFT == 'faceless':
-		L1 = (velocity.incidence.T@velocity.incidence).todense()
-	elif GFT == 'dual':
-		Gu = nx.line_graph(velocity.G)
-		L1 = nx.laplacian_matrix(Gu).todense()
+	Construct divergence-free initial conditions with energies at specified length-scales.
 
-	L1 = np.asarray(L1)
+	scale_distribution: probability measure on [0, 1] (default uniform)
+	'''
+	assert KE >= 0, 'Specify nonnegative kinetic energy'
+	if scale_distribution is None:
+		scale_distribution = lambda x: 1.
+
+	N = len(G.edges())
+	P = gds.edge_gds(G).leray_projector # TODO: assumes determinism of construction
+	freqs, spec_fun = edge_power_spectrum(G)
+	dist = np.array(list(map(scale_distribution, (freqs - freqs.min()) / (freqs.max() - freqs.min()))))
+	def f(x):
+		return np.linalg.norm(spec_fun(P @ x) - dist)
+	x0 = np.random.uniform(size=N)
+	sol = minimize(f, x0)
+	u = P @ sol.x
+	u *= np.sqrt(KE / np.dot(u, u))
+	return u
+
+def edge_fourier_transform(G, method='hodge_faces'):
+	'''
+	Diagonalization of 1-form laplacian with varying 2-form definitions
+	'''
+	if method == 'hodge_faces': # 2-forms defined on planar faces (default)
+		pass
+	elif method == 'hodge_cycles': # 2-forms defined on cycle basis
+		G.faces = [tuple(f) for f in nx.cycle_basis(G)]
+	elif method == 'dual':
+		raise NotImplementedError()
+	else:
+		raise ValueError(f'Method {method} undefined')
+
+	v = gds.edge_gds(G) # TODO: assumes determinism of edge index assignment -- fix!
+	L1 = -v.laplacian(np.eye(v.ndim))
 	eigvals, eigvecs = np.linalg.eigh(L1) # Important to use eigh() rather than eig() -- otherwise non-unitary eigenvectors
 	eigvecs = np.asarray(eigvecs)
 
 	# Unitary check
-	assert (np.round(eigvecs@eigvecs.T, 6) == np.eye(velocity.ndim)).all(), f'VV^T != I: {GFT}'
-	assert (np.round(eigvecs.T@eigvecs, 6) == np.eye(velocity.ndim)).all(), f'V^TV != I: {GFT}'
+	assert (np.round(eigvecs@eigvecs.T, 6) == np.eye(v.ndim)).all(), 'VV^T != I'
+	assert (np.round(eigvecs.T@eigvecs, 6) == np.eye(v.ndim)).all(), 'V^TV != I'
 
+	return eigvals, eigvecs
+
+
+def edge_power_spectrum(G, method='hodge_faces', raw=False):
+	'''
+	Projection onto eigenspace of Hodge Laplacian.
+	'''
+	eigvals, eigvecs = edge_fourier_transform(G, method=method)
 	evs = sorted(zip(eigvals, eigvecs.T), key=lambda x: np.abs(x[0])) # order by lowest to highest frequency magnitude
 	freqs = np.round(np.abs(np.array([x[0] for x in evs])), 4)
 	freqs_ = np.unique(freqs)
@@ -365,24 +371,12 @@ def power_spectrum(velocity, GFT='hodge'):
 		for j in range(freqs.size):
 			if freqs_[i] == freqs[j]:
 				A[i,j] = 1
-	A = sp.csr_matrix(A)
 	eigspace = np.asarray(np.vstack(tuple(x[1] for x in evs)))
-	spectrum = velocity.project(VectorObservable, lambda v: A@np.abs(eigspace@v.y)**2, freqs_.tolist())
-	return spectrum
-
-def GFT_L2(velocity):
-	'''
-	Track L2 norm of the graph Fourier transform.
-	'''
-	# L1 = -velocity.laplacian(np.eye(velocity.ndim))
-	L1 = (velocity.incidence.T@velocity.incidence).todense()
-	# Gu = nx.line_graph(velocity.G)
-	# L1 = nx.laplacian_matrix(Gu).todense()
-
-	eigvals, eigvecs = np.linalg.eigh(L1) # Important to use eigh() rather than eig() -- otherwise non-unitary eigenvectors
-	eigvecs = np.asarray(eigvecs)
-	spectrum = velocity.project(PointObservable, lambda v: np.sqrt((np.abs(eigvecs.T@v.y)**2).sum()))
-	return spectrum
+	projector = lambda u: A @ (np.abs(eigspace @ u) ** 2)
+	if raw:
+		return freqs_, A, eigspace
+	else:
+		return freqs_, projector
 
 
 if __name__ == '__main__':
