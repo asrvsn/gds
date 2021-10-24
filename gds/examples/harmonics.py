@@ -48,7 +48,7 @@ def show_L0_eigfuns(G, n=12, **kwargs):
 	# L = np.array(nx.laplacian_matrix(G).todense())
 	L = -obs.laplacian(np.eye(obs.ndim))
 	# vals, vecs = sp.sparse.linalg.eigs(-L, k=n, which='SM')
-	vals, vecs = np.linalg.eig(L)
+	vals, vecs = np.linalg.eigh(L)
 	vals, vecs = np.real(vals), np.real(vecs)
 	# pdb.set_trace()
 	sys = dict()
@@ -73,6 +73,40 @@ def show_L0_eigfuns(G, n=12, **kwargs):
 	canvas = list(canvas.values())
 	sys = gds.couple(sys)
 	gds.render(sys, canvas=canvas, n_spring_iters=1200, title=f'L0-eigenfunctions', **kwargs)
+
+def show_L1_eigfuns(G, n=np.inf, **kwargs):
+	'''
+	Show eigenfunctions of 0-Laplacian
+	'''
+	obs = gds.edge_gds(G)
+	# L = np.array(nx.laplacian_matrix(G).todense())
+	L = -obs.laplacian(np.eye(obs.ndim))
+	# vals, vecs = sp.sparse.linalg.eigs(-L, k=n, which='SM')
+	vals, vecs = np.linalg.eigh(L)
+	vals, vecs = np.real(vals), np.real(vecs)
+	vals = np.round(vals, 6)
+	# pdb.set_trace()
+	sys = dict()
+	sys['Surface'] = gds.face_gds(G)
+	sys['Surface'].set_evolution(nil=True)
+	canvas = dict()
+	canvas['Surface'] = [[[sys['Surface']]]]
+	for i, (ev, vec) in enumerate(sorted(zip(vals, vecs.T), key=lambda x: np.abs(x[0]))):
+		obs = gds.edge_gds(G)
+		obs.set_evolution(nil=True)
+		obs.set_initial(y0=lambda x: vec[obs.X[x]])
+		if ev in canvas:
+			sys[f'eigval_{ev} eigfun_{len(canvas[ev])}'] = obs
+			canvas[ev].append([[obs]])
+		else:
+			sys[f'eigval_{ev} eigfun_{0}'] = obs
+			canvas[ev] = [[[obs]]]
+		if i == n:
+			break
+	# canvas = sorted(list(canvas.values()), key=len)
+	canvas = list(canvas.values())
+	sys = gds.couple(sys)
+	gds.render(sys, canvas=canvas, n_spring_iters=1200, title=f'L1-eigenfunctions', **kwargs)
 
 
 def square_defect(G, v):
@@ -108,7 +142,9 @@ if __name__ == '__main__':
 	# G.add_edges_from([(0,1),(1,2),(2,0),(0,3),(3,2),(0,4),(4,3)])
 
 	# Harmonics with degenerate edge
-	G = gds.k_torus(3, m=8, n=11, degenerate=True)
+	# G = gds.k_torus(3, m=8, n=11, degenerate=True)
+
+	G = gds.triangular_lattice(m=1, n=4)
 
 	# G.faces = [tuple(f) for f in nx.cycle_basis(G)]
 
@@ -120,7 +156,8 @@ if __name__ == '__main__':
 	# plt.show()
 
 	# show_harmonics(G, k=0)
-	show_harmonics(G, k=1, edge_colors=True, edge_palette=cc.bmy)
+	# show_harmonics(G, k=1, edge_colors=True, edge_palette=cc.bmy)
 	# show_harmonics(G, k=2, face_palette=cc.bmy)
 
 	# show_L0_eigfuns(G, n=16, node_palette=cc.bmy)
+	show_L1_eigfuns(G, node_palette=cc.bmy)

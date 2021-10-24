@@ -16,6 +16,7 @@ import seaborn as sns
 from scipy.spatial.distance import pdist, squareform
 from scipy.signal import stft
 from scipy.fft import rfftn
+from scipy.stats import beta
 import statsmodels.api as sm
 from pyunicorn.timeseries import RecurrencePlot
 
@@ -33,7 +34,12 @@ energies = np.logspace(-1, 2, 10)
 fig_N, fig_M = len(n_triangles), len(energies)
 T = 80
 dt = 0.01
-scale_distribution = lambda x: 1.0 # Uniform energy distribution across length scales
+
+beta_rv = beta(5, 1)
+# scale_distribution = lambda x: 1.0 # Uniform energy distribution across length scales
+# scale_distribution = lambda x: beta_rv.pdf(x) # High-energy distribution across length scales
+scale_distribution = lambda x: beta_rv.pdf(1-x) # Low-energy distribution across length scales
+start, end = -2000, None
 
 def solve():
 	if os.path.isdir(folder):
@@ -73,11 +79,15 @@ def analyze(foreach: Callable):
 			G = gds.triangular_lattice(m=1, n=N)
 			with open(f'{folder}/{N}/{KE}.npy', 'rb') as f:
 				data = np.load(f)
-				foreach(G, data, axs[fig_i][fig_j], fig_i, fig_j)
+				foreach(G, data[start:end], axs[fig_i][fig_j], fig_i, fig_j)
 				if fig_i == 0:
 					axs[fig_i][fig_j].set_title(f'{round(KE, 4)}')
+				if fig_i < fig_N-1:
+					axs[fig_i][fig_j].axes.xaxis.set_visible(False)
 				if fig_j == 0:
 					axs[fig_i][fig_j].set_ylabel(f'{N}')
+				else:
+					axs[fig_i][fig_j].axes.yaxis.set_visible(False)
 
 	fig.text(0.01, 0.5, '# Triangles', ha='center', va='center', rotation='vertical')
 	fig.text(0.5, 0.99, 'Energy density (KE / |E|)', ha='center', va='center')
@@ -154,7 +164,7 @@ def raw_data():
 		delta = heatmax - heatmin
 		delta[delta == 0] = 1
 		heat /= delta
-		sns.heatmap(heat.T, ax=ax, cbar=False, yticklabels=('auto' if fig_j==0 else False), xticklabels=('auto' if fig_i == 4 else False))
+		sns.heatmap(heat.T, ax=ax, cbar=False)
 		ax.invert_yaxis() # (reversed order for sns)
 
 	analyze(foreach)
@@ -167,13 +177,15 @@ def temporal_fourier_transform():
 
 	analyze(foreach)
 
-def hodge_spectrum():
+def power_spectrum():
 
 	def foreach(G, data, ax, fig_i, fig_j):
-		freqs, spec_fun = edge_power_spectrum(G)
+		freqs, spec_fun = edge_power_spectrum(G, method='hodge_cycles')
+		if fig_i == 3:
+			pdb.set_trace()
 		spectrum = spec_fun(data.T)
 		# spectrum = (freqs_ ** (-5/3))[:,np.newaxis] # Theoretical energy distribution
-		sns.heatmap(spectrum, ax=ax, cbar=False, yticklabels=(freqs if fig_j==0 else False), xticklabels=('auto' if fig_i == 4 else False)) 
+		sns.heatmap(spectrum, ax=ax, cbar=False, yticklabels=freqs) 
 		ax.invert_yaxis() # (reversed order for sns)
 
 	analyze(foreach)
@@ -211,14 +223,16 @@ def dKdt():
 
 if __name__ == '__main__':
 	gds.set_seed(1)
-	solve()
+	# plt.plot(np.linspace(0,1,10), [scale_distribution(x) for x in np.linspace(0,1,10)])
+	# plt.show()
+	# solve()
 	# poincare_section()
 	# recurrence()
 	# turbulence_kinetic_energy()
 	# stationarity()
 	# raw_data()
 	# temporal_fourier_transform()
-	# hodge_spectrum()
+	power_spectrum()
 	# autocorrelation()
 	# energy_drift()
 	# dKdt()

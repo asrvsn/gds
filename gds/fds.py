@@ -430,9 +430,9 @@ class coupled_fds(Steppable):
 
 		# Common state for continuous systems
 		self.has_integrator = len(self.systems[IterationMode.dydt]) > 0
-		self.integrator_type = self.systems[IterationMode.dydt][0].integrator_type
-		assert all([sys.integrator_type is self.integrator_type for sys in self.systems[IterationMode.dydt]]), 'All continuous dynamics must use the same integrator.'
 		if self.has_integrator:
+			self.integrator_type = self.systems[IterationMode.dydt][0].integrator_type
+			assert all([sys.integrator_type is self.integrator_type for sys in self.systems[IterationMode.dydt]]), 'All continuous dynamics must use the same integrator.'
 			dydt_systems = self.systems[IterationMode.dydt]
 			self.dydt_max_step = min([sys.max_step for sys in dydt_systems])
 			self.dydt_solver_args = merge_dicts([sys.solver_args for sys in dydt_systems])
