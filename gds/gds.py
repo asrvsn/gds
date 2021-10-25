@@ -3,6 +3,7 @@ import networkx as nx
 import scipy.sparse as sp
 from typing import Any, Union, Tuple, Callable, NewType, Iterable, Dict
 import itertools
+import torch
 
 from .types import *
 from .fds import *
@@ -265,6 +266,10 @@ class edge_gds(gds):
 		self.curl_face = np.asarray(self.curl_face.todense())
 		self.dual_weights = np.asarray(self.dual_weights.todense())
 
+		#Torch
+		self.incidence_torch = torch.from_numpy(self.incidence).float()
+		self.dual_weights_torch = torch.from_numpy(self.dual_weights).float()
+
 	def __call__(self, x: Edge):
 		return self.edge_orientation[x] * self.y[self.X[x]]
 
@@ -331,7 +336,7 @@ class edge_gds(gds):
 		Bm = relu(-B)
 		Bp = relu(B)
 		# P = Bm.T @ Bm - Bp.T @ Bp
-		# M = np.tanh(P * y_[:, np.newaxis] - P * y_)
+		# M = np.tanh(stiff * (P * y_[:, np.newaxis] - P * y_))
 		F = Bm.T @ Bp - Bp.T @ Bm # + M
 		if weighted:
 			F = np.multiply(F, self.dual_weights)
@@ -343,8 +348,6 @@ class edge_gds(gds):
 		'''
 		Advective interaction 3-tensor 
 		'''
-		if y is None: y=self.y
-
 		s = np.sign(y)
 		y_ = np.abs(y)
 
@@ -352,7 +355,7 @@ class edge_gds(gds):
 		Bm = relu(-B)
 		Bp = relu(B)
 		# P = Bm.T @ Bm - Bp.T @ Bp
-		# M = np.tanh(P * y_[:, np.newaxis] - P * y_)
+		# M = np.tanh(stiff * (P * y_[:, np.newaxis] - P * y_))
 		F = Bm.T @ Bp - Bp.T @ Bm # + M
 		if weighted:
 			F = np.multiply(F, self.dual_weights)
@@ -366,6 +369,30 @@ class edge_gds(gds):
 			T.append(selector@F + F@selector)
 		return np.array(T)
 
+	def advect_torch(self, y: torch.Tensor, stiff=200, weighted=True) -> torch.Tensor:
+		'''
+		Autograd-compatible advective derivative.
+		'''
+		s = torch.sign(y)
+		y_ = torch.abs(y)
+
+		B = torch.mul(self.incidence_torch, s)
+		Bm = torch.nn.functional.relu(-B)
+		Bp = torch.nn.functional.relu(B)
+		# P = Bm.T @ Bm - Bp.T @ Bp
+		# M = np.tanh(P * y_[:, np.newaxis] - P * y_)
+		F = Bm.t() @ Bp - Bp.t() @ Bm # + M
+		if weighted:
+			F = torch.mul(F, self.dual_weights_torch)
+		A = torch.mul(torch.mul(F.t(), y).t(), s) + torch.mul(torch.mul(F.t(), s).t(), y)
+
+		return -A @ y
+
+	def advect_jac(self, y: torch.Tensor) -> torch.Tensor:
+		'''
+		Jacobian of advective derivative.
+		'''
+		return torch.autograd.functional.jacobian(self.advect_torch, y)
 
 	def lie_advect(self, v_field: Union[Callable[[Edge], float], np.ndarray], y: np.ndarray=None) -> np.ndarray:
 		'''
