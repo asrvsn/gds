@@ -58,44 +58,6 @@ def test1():
 	velocity.set_initial(y0=lambda e: v_field[e])
 	return velocity
 
-def poiseuille():
-	m=14 
-	n=28 
-	gradP=6.0
-	viscosity=100
-
-	G, (l, r, t, b) = gds.square_lattice(m, n, with_boundaries=True)
-	v_free_l = set(l.nodes()) - (set(t.nodes()) | set(b.nodes()))
-	v_free_r = set(r.nodes()) - (set(t.nodes()) | set(b.nodes()))
-	v_free = v_free_l | v_free_r
-
-	velocity, pressure = navier_stokes(G, viscosity=viscosity, v_free=v_free)
-
-	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		gds.zero_edge_bc(t),
-		gds.zero_edge_bc(b),
-	))
-	pressure.set_constraints(dirichlet=gds.combine_bcs(
-		{n: gradP/2 for n in l.nodes},
-		{n: -gradP/2 for n in r.nodes},
-	))
-	return velocity, pressure
-
-def lid_driven_cavity():
-	m=18
-	n=21
-	v=10.0
-	G, (l, r, t, b) = gds.triangular_lattice(m, n*2, with_boundaries=True)
-	# t.remove_nodes_from([(0, m), (1, m), (n-1, m), (n, m)])
-	velocity, pressure = navier_stokes(G, viscosity=200.)
-	velocity.set_constraints(dirichlet=gds.combine_bcs(
-		gds.const_edge_bc(t, v),
-		gds.zero_edge_bc(b),
-		gds.zero_edge_bc(l),
-		gds.zero_edge_bc(r),
-	))
-	return velocity, pressure
-
 def euler_test_1():
 	v_field = {
 		(1,2): 2, (2,3): 1, (3,4): 2, (1,4): -3,

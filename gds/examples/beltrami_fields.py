@@ -108,7 +108,7 @@ if __name__ == '__main__':
 	gds.set_seed(1)
 
 	# save_beltrami()
-	power_spectrum()
-	# plot_beltrami()
+	plot_beltrami()
+	# power_spectrum()
 
 

@@ -15,7 +15,8 @@ from matplotlib.colors import LogNorm, Normalize
 import seaborn as sns
 from scipy.spatial.distance import pdist, squareform
 from scipy.signal import stft
-from numpy.fft import rfftn, fft
+from numpy.fft import rfftn, fft, rfft
+from scipy.fftpack import dct
 from scipy.stats import beta, ortho_group
 import statsmodels.api as sm
 from pyunicorn.timeseries import RecurrencePlot
@@ -37,9 +38,9 @@ T = 80
 dt = 0.01
 
 beta_rv = beta(5, 1)
-# scale_distribution = lambda x: 1.0 # Uniform energy distribution across length scales
+scale_distribution = lambda x: 1.0 # Uniform energy distribution across length scales
 # scale_distribution = lambda x: beta_rv.pdf(x) # High-energy distribution across length scales
-scale_distribution = lambda x: beta_rv.pdf(1-x) # Low-energy distribution across length scales
+# scale_distribution = lambda x: beta_rv.pdf(1-x) # Low-energy distribution across length scales
 start, end = None, None
 
 def solve():
@@ -65,7 +66,7 @@ def solve():
 				np.save(f, data['V'])
 			
 
-def analyze_each(foreach: Callable):
+def analyze_each(foreach: Callable, y_collapse=False):
 	if not os.path.isdir(folder):
 		raise Exception('no data')
 
@@ -87,8 +88,8 @@ def analyze_each(foreach: Callable):
 					axs[fig_i][fig_j].axes.xaxis.set_visible(False)
 				if fig_j == 0:
 					axs[fig_i][fig_j].set_ylabel(f'{N}')
-				# else:
-				# 	axs[fig_i][fig_j].axes.yaxis.set_visible(False)
+				elif y_collapse:
+					axs[fig_i][fig_j].axes.yaxis.set_visible(False)
 
 	fig.text(0.01, 0.5, '# Triangles', ha='center', va='center', rotation='vertical')
 	fig.text(0.5, 0.99, 'Energy density (KE / |E|)', ha='center', va='center')
@@ -132,20 +133,13 @@ def poincare_section():
 
 
 def recurrence():
-	eps = 1e-4
-	steps = 10
-
 	def foreach(G, data, ax):
 		idx = 0
 		rp = RecurrencePlot(data[:,idx], threshold=0.3, metric='supremum', normalize=True)
 		mat = rp.recurrence_matrix()
 		ax.imshow(mat, origin='lower')
-		if fig_i != fig_M-1:
-			ax.axes.xaxis.set_visible(False)
-		if fig_j != 0:
-			ax.axes.yaxis.set_visible(False)
 
-	analyze_each(foreach)
+	analyze_each(foreach, y_collapse=True)
 
 def stationarity():
 	def foreach(G, data, ax):
@@ -158,13 +152,16 @@ def stationarity():
 
 
 def turbulence_kinetic_energy():
+	# TODO: should be rolling variance instead?
 	def foreach(G, data, ax):
-		avg = rolling_mean_2d(data)
+		# avg = rolling_mean_2d(data)
+		avg = data.mean(axis=0)
 		fluct = data - avg
 		fluct_var = rolling_mean_2d(fluct ** 2)
 		tke = fluct_var.sum(axis=1) / data.shape[1]
 		tke = np.round(tke, 15) # Truncate to machine precision (1e-15)
 		ax.plot(tke)
+		ax.set_ylim(bottom=0)
 
 	analyze_each(foreach)
 
@@ -189,8 +186,12 @@ def raw_data():
 def temporal_fourier_transform():
 
 	def foreach(G, data, ax):
-		fs = np.abs(rfftn(data.T))
-		sns.heatmap(fs, ax=ax, norm=LogNorm())
+		# data = data.mean(axis=1)
+		data = data[:, 0]
+		fs = np.abs(rfft(data))
+		ax.plot(fs)
+		# ax.plot(np.arange(fs.size), np.zeros(fs.size), color='black')
+		ax.set_yscale('log')
 
 	analyze_each(foreach)
 
@@ -203,17 +204,17 @@ def power_spectrum():
 		sns.heatmap(spectrum, ax=ax, cbar=False, yticklabels=freqs) 
 		ax.invert_yaxis() # (reversed order for sns)
 
-	analyze_each(foreach)
+	analyze_each(foreach, y_collapse=True)
 
 def power_spectrum_fft():
 
 	def foreach(G, data, ax):
 		freqs, spec_fun = edge_power_spectrum(G, method='hodge_cycles')
 		spectrum = spec_fun(data.T)
-		# spectrum = (freqs_ ** (-5/3))[:,np.newaxis] # Theoretical energy distribution
-		spectrum = np.abs(fft(spectrum, axis=1))
-		sns.heatmap(spectrum, ax=ax, yticklabels=freqs, norm=LogNorm()) 
-		ax.invert_yaxis() # (reversed order for sns)
+		fs = np.abs(rfft(spectrum[0]))
+		ax.plot(fs)
+		# ax.plot(np.arange(fs.size), np.zeros(fs.size), color='black')
+		ax.set_yscale('log')
 
 	analyze_each(foreach)
 
@@ -250,7 +251,7 @@ def dKdt():
 
 def lyapunov_spectra():
 	transient = 2000
-	window = 1000
+	window = 2000
 	interval = 10
 	floor = -10
 
@@ -306,10 +307,10 @@ if __name__ == '__main__':
 	# turbulence_kinetic_energy()
 	# stationarity()
 	# raw_data()
-	# temporal_fourier_transform()
+	temporal_fourier_transform()
 	# power_spectrum()
 	# power_spectrum_fft()
 	# autocorrelation()
 	# energy_drift()
 	# dKdt()
-	lyapunov_spectra()
+	# lyapunov_spectra()
