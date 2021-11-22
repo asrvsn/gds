@@ -47,8 +47,43 @@ def euler(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	return navier_stokes(G, viscosity=0, integrator=Integrators.implicit_midpoint, **kwargs)
 
 
-def ns_cycles(G: nx.Graph, viscosity=1e-3, density=1.0, integrator=Integrators.lsoda):
+def euler_cycles(G: nx.Graph, density=1.0, integrator=Integrators.lsoda):
 	velocity = gds.edge_gds(G)
+	cycles = gds.cycle_basis(G)
+	print(cycles)
+	ops = dict()
+	edge_set = set(G.edges())
+	for i, cycle in enumerate(cycles):
+		print(cycle)
+		n = len(cycle)
+		D = np.zeros((n, n))
+		P = np.zeros((n, velocity.ndim))
+		# edge_pairs = zip(zip(chain([cycle[-2], cycle[-1]], cycle[:-2]), chain([cycle[-1]], cycle[:-1])), zip(chain([cycle[-1]], cycle[:-1]), cycle))
+		edges = zip(chain([cycle[-1]], cycle[:-1]), cycle)
+		for idx, e_i in enumerate(edges):
+			D[idx,idx] = -1
+			D[idx,(idx+1)%n] = 1
+			i = velocity.X[e_i]
+			P[idx,i] = 1 if e_i in edge_set else -1 # Re-orient
+		Dm = relu(-D)
+		Dp = relu(D)
+		F = Dm.T @ Dp - Dp.T @ Dm
+		ops[i] = {
+			'c': cycle,
+			'D': D,
+			'P': P,
+			'F': F
+		}
+	def dvdt(t, v):
+		ret = 0
+		for i in ops:
+			F, P = ops[i]['F'], ops[i]['P']
+			pv = P @ v
+			ret -= P.T @ (np.multiply(F.T, pv).T + np.multiply(F, pv)) @ pv
+		return velocity.leray_project(ret)
+	# dvdt(0, velocity.y)
+	velocity.set_evolution(dydt=dvdt, integrator=integrator)
+	return velocity
 
 
 ''' Systems ''' 
@@ -87,16 +122,13 @@ def ns_cycle_test():
 	velocity = gds.edge_gds(G)
 	print(velocity.X.keys())
 	D = np.zeros((velocity.ndim, velocity.ndim))
-	P = np.zeros((velocity.ndim, velocity.ndim))
 	IV = np.zeros((velocity.ndim, velocity.ndim))
 	edge_pairs = zip(zip(chain([n-2, n-1], range(n-2)), chain([n-1], range(n-1))), zip(chain([n-1], range(n-1)), range(n)))
 	for idx, (e_i, e_j) in enumerate(edge_pairs):
-		# e_i, e_j = (str(e_i[0]), str(e_i[1])), (str(e_j[0]), str(e_j[1]))
 		print(e_i, e_j)
 		i, j = velocity.X[e_i], velocity.X[e_j]
 		D[i,i] = -1
 		D[i,j] = 1
-		P[j,i] = 1
 		IV[j,idx] = 1
 	# print(D)
 	# D = -velocity.incidence # Either incidence or dual derivative seems to work
@@ -131,7 +163,7 @@ def ns_cycle_test():
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# G = gds.torus()
-	# G = gds.flat_prism(k=4)
+	G = gds.flat_prism(k=4)
 	# G = gds.flat_prism(k=6, n=8)
 	# G = gds.icosphere()
 	# G = nx.Graph()
@@ -148,4 +180,9 @@ if __name__ == '__main__':
 
 	# fluid_test(v, p)
 
-	ns_cycle_test()
+	# ns_cycle_test()
+
+	y0 = initial_flow(G, KE=10)
+	velocity = euler_cycles(G)
+	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
+	fluid_test(velocity)

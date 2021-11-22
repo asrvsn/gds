@@ -711,6 +711,15 @@ def edge_domain(G, nodes):
 		if u in nodes and v in nodes: 
 			yield (u, v)
 
+def cycle_basis(G):
+	pos =  nx.get_node_attributes(G, 'pos')
+	if pos != {}:
+		# Position data already calculated (e.g. in planar graph generators)
+		faces, outer = embedded_faces(G)
+		return faces
+	else:
+		return [tuple(c) for c in nx.cycle_basis(G)]
+
 if __name__ == '__main__':
 	G = hexagonal_lattice(3, 4)
 	faces = embedded_faces(G)
