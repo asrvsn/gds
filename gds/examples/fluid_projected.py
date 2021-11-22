@@ -5,11 +5,13 @@ Incompressible hydrodynamics by Leray projection method.
 import networkx as nx
 import numpy as np
 import pdb
-from itertools import count
+from itertools import count, chain
 import colorcet as cc
 import random
+from scipy import stats
 
 from gds.types import *
+from gds.utils import relu, rotate
 from .fluid import fluid_test, initial_flow
 import gds
 
@@ -45,6 +47,10 @@ def euler(G: nx.Graph, **kwargs) -> (gds.node_gds, gds.edge_gds):
 	return navier_stokes(G, viscosity=0, integrator=Integrators.implicit_midpoint, **kwargs)
 
 
+def ns_cycles(G: nx.Graph, viscosity=1e-3, density=1.0, integrator=Integrators.lsoda):
+	velocity = gds.edge_gds(G)
+
+
 ''' Systems ''' 
 
 def test1():
@@ -75,6 +81,53 @@ def random_euler(G, **kwargs):
 	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
 	return velocity, pressure
 
+def ns_cycle_test():
+	n = 20
+	G = gds.directed_cycle_graph(n)
+	velocity = gds.edge_gds(G)
+	print(velocity.X.keys())
+	D = np.zeros((velocity.ndim, velocity.ndim))
+	P = np.zeros((velocity.ndim, velocity.ndim))
+	IV = np.zeros((velocity.ndim, velocity.ndim))
+	edge_pairs = zip(zip(chain([n-2, n-1], range(n-2)), chain([n-1], range(n-1))), zip(chain([n-1], range(n-1)), range(n)))
+	for idx, (e_i, e_j) in enumerate(edge_pairs):
+		# e_i, e_j = (str(e_i[0]), str(e_i[1])), (str(e_j[0]), str(e_j[1]))
+		print(e_i, e_j)
+		i, j = velocity.X[e_i], velocity.X[e_j]
+		D[i,i] = -1
+		D[i,j] = 1
+		P[j,i] = 1
+		IV[j,idx] = 1
+	# print(D)
+	# D = -velocity.incidence # Either incidence or dual derivative seems to work
+	Dm = relu(-D)
+	Dp = relu(D)
+	F = Dm.T @ Dp - Dp.T @ Dm
+
+	# pdb.set_trace()
+	def dvdt(t, v):
+		A = np.multiply(F.T, v).T + np.multiply(F, v)
+		return -A @ v
+
+	velocity.set_evolution(dydt=dvdt)
+	bump = stats.norm().pdf(np.linspace(-4, 4, n)) 
+	v0 = -IV @ bump
+	# v0 = IV @ rotate(bump, 10)
+	# v0 = IV @ (bump - rotate(bump, 10))
+	velocity.set_initial(y0=lambda e: v0[velocity.X[e]])
+
+	sys = gds.couple({
+		'velocity': velocity,
+		'gradient': velocity.project(gds.GraphDomain.edges, lambda v: D @ v.y),
+		# 'laplacian': velocity.project(gds.GraphDomain.edges, lambda v: -D.T @ D @ v.y),
+		'dual': velocity.project(gds.GraphDomain.nodes, lambda v: v.y),
+		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		'L2': velocity.project(PointObservable, lambda v: np.linalg.norm(v.y)),
+		'min': velocity.project(PointObservable, lambda v: v.y.min()),
+	})
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=3)
+
+
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# G = gds.torus()
@@ -83,14 +136,16 @@ if __name__ == '__main__':
 	# G = gds.icosphere()
 	# G = nx.Graph()
 	# G.add_edges_from([(0,1),(1,2),(2,3),(3,0),(0,4),(4,5),(5,3)])
-	G = gds.triangular_lattice(m=1, n=4)
+	# G = gds.triangular_lattice(m=1, n=4)
 	# G = nx.random_geometric_graph(40, 0.5)
 	# G = gds.voronoi_lattice(10, 100, eps=0.07)
 
-	G.faces = [tuple(f) for f in nx.cycle_basis(G)]
+	# G.faces = [tuple(f) for f in nx.cycle_basis(G)]
 
-	v, p = random_euler(G, KE=10)
+	# v, p = random_euler(G, KE=10)
 	# T = v.advection_tensor()
 	# pdb.set_trace()
 
-	fluid_test(v, p)
+	# fluid_test(v, p)
+
+	ns_cycle_test()

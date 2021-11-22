@@ -109,3 +109,10 @@ def relu(arr: np.ndarray) -> np.ndarray:
 def rolling_mean_2d(arr: np.ndarray) -> np.ndarray:
 	''' Rolling average along first dimension ''' 
 	return np.cumsum(arr, axis=0) / np.arange(1, arr.shape[0]+1)[:,None]
+
+def rotate(arr: list, k) -> list:
+	if isinstance(arr, list):
+		return arr[k:] + arr[:k]
+	elif isinstance(arr, np.ndarray):
+		return np.concatenate((arr[k:], arr[:k]))
+	raise ValueError('unknown array type')

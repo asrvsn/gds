@@ -23,10 +23,10 @@ class GraphObservable(Observable):
 		self.edges = bidict({e: i for i, e in enumerate(G.edges())})
 		self.edges_i = {i: e for e, i in self.edges.items()}
 		self.triangles, tri_index = {}, 0
-		for clique in nx.find_cliques(G):
-			if len(clique) == 3:
-				self.triangles[tuple(clique)] = tri_index
-				tri_index += 1
+		# for clique in nx.find_cliques(G): # TODO: migrate
+		# 	if len(clique) == 3:
+		# 		self.triangles[tuple(clique)] = tri_index
+		# 		tri_index += 1
 
 		if hasattr(G, 'faces'): # TODO: hacky
 			faces = G.faces

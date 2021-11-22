@@ -13,6 +13,14 @@ from .voronoi import voronoi
 
 ''' Graph generators ''' 
 
+def directed_cycle_graph(n: int):
+	''' Construct a cycle graph preserving the orientation. ''' 
+	G = nx.DiGraph()
+	G.add_edges_from(
+		zip(itertools.chain([n-1], range(n-1)), range(n))
+	)
+	return G
+
 def set_grid_graph_layout(G: nx.Graph):
 	m, n = 0, 0
 	nodes = set(G.nodes())
