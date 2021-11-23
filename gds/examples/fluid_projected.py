@@ -117,11 +117,13 @@ def random_euler(G, **kwargs):
 	return velocity, pressure
 
 def ns_cycle_test():
-	n = 20
+	n = 30
 	G = gds.directed_cycle_graph(n)
 	velocity = gds.edge_gds(G)
+	mu = 0 # viscosity
 	print(velocity.X.keys())
 	D = np.zeros((velocity.ndim, velocity.ndim))
+	L = -D.T @ D 
 	IV = np.zeros((velocity.ndim, velocity.ndim))
 	edge_pairs = zip(zip(chain([n-2, n-1], range(n-2)), chain([n-1], range(n-1))), zip(chain([n-1], range(n-1)), range(n)))
 	for idx, (e_i, e_j) in enumerate(edge_pairs):
@@ -139,31 +141,31 @@ def ns_cycle_test():
 	# pdb.set_trace()
 	def dvdt(t, v):
 		A = np.multiply(F.T, v).T + np.multiply(F, v)
-		return -A @ v
+		return -A @ v + mu * L @ v
 
 	velocity.set_evolution(dydt=dvdt)
-	bump = stats.norm().pdf(np.linspace(-4, 4, n)) 
-	v0 = -IV @ bump
+	bump = 2*stats.norm().pdf(np.linspace(-4, 4, n)) 
+	# v0 = -IV @ bump
 	# v0 = IV @ rotate(bump, 10)
-	# v0 = IV @ (bump - rotate(bump, 10))
+	v0 = IV @ (bump - rotate(bump, n//2))
 	velocity.set_initial(y0=lambda e: v0[velocity.X[e]])
 
 	sys = gds.couple({
 		'velocity': velocity,
-		'gradient': velocity.project(gds.GraphDomain.edges, lambda v: D @ v.y),
+		# 'gradient': velocity.project(gds.GraphDomain.edges, lambda v: D @ v.y),
 		# 'laplacian': velocity.project(gds.GraphDomain.edges, lambda v: -D.T @ D @ v.y),
-		'dual': velocity.project(gds.GraphDomain.nodes, lambda v: v.y),
-		'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
-		'L2': velocity.project(PointObservable, lambda v: np.linalg.norm(v.y)),
-		'min': velocity.project(PointObservable, lambda v: v.y.min()),
+		# 'dual': velocity.project(gds.GraphDomain.nodes, lambda v: v.y),
+		# 'L1': velocity.project(PointObservable, lambda v: np.abs(v.y).sum()),
+		# 'L2': velocity.project(PointObservable, lambda v: np.linalg.norm(v.y)),
+		# 'min': velocity.project(PointObservable, lambda v: v.y.min()),
 	})
-	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=3)
+	gds.render(sys, canvas=gds.grid_canvas(sys.observables.values(), 3), edge_max=3, dynamic_ranges=False)
 
 
 if __name__ == '__main__':
 	gds.set_seed(1)
 	# G = gds.torus()
-	G = gds.flat_prism(k=4)
+	# G = gds.flat_prism(k=4)
 	# G = gds.flat_prism(k=6, n=8)
 	# G = gds.icosphere()
 	# G = nx.Graph()
@@ -180,9 +182,9 @@ if __name__ == '__main__':
 
 	# fluid_test(v, p)
 
-	# ns_cycle_test()
+	ns_cycle_test()
 
-	y0 = initial_flow(G, KE=10)
-	velocity = euler_cycles(G)
-	velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
-	fluid_test(velocity)
+	# y0 = initial_flow(G, KE=10)
+	# velocity = euler_cycles(G)
+	# velocity.set_initial(y0=lambda e: y0[velocity.X[e]])
+	# fluid_test(velocity)
